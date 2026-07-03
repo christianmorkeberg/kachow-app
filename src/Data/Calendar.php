@@ -7,6 +7,7 @@ namespace App\Data;
 use App\Auth\GoogleOAuth;
 use Google\Service\Calendar as GoogleCalendar;
 use Google\Service\Calendar\Event as GoogleEvent;
+use Google\Service\Exception as GoogleServiceException;
 
 /**
  * Data-access layer for the user's calendar.
@@ -54,7 +55,7 @@ final class Calendar
             ]);
 
             foreach ($result->getItems() as $event) {
-                $events[] = $this->normalize($event, $calendar['name']);
+                $events[] = $this->normalize($event, $calendar['name'], $calendar['id']);
             }
         }
 
@@ -80,7 +81,8 @@ final class Calendar
         string $end,
         ?string $description = null,
         ?string $location = null,
-        string $timeZone = 'UTC'
+        string $timeZone = 'UTC',
+        string $calendarId = self::PRIMARY
     ): array {
         $service = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
 
@@ -92,9 +94,56 @@ final class Calendar
             'end'         => ['dateTime' => $end,   'timeZone' => $timeZone],
         ]);
 
-        $created = $service->events->insert(self::PRIMARY, $event);
+        $targetId = $calendarId !== '' ? $calendarId : self::PRIMARY;
+        $created  = $service->events->insert($targetId, $event);
 
-        return $this->normalize($created, 'primary');
+        return $this->normalize($created, $targetId === self::PRIMARY ? 'primary' : $targetId, $targetId);
+    }
+
+    /**
+     * Deletes an event by id from the given calendar (default primary). Returns
+     * true if deleted, false if it was already gone / not found. Any other API
+     * error propagates.
+     */
+    public function deleteEvent(int $userId, string $eventId, string $calendarId = self::PRIMARY): bool
+    {
+        $service = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
+
+        try {
+            $service->events->delete($calendarId !== '' ? $calendarId : self::PRIMARY, $eventId);
+            return true;
+        } catch (GoogleServiceException $e) {
+            if (in_array($e->getCode(), [404, 410], true)) {
+                return false; // not found or already deleted
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Lists all of the user's calendars with ids, names, and whether they can be
+     * written to. Used so the assistant can resolve a calendar the user names
+     * (e.g. a shared calendar) to its id before reading or inserting.
+     *
+     * @return array<int, array{id: string, name: string, primary: bool, access_role: string, can_write: bool}>
+     */
+    public function listCalendars(int $userId): array
+    {
+        $service = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
+
+        $calendars = [];
+        foreach ($service->calendarList->listCalendarList()->getItems() as $entry) {
+            $role = (string) $entry->getAccessRole();
+            $calendars[] = [
+                'id'          => (string) $entry->getId(),
+                'name'        => (string) ($entry->getSummaryOverride() ?: $entry->getSummary()),
+                'primary'     => (bool) $entry->getPrimary(),
+                'access_role' => $role,
+                'can_write'   => in_array($role, ['owner', 'writer'], true),
+            ];
+        }
+
+        return $calendars;
     }
 
     /**
@@ -134,7 +183,7 @@ final class Calendar
      *
      * @return array<string, mixed>
      */
-    private function normalize(GoogleEvent $event, ?string $calendarName = null): array
+    private function normalize(GoogleEvent $event, ?string $calendarName = null, ?string $calendarId = null): array
     {
         $start = $event->getStart();
         $end   = $event->getEnd();
@@ -142,6 +191,7 @@ final class Calendar
         return [
             'id'          => $event->getId(),
             'calendar'    => $calendarName,
+            'calendar_id' => $calendarId,
             'summary'     => $event->getSummary(),
             'description' => $event->getDescription(),
             'location'    => $event->getLocation(),

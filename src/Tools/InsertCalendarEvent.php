@@ -25,7 +25,9 @@ final class InsertCalendarEvent implements Tool
         return "Creates an event on the user's Google Calendar. Use when the user asks to schedule, "
             . 'add, or book something. Provide start and end as RFC3339 timestamps, e.g. '
             . '"2026-07-10T14:00:00Z". If the user gives only a start time, choose a sensible '
-            . 'duration (e.g. one hour) for the end.';
+            . 'duration (e.g. one hour) for the end. By default the event goes on the primary calendar; '
+            . 'to add it to a specific calendar (e.g. a shared one), first call list_calendars to get '
+            . 'that calendar\'s id and pass it as calendar_id.';
     }
 
     public function parameters(): array
@@ -57,6 +59,11 @@ final class InsertCalendarEvent implements Tool
                     'type'        => 'string',
                     'description' => 'Optional IANA time zone for the times (default "UTC").',
                 ],
+                'calendar_id' => [
+                    'type'        => 'string',
+                    'description' => 'Optional id of the calendar to add the event to (from '
+                        . 'list_calendars). Omit to use the primary calendar.',
+                ],
             ],
             'required' => ['summary', 'start', 'end'],
         ];
@@ -79,6 +86,7 @@ final class InsertCalendarEvent implements Tool
             isset($arguments['description']) && $arguments['description'] !== '' ? (string) $arguments['description'] : null,
             isset($arguments['location']) && $arguments['location'] !== '' ? (string) $arguments['location'] : null,
             isset($arguments['time_zone']) && $arguments['time_zone'] !== '' ? (string) $arguments['time_zone'] : 'UTC',
+            isset($arguments['calendar_id']) && $arguments['calendar_id'] !== '' ? (string) $arguments['calendar_id'] : 'primary',
         );
 
         return [
