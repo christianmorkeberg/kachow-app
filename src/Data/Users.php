@@ -42,7 +42,7 @@ final class Users
     public function findById(int $id): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, email, password_hash, role, google_refresh_token, created_at
+            'SELECT id, email, name, password_hash, role, google_refresh_token, created_at
              FROM users WHERE id = :id'
         );
         $stmt->execute([':id' => $id]);
@@ -57,7 +57,7 @@ final class Users
     public function findByEmail(string $email): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, email, password_hash, role, google_refresh_token, created_at
+            'SELECT id, email, name, password_hash, role, google_refresh_token, created_at
              FROM users WHERE email = :email'
         );
         $stmt->execute([':email' => $email]);
@@ -72,14 +72,15 @@ final class Users
      * Expects an already-hashed password (password_hash() is applied by the
      * auth layer, not here). $role must be 'admin' or 'user'.
      */
-    public function create(string $email, string $passwordHash, string $role = 'user'): int
+    public function create(string $email, string $passwordHash, string $role = 'user', ?string $name = null): int
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO users (email, password_hash, role)
-             VALUES (:email, :password_hash, :role)'
+            'INSERT INTO users (email, name, password_hash, role)
+             VALUES (:email, :name, :password_hash, :role)'
         );
         $stmt->execute([
             ':email'         => $email,
+            ':name'          => $name,
             ':password_hash' => $passwordHash,
             ':role'          => $role,
         ]);

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Calendar;
+use App\Data\Invites;
 use App\Data\UserInstructions;
+use App\Data\Users;
 use App\Data\Wishlist;
 use App\Data\Workouts;
 use InvalidArgumentException;
@@ -31,7 +33,9 @@ final class ToolRegistry
         Workouts $workouts,
         Wishlist $wishlist,
         Calendar $calendar,
-        UserInstructions $instructions
+        UserInstructions $instructions,
+        Users $users,
+        Invites $invites
     ): self {
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
@@ -46,6 +50,7 @@ final class ToolRegistry
         $registry->register(new RememberInstruction($instructions));
         $registry->register(new GetInstructions($instructions));
         $registry->register(new ForgetInstruction($instructions));
+        $registry->register(new CreateInvite($users, $invites));
 
         return $registry;
     }
