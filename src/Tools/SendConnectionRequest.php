@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\Connections;
 use App\Data\Users;
+use App\Mail\Mailer;
 
 /**
  * Tool: send a connection request to another user by email.
@@ -15,6 +16,7 @@ final class SendConnectionRequest implements Tool
     public function __construct(
         private Connections $connections,
         private Users $users,
+        private Mailer $mailer,
     ) {
     }
 
@@ -25,11 +27,11 @@ final class SendConnectionRequest implements Tool
 
     public function description(): string
     {
-        return 'Sends a connection request to another existing user by their email, so you can share '
-            . 'data with each other (e.g. workout stats). Specify what YOU want to share via "share" '
-            . '(any of: workouts, wishlist, calendar). They must accept and choose what they share back. '
-            . 'If the person has no account yet, use create_invite first (admin only). Defaults to '
-            . 'sharing workouts if "share" is omitted.';
+        return 'Sends a connection request to another existing user by their email (and emails them a '
+            . 'notification to sign in and accept), so you can share data with each other (e.g. workout '
+            . 'stats). Specify what YOU want to share via "share" (any of: workouts, wishlist, calendar). '
+            . 'They must accept and choose what they share back. If the person has no account yet, use '
+            . 'create_invite first (admin only). Defaults to sharing workouts if "share" is omitted.';
     }
 
     public function parameters(): array
@@ -76,10 +78,50 @@ final class SendConnectionRequest implements Tool
 
         $this->connections->request($userId, $targetId, $scopes);
 
+        // Notify the addressee by email (best-effort; the request stands regardless).
+        $actor        = $this->users->findById($userId);
+        $requesterName = trim((string) ($actor['name'] ?? '')) ?: 'Someone';
+        $notified = $this->mailer->send(
+            $email,
+            $requesterName . ' wants to connect with you on Kachow',
+            $this->emailBody($requesterName)
+        );
+
         return [
             'request_sent' => true,
             'to'           => $email,
             'you_share'    => Connections::scopesToArray($scopes),
+            'notified'     => $notified,
         ];
+    }
+
+    private function emailBody(string $requesterName): string
+    {
+        $safeName = htmlspecialchars($requesterName, ENT_QUOTES, 'UTF-8');
+        $safeUrl  = htmlspecialchars($this->baseUrl(), ENT_QUOTES, 'UTF-8');
+
+        return '<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:auto">'
+            . '<h2>⚡ Kachow</h2>'
+            . "<p><strong>{$safeName}</strong> wants to connect with you on Kachow so you can share data "
+            . '(like workout stats) with each other.</p>'
+            . '<p><a href="' . $safeUrl . '" style="display:inline-block;background:#38bdf8;color:#05263a;'
+            . 'padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700">Open Kachow</a></p>'
+            . "<p style=\"color:#667\">Sign in and say &ldquo;accept {$safeName}&rsquo;s request&rdquo; to connect "
+            . '(you choose what you share back).</p>'
+            . '</div>';
+    }
+
+    private function baseUrl(): string
+    {
+        $configured = $_ENV['APP_BASE_URL'] ?? '';
+        if (is_string($configured) && $configured !== '') {
+            return rtrim($configured, '/');
+        }
+
+        $https  = (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off');
+        $scheme = $https ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+
+        return $scheme . '://' . $host;
     }
 }

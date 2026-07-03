@@ -55,7 +55,7 @@ final class ToolRegistry
         $registry->register(new GetInstructions($instructions));
         $registry->register(new ForgetInstruction($instructions));
         $registry->register(new CreateInvite($users, $invites, $mailer));
-        $registry->register(new SendConnectionRequest($connections, $users));
+        $registry->register(new SendConnectionRequest($connections, $users, $mailer));
         $registry->register(new ListConnections($connections));
         $registry->register(new AcceptConnectionRequest($connections));
         $registry->register(new RemoveConnection($connections));
