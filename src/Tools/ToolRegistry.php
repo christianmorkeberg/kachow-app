@@ -64,7 +64,7 @@ final class ToolRegistry
         $registry->register(new CreateInvite($users, $invites, $mailer));
         $registry->register(new SendConnectionRequest($connections, $users, $mailer));
         $registry->register(new ListConnections($connections));
-        $registry->register(new AcceptConnectionRequest($connections));
+        $registry->register(new AcceptConnectionRequest($connections, $users, $mailer));
         $registry->register(new RemoveConnection($connections));
         $registry->register(new UpdateConnectionSharing($connections));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
