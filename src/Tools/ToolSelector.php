@@ -46,6 +46,7 @@ final class ToolSelector
         ],
         'vinyls' => [
             'add_vinyl', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'remove_vinyl',
+            'recommend_vinyl', 'assess_vinyl',
         ],
     ];
 
@@ -83,6 +84,8 @@ final class ToolSelector
         'vinyls' => [
             'vinyl', 'vinyls', ' lp ', ' album', 'turntable', 'pressing', 'discogs', 'listened',
             'my collection', 'record collection', ' genre', 'artist',
+            'recommend', 'similar to', 'listen to next', 'what should i listen', 'my taste',
+            'a fit for', 'put on next', 'should i buy this record',
         ],
     ];
 

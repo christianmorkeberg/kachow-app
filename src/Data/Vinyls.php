@@ -137,4 +137,98 @@ final class Vinyls
 
         return $stmt->rowCount() > 0;
     }
+
+    /**
+     * The user's highly-rated records (their taste profile), best first.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function liked(int $userId, int $minRating = 4, int $limit = 50): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, artist, title, genre, style, rating
+             FROM vinyls
+             WHERE user_id = :uid AND rating >= :minr
+             ORDER BY rating DESC, added_at DESC
+             LIMIT ' . max(1, $limit)
+        );
+        $stmt->execute([':uid' => $userId, ':minr' => $minRating]);
+
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * The user's low-rated records (their negative taste signal), worst first.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function disliked(int $userId, int $maxRating = 2, int $limit = 50): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, artist, title, genre, style, rating
+             FROM vinyls
+             WHERE user_id = :uid AND rating IS NOT NULL AND rating <= :maxr
+             ORDER BY rating ASC, added_at DESC
+             LIMIT ' . max(1, $limit)
+        );
+        $stmt->execute([':uid' => $userId, ':maxr' => $maxRating]);
+
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Unheard records, optionally limited to those whose genre or style matches
+     * any of $tokens (case-insensitive substring). Newest first.
+     *
+     * @param array<int, string>|null $tokens
+     * @return array<int, array<string, mixed>>
+     */
+    public function unheard(int $userId, ?array $tokens = null, int $limit = 25): array
+    {
+        $sql    = 'SELECT id, artist, title, genre, style FROM vinyls WHERE user_id = :uid AND heard = 0';
+        $params = [':uid' => $userId];
+
+        $tokens = $tokens === null ? [] : array_values(array_filter(array_map('trim', $tokens), static fn ($t): bool => $t !== ''));
+        if ($tokens !== []) {
+            $ors = [];
+            foreach (array_slice($tokens, 0, 8) as $i => $token) {
+                $ors[] = "genre LIKE :g{$i}";
+                $ors[] = "style LIKE :s{$i}";
+                $params[":g{$i}"] = '%' . $token . '%';
+                $params[":s{$i}"] = '%' . $token . '%';
+            }
+            $sql .= ' AND (' . implode(' OR ', $ors) . ')';
+        }
+
+        $sql .= ' ORDER BY added_at DESC LIMIT ' . max(1, $limit);
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Distinct genre + style tokens drawn from a set of rows (splitting the CSV
+     * columns). Handy for turning a taste profile into match tokens.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, string>
+     */
+    public static function tokensFrom(array $rows): array
+    {
+        $tokens = [];
+        foreach ($rows as $row) {
+            foreach (['genre', 'style'] as $col) {
+                foreach (explode(',', (string) ($row[$col] ?? '')) as $piece) {
+                    $piece = trim($piece);
+                    if ($piece !== '') {
+                        $tokens[strtolower($piece)] = $piece;
+                    }
+                }
+            }
+        }
+
+        return array_values($tokens);
+    }
 }

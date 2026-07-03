@@ -75,6 +75,8 @@ final class ToolRegistry
         $registry->register(new RateVinyl($vinyls));
         $registry->register(new UpdateVinyl($vinyls));
         $registry->register(new RemoveVinyl($vinyls));
+        $registry->register(new RecommendVinyl($vinyls));
+        $registry->register(new AssessVinyl($vinyls, $discogs));
 
         return $registry;
     }
