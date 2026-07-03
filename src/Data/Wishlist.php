@@ -80,4 +80,55 @@ final class Wishlist
 
         return $stmt->fetchAll();
     }
+
+    /**
+     * Deletes one of the user's items by id (user-scoped). Returns true if removed.
+     */
+    public function delete(int $userId, int $id): bool
+    {
+        $stmt = $this->db->prepare('DELETE FROM wishlist WHERE id = :id AND user_id = :user_id');
+        $stmt->execute([':id' => $id, ':user_id' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Updates only the given fields of one of the user's items. Allowed fields:
+     * item, category, url, price, priority, notes. Returns true if the item
+     * exists (and belongs to the user), false otherwise.
+     *
+     * @param array<string, mixed> $fields
+     */
+    public function update(int $userId, int $id, array $fields): bool
+    {
+        $allowed = ['item', 'category', 'url', 'price', 'priority', 'notes'];
+
+        $set    = [];
+        $params = [];
+        foreach ($allowed as $column) {
+            if (array_key_exists($column, $fields)) {
+                $set[] = "{$column} = :{$column}";
+                $params[":{$column}"] = $fields[$column];
+            }
+        }
+        if ($set === []) {
+            return false;
+        }
+
+        // Ownership check (also disambiguates "no such row" from "no change").
+        $own = $this->db->prepare('SELECT 1 FROM wishlist WHERE id = :id AND user_id = :uid');
+        $own->execute([':id' => $id, ':uid' => $userId]);
+        if ($own->fetchColumn() === false) {
+            return false;
+        }
+
+        $params[':id']  = $id;
+        $params[':uid'] = $userId;
+        $stmt = $this->db->prepare(
+            'UPDATE wishlist SET ' . implode(', ', $set) . ' WHERE id = :id AND user_id = :uid'
+        );
+        $stmt->execute($params);
+
+        return true;
+    }
 }

@@ -133,6 +133,45 @@ final class Workouts
     }
 
     /**
+     * Updates only the given fields of one of the user's sets. Allowed fields:
+     * exercise, weight, reps, notes, logged_at. Returns true if the set exists
+     * (and belongs to the user), false otherwise.
+     *
+     * @param array<string, mixed> $fields
+     */
+    public function update(int $userId, int $id, array $fields): bool
+    {
+        $allowed = ['exercise', 'weight', 'reps', 'notes', 'logged_at'];
+
+        $set    = [];
+        $params = [];
+        foreach ($allowed as $column) {
+            if (array_key_exists($column, $fields)) {
+                $set[] = "{$column} = :{$column}";
+                $params[":{$column}"] = $fields[$column];
+            }
+        }
+        if ($set === []) {
+            return false;
+        }
+
+        $own = $this->db->prepare('SELECT 1 FROM workouts WHERE id = :id AND user_id = :uid');
+        $own->execute([':id' => $id, ':uid' => $userId]);
+        if ($own->fetchColumn() === false) {
+            return false;
+        }
+
+        $params[':id']  = $id;
+        $params[':uid'] = $userId;
+        $stmt = $this->db->prepare(
+            'UPDATE workouts SET ' . implode(', ', $set) . ' WHERE id = :id AND user_id = :uid'
+        );
+        $stmt->execute($params);
+
+        return true;
+    }
+
+    /**
      * Deletes specific set rows by id, scoped to the user (so one user can never
      * delete another's rows). Returns the number of rows removed.
      *

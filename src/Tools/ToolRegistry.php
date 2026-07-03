@@ -44,9 +44,12 @@ final class ToolRegistry
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
         $registry->register(new GetWorkoutHistory($workouts));
+        $registry->register(new UpdateWorkout($workouts));
         $registry->register(new DeleteWorkout($workouts));
         $registry->register(new AddWishlistItem($wishlist));
         $registry->register(new GetWishlist($wishlist));
+        $registry->register(new UpdateWishlistItem($wishlist));
+        $registry->register(new RemoveWishlistItem($wishlist));
         $registry->register(new GetCalendarEvents($calendar));
         $registry->register(new InsertCalendarEvent($calendar));
         $registry->register(new DeleteCalendarEvent($calendar));
