@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Calendar;
+use App\Data\UserInstructions;
 use App\Data\Wishlist;
 use App\Data\Workouts;
 use InvalidArgumentException;
@@ -29,7 +30,8 @@ final class ToolRegistry
     public static function createStandard(
         Workouts $workouts,
         Wishlist $wishlist,
-        Calendar $calendar
+        Calendar $calendar,
+        UserInstructions $instructions
     ): self {
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
@@ -38,6 +40,9 @@ final class ToolRegistry
         $registry->register(new GetWishlist($wishlist));
         $registry->register(new GetCalendarEvents($calendar));
         $registry->register(new InsertCalendarEvent($calendar));
+        $registry->register(new RememberInstruction($instructions));
+        $registry->register(new GetInstructions($instructions));
+        $registry->register(new ForgetInstruction($instructions));
 
         return $registry;
     }

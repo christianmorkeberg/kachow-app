@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Assistant;
 
 use App\Data\Conversations;
+use App\Data\UserInstructions;
 use App\Tools\ToolRegistry;
 use Throwable;
 
@@ -29,6 +30,7 @@ final class AssistantLoop
         private GeminiClient $gemini,
         private ToolRegistry $tools,
         private Conversations $conversations,
+        private ?UserInstructions $instructions = null,
         private string $systemInstruction = self::DEFAULT_SYSTEM_INSTRUCTION,
     ) {
     }
@@ -43,8 +45,7 @@ final class AssistantLoop
 
         $contents     = $this->buildContents($conversationId);
         $declarations = $this->tools->declarations();
-        $system       = $this->systemInstruction
-            . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
+        $system       = $this->buildSystemInstruction($userId);
 
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
             $response = $this->gemini->generate($contents, $declarations, $system);
@@ -93,6 +94,29 @@ final class AssistantLoop
         $this->conversations->addMessage($conversationId, 'assistant', $fallback);
 
         return $fallback;
+    }
+
+    /**
+     * Builds the system instruction for a turn: base prompt + current UTC time +
+     * the user's stored standing instructions (so they always apply).
+     */
+    private function buildSystemInstruction(int $userId): string
+    {
+        $system = $this->systemInstruction
+            . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
+
+        if ($this->instructions !== null) {
+            $stored = $this->instructions->all($userId);
+            if ($stored !== []) {
+                $system .= "\n\nThe user has given you these standing instructions — follow them "
+                    . "unless the current message overrides one:";
+                foreach ($stored as $row) {
+                    $system .= "\n- (#" . (int) $row['id'] . ') ' . (string) $row['instruction'];
+                }
+            }
+        }
+
+        return $system;
     }
 
     /**
