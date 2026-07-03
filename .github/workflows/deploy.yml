@@ -16,5 +16,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/kachowdk/assistant-app
-            git pull origin main
+            git pull origin master
             composer install --no-dev --optimize-autoloader
