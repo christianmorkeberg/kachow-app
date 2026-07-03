@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\Invites;
 use App\Data\Users;
+use App\Mail\Mailer;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -22,6 +23,7 @@ final class CreateInvite implements Tool
     public function __construct(
         private Users $users,
         private Invites $invites,
+        private Mailer $mailer,
     ) {
     }
 
@@ -32,10 +34,11 @@ final class CreateInvite implements Tool
 
     public function description(): string
     {
-        return 'Creates a registration invite link so a new person can make their own account. '
+        return 'Invites a new person to create their own account by emailing them a registration link. '
             . 'ADMIN ONLY — returns an error if the current user is not an admin. Provide the '
-            . "person's email; returns a link to share with them (valid " . self::EXPIRY_DAYS
-            . ' days). Use when an admin asks to invite someone or add a new user.';
+            . "person's email; the link is emailed to them (valid " . self::EXPIRY_DAYS . ' days) and '
+            . 'also returned so the admin can share it manually if needed. The response "email_sent" '
+            . 'indicates whether the email was accepted for delivery.';
     }
 
     public function parameters(): array
@@ -73,12 +76,36 @@ final class CreateInvite implements Tool
 
         $this->invites->create($email, $tokenHash, $userId, $expiresAt->format('Y-m-d H:i:s'));
 
+        $inviteUrl = $this->baseUrl() . '/register.php?token=' . $rawToken;
+        $inviterName = trim((string) ($actor['name'] ?? '')) ?: 'An admin';
+        $emailSent = $this->mailer->send(
+            $email,
+            'You have been invited to Kachow',
+            $this->emailBody($inviterName, $inviteUrl)
+        );
+
         return [
             'invited'         => true,
             'email'           => $email,
-            'invite_url'      => $this->baseUrl() . '/register.php?token=' . $rawToken,
+            'email_sent'      => $emailSent,
+            'invite_url'      => $inviteUrl,
             'expires_in_days' => self::EXPIRY_DAYS,
         ];
+    }
+
+    private function emailBody(string $inviterName, string $inviteUrl): string
+    {
+        $safeName = htmlspecialchars($inviterName, ENT_QUOTES, 'UTF-8');
+        $safeUrl  = htmlspecialchars($inviteUrl, ENT_QUOTES, 'UTF-8');
+
+        return '<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:auto">'
+            . '<h2>⚡ Kachow</h2>'
+            . "<p>{$safeName} invited you to create a Kachow account.</p>"
+            . '<p><a href="' . $safeUrl . '" style="display:inline-block;background:#38bdf8;color:#05263a;'
+            . 'padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700">Create your account</a></p>'
+            . '<p style="color:#667">Or paste this link into your browser:<br>' . $safeUrl . '</p>'
+            . '<p style="color:#889;font-size:13px">This link is valid for ' . self::EXPIRY_DAYS . ' days.</p>'
+            . '</div>';
     }
 
     /**

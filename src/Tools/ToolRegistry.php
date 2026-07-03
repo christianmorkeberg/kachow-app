@@ -10,6 +10,7 @@ use App\Data\UserInstructions;
 use App\Data\Users;
 use App\Data\Wishlist;
 use App\Data\Workouts;
+use App\Mail\Mailer;
 use InvalidArgumentException;
 
 /**
@@ -35,7 +36,8 @@ final class ToolRegistry
         Calendar $calendar,
         UserInstructions $instructions,
         Users $users,
-        Invites $invites
+        Invites $invites,
+        Mailer $mailer
     ): self {
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
@@ -50,7 +52,7 @@ final class ToolRegistry
         $registry->register(new RememberInstruction($instructions));
         $registry->register(new GetInstructions($instructions));
         $registry->register(new ForgetInstruction($instructions));
-        $registry->register(new CreateInvite($users, $invites));
+        $registry->register(new CreateInvite($users, $invites, $mailer));
 
         return $registry;
     }
