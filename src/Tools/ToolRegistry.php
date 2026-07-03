@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Calendar;
+use App\Data\Connections;
 use App\Data\Invites;
 use App\Data\UserInstructions;
 use App\Data\Users;
@@ -37,7 +38,8 @@ final class ToolRegistry
         UserInstructions $instructions,
         Users $users,
         Invites $invites,
-        Mailer $mailer
+        Mailer $mailer,
+        Connections $connections
     ): self {
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
@@ -53,6 +55,14 @@ final class ToolRegistry
         $registry->register(new GetInstructions($instructions));
         $registry->register(new ForgetInstruction($instructions));
         $registry->register(new CreateInvite($users, $invites, $mailer));
+        $registry->register(new SendConnectionRequest($connections, $users));
+        $registry->register(new ListConnections($connections));
+        $registry->register(new AcceptConnectionRequest($connections));
+        $registry->register(new RemoveConnection($connections));
+        $registry->register(new UpdateConnectionSharing($connections));
+        $registry->register(new GetConnectedWorkouts($connections, $workouts));
+        $registry->register(new GetConnectedWishlist($connections, $wishlist));
+        $registry->register(new GetConnectedCalendar($connections, $calendar));
 
         return $registry;
     }
