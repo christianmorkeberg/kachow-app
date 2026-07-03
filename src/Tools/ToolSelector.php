@@ -44,6 +44,9 @@ final class ToolSelector
         'admin' => [
             'create_invite',
         ],
+        'vinyls' => [
+            'add_vinyl', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'remove_vinyl',
+        ],
     ];
 
     /**
@@ -76,6 +79,10 @@ final class ToolSelector
         ],
         'admin' => [
             'invite', 'new user', 'add user', 'create account', 'sign up', 'signup',
+        ],
+        'vinyls' => [
+            'vinyl', 'vinyls', ' lp ', ' album', 'turntable', 'pressing', 'discogs', 'listened',
+            'my collection', 'record collection', ' genre', 'artist',
         ],
     ];
 

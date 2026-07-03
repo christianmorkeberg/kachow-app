@@ -9,9 +9,11 @@ use App\Data\Connections;
 use App\Data\Invites;
 use App\Data\UserInstructions;
 use App\Data\Users;
+use App\Data\Vinyls;
 use App\Data\Wishlist;
 use App\Data\Workouts;
 use App\Mail\Mailer;
+use App\Music\Discogs;
 use InvalidArgumentException;
 
 /**
@@ -39,7 +41,9 @@ final class ToolRegistry
         Users $users,
         Invites $invites,
         Mailer $mailer,
-        Connections $connections
+        Connections $connections,
+        Vinyls $vinyls,
+        ?Discogs $discogs = null
     ): self {
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
@@ -66,6 +70,11 @@ final class ToolRegistry
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));
+        $registry->register(new AddVinyl($vinyls, $discogs));
+        $registry->register(new GetVinyls($vinyls));
+        $registry->register(new RateVinyl($vinyls));
+        $registry->register(new UpdateVinyl($vinyls));
+        $registry->register(new RemoveVinyl($vinyls));
 
         return $registry;
     }
