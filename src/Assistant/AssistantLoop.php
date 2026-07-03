@@ -7,6 +7,7 @@ namespace App\Assistant;
 use App\Data\Conversations;
 use App\Data\UserInstructions;
 use App\Tools\ToolRegistry;
+use App\Tools\ToolSelector;
 use Throwable;
 
 /**
@@ -44,7 +45,8 @@ final class AssistantLoop
         $this->conversations->addMessage($conversationId, 'user', $userMessage);
 
         $contents     = $this->buildContents($conversationId);
-        $declarations = $this->tools->declarations();
+        // Send only the tools relevant to this message (falls back to all if unsure).
+        $declarations = ToolSelector::select($this->tools->declarations(), $userMessage);
         $system       = $this->buildSystemInstruction($userId);
 
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
