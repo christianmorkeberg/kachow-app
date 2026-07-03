@@ -131,4 +131,51 @@ final class Workouts
 
         return $stmt->fetchAll();
     }
+
+    /**
+     * Deletes specific set rows by id, scoped to the user (so one user can never
+     * delete another's rows). Returns the number of rows removed.
+     *
+     * @param array<int, int|string> $ids
+     */
+    public function deleteByIds(int $userId, array $ids): int
+    {
+        $ids = array_values(array_filter(array_map('intval', $ids), static fn (int $i): bool => $i > 0));
+        if ($ids === []) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->db->prepare(
+            "DELETE FROM workouts WHERE user_id = ? AND id IN ({$placeholders})"
+        );
+        $stmt->execute(array_merge([$userId], $ids));
+
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Deletes all sets of a given exercise for the user, optionally limited to a
+     * [from, to] date window (inclusive). Returns the number of rows removed.
+     * $exercise is required — this never deletes across all exercises at once.
+     */
+    public function deleteByExercise(int $userId, string $exercise, ?string $from = null, ?string $to = null): int
+    {
+        $sql = 'DELETE FROM workouts WHERE user_id = :user_id AND exercise = :exercise';
+        $params = [':user_id' => $userId, ':exercise' => $exercise];
+
+        if ($from !== null) {
+            $sql .= ' AND logged_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $sql .= ' AND logged_at <= :to';
+            $params[':to'] = $to;
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->rowCount();
+    }
 }
