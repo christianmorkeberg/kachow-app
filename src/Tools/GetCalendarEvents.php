@@ -22,7 +22,9 @@ final class GetCalendarEvents implements Tool
 
     public function description(): string
     {
-        return "Gets events from the user's Google Calendar within a time range. Use for questions "
+        return "Gets events from all of the user's visible Google Calendars (their primary calendar "
+            . 'plus any shared calendars) within a time range, merged and ordered by start time. Each '
+            . 'event includes a "calendar" field naming which calendar it belongs to. Use for questions '
             . 'about their schedule, appointments, meetings, or availability. Provide the range as '
             . 'RFC3339 timestamps in UTC, e.g. "2026-07-10T00:00:00Z".';
     }
