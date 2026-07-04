@@ -58,6 +58,7 @@ final class ToolRegistry
         $registry->register(new InsertCalendarEvent($calendar));
         $registry->register(new DeleteCalendarEvent($calendar));
         $registry->register(new ListCalendars($calendar));
+        $registry->register(new SetMyName($users));
         $registry->register(new RememberInstruction($instructions));
         $registry->register(new GetInstructions($instructions));
         $registry->register(new ForgetInstruction($instructions));

@@ -89,6 +89,21 @@ final class Users
     }
 
     /**
+     * Updates the user's display name. Pass null to clear it (falls back to email
+     * in the UI). Caller is responsible for trimming/validating the value.
+     */
+    public function updateName(int $userId, ?string $name): void
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE users SET name = :name WHERE id = :id'
+        );
+        $stmt->execute([
+            ':name' => $name,
+            ':id'   => $userId,
+        ]);
+    }
+
+    /**
      * Returns the decrypted Google refresh token for the user, or null if the
      * user has never connected their calendar.
      */

@@ -37,6 +37,9 @@ final class ToolSelector
         'instructions' => [
             'remember_instruction', 'get_instructions', 'forget_instruction',
         ],
+        'profile' => [
+            'set_my_name',
+        ],
         'connections' => [
             'send_connection_request', 'list_connections', 'accept_connection_request',
             'remove_connection', 'update_connection_sharing',
@@ -73,6 +76,9 @@ final class ToolSelector
         ],
         'instructions' => [
             'remember', 'from now on', 'always ', 'prefer', 'forget', 'instruction', 'by default',
+        ],
+        'profile' => [
+            'call me ', 'my name', 'change my name', 'rename me', 'i am called', "i'm called",
         ],
         'connections' => [
             'connect', 'connection', 'buddy', 'partner', 'share my', 'share their', 'sharing',
