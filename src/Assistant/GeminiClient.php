@@ -24,6 +24,9 @@ final class GeminiClient
         private string $apiKey,
         private string $model = 'gemini-3.1-flash-lite',
         ?callable $transport = null,
+        // Low temperature keeps a factual, tool-grounded assistant from improvising
+        // numbers/data. Override via GEMINI_TEMPERATURE if ever needed.
+        private float $temperature = 0.2,
     ) {
         $this->transport = $transport ?? [$this, 'curlTransport'];
     }
@@ -34,9 +37,12 @@ final class GeminiClient
         if ($key === '') {
             throw new RuntimeException('GEMINI_API_KEY missing from environment.');
         }
-        $model = $_ENV['GEMINI_MODEL'] ?? 'gemini-3.1-flash-lite';
+        $model       = $_ENV['GEMINI_MODEL'] ?? 'gemini-3.1-flash-lite';
+        $temperature = isset($_ENV['GEMINI_TEMPERATURE']) && $_ENV['GEMINI_TEMPERATURE'] !== ''
+            ? (float) $_ENV['GEMINI_TEMPERATURE']
+            : 0.2;
 
-        return new self($key, $model, $transport);
+        return new self($key, $model, $transport, $temperature);
     }
 
     /**
@@ -47,7 +53,10 @@ final class GeminiClient
      */
     public function generate(array $contents, array $functionDeclarations = [], ?string $systemInstruction = null): array
     {
-        $payload = ['contents' => $contents];
+        $payload = [
+            'contents'         => $contents,
+            'generationConfig' => ['temperature' => $this->temperature],
+        ];
 
         if ($systemInstruction !== null && $systemInstruction !== '') {
             $payload['system_instruction'] = ['parts' => [['text' => $systemInstruction]]];
