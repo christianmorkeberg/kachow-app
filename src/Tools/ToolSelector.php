@@ -78,44 +78,69 @@ final class ToolSelector
             'pull-up', 'pullup', 'push-up', 'pushup', 'rowing', 'overhead press', 'shoulder press',
             'leg press', 'chest press', 'bicep', 'tricep', 'reps', ' rep ', ' lift ', 'lifted',
             'lifting', 'weightlift', 'personal record', ' pr ', ' 1rm', 'training',
+            // Danish
+            'træn', 'motion', 'løft', 'øvelse', 'bænkpres', 'dødløft', 'markløft',
+            'gentagelser', 'kropsvægt', 'fitness',
         ],
         // Personal wishlist is explicit-only now — the everyday "list"/"buy"/"shopping"
         // words route to the shared shopping list instead.
         'wishlist' => [
             'wishlist', 'wish list', 'gift', 'gifts',
+            // Danish (" gave" avoids matching opgave/udgave; also catches gaver/gavekort)
+            'ønskeliste', 'ønskeseddel', ' gave',
         ],
         'shopping' => [
             'shopping', 'grocer', 'the list', 'our list', 'shared list', 'a list', 'shopping list',
             ' buy ', 'need to buy', 'we need', 'pick up', 'picked up', 'ran out', 'cross off',
             'check off', 'tick off', 'checked off', 'clear the list', 'on the list', 'off the list',
+            // Danish (køb also catches indkøb/købe/køber)
+            'køb', 'indkøb', 'dagligvarer', 'mangler', 'skal bruge', 'løbet tør', 'kryds af',
+            'på listen', ' liste', 'streg',
         ],
         'calendar' => [
             'calendar', 'event', 'schedule', 'appointment', 'meeting', 'busy', ' free ', 'availab',
             'remind', 'agenda', 'plans', 'today', 'tomorrow', 'tonight', 'this week', 'next week',
             'weekend', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            // Danish
+            'kalender', 'aftale', 'møde', 'begivenhed', 'påmind', 'i dag', 'i morgen', 'i aften',
+            'i weekenden', 'næste uge', 'denne uge', 'travlt', 'ledig', 'planer',
+            'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag',
         ],
         'instructions' => [
             'remember', 'from now on', 'always ', 'prefer', 'forget', 'instruction', 'by default',
+            // Danish
+            'husk', 'fra nu af', 'foretræk', 'glem', 'som standard', 'altid',
         ],
         'profile' => [
             'call me ', 'my name', 'change my name', 'rename me', 'i am called', "i'm called",
+            // Danish
+            'kald mig', 'mit navn', 'skift mit navn', 'omdøb', 'jeg hedder',
         ],
         'memory' => [
             'about me', 'know about me', 'what do you know', 'my profile', 'remember that',
             'remember this', 'forget that', 'you know about', 'my details', 'who i am', 'note that',
+            // Danish
+            'om mig', 'hvad ved du', 'ved du om mig', 'husk at jeg', 'glem at', 'hvem er jeg',
+            'mine oplysninger', 'min profil', 'noter at',
         ],
         'connections' => [
             'connect', 'connection', 'buddy', 'partner', 'share my', 'share their', 'sharing',
             ' accept', 'request', 'disconnect', 'friend',
+            // Danish
+            'forbind', 'del med', 'deler', 'anmodning', 'accepter', 'afbryd', 'kæreste', 'makker',
         ],
         'admin' => [
             'invite', 'new user', 'add user', 'create account', 'sign up', 'signup',
+            // Danish
+            'inviter', 'invitation', 'ny bruger', 'opret konto', 'tilmeld',
         ],
         'vinyls' => [
             'vinyl', 'vinyls', ' lp ', ' album', 'turntable', 'pressing', 'discogs', 'listened',
             'my collection', 'record collection', ' genre', 'artist',
             'recommend', 'similar to', 'listen to next', 'what should i listen', 'my taste',
             'a fit for', 'put on next', 'should i buy this record',
+            // Danish
+            'plade', 'pladesamling', 'lytte', 'kunstner', 'anbefal',
         ],
     ];
 
