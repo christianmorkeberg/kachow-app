@@ -36,6 +36,10 @@ final class ToolSelector
             'add_wishlist_item', 'get_wishlist', 'update_wishlist_item', 'delete_wishlist_item',
             'get_connected_wishlist',
         ],
+        'shopping' => [
+            'list_shopping_lists', 'get_shopping_list', 'add_to_shopping_list', 'check_off_item',
+            'uncheck_item', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
+        ],
         'calendar' => [
             'get_calendar_events', 'insert_calendar_event', 'delete_calendar_event', 'list_calendars',
             'get_connected_calendar',
@@ -75,8 +79,15 @@ final class ToolSelector
             'leg press', 'chest press', 'bicep', 'tricep', 'reps', ' rep ', ' lift ', 'lifted',
             'lifting', 'weightlift', 'personal record', ' pr ', ' 1rm', 'training',
         ],
+        // Personal wishlist is explicit-only now — the everyday "list"/"buy"/"shopping"
+        // words route to the shared shopping list instead.
         'wishlist' => [
-            'wish', ' buy ', 'gift', 'shopping', 'purchase', 'my list', 'price', 'priority',
+            'wishlist', 'wish list', 'gift', 'gifts',
+        ],
+        'shopping' => [
+            'shopping', 'grocer', 'the list', 'our list', 'shared list', 'a list', 'shopping list',
+            ' buy ', 'need to buy', 'we need', 'pick up', 'picked up', 'ran out', 'cross off',
+            'check off', 'tick off', 'checked off', 'clear the list', 'on the list', 'off the list',
         ],
         'calendar' => [
             'calendar', 'event', 'schedule', 'appointment', 'meeting', 'busy', ' free ', 'availab',

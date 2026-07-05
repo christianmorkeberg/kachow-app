@@ -8,6 +8,7 @@ use App\Data\Calendar;
 use App\Data\Connections;
 use App\Data\Invites;
 use App\Data\Memories;
+use App\Data\ShoppingLists;
 use App\Data\UserInstructions;
 use App\Data\Users;
 use App\Data\Vinyls;
@@ -45,6 +46,7 @@ final class ToolRegistry
         Connections $connections,
         Vinyls $vinyls,
         Memories $memories,
+        ShoppingLists $shoppingLists,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -74,6 +76,14 @@ final class ToolRegistry
         $registry->register(new AcceptConnectionRequest($connections, $users, $mailer));
         $registry->register(new RemoveConnection($connections));
         $registry->register(new UpdateConnectionSharing($connections));
+        $registry->register(new ListShoppingLists($connections, $shoppingLists));
+        $registry->register(new GetShoppingList($connections, $shoppingLists));
+        $registry->register(new AddToShoppingList($connections, $shoppingLists));
+        $registry->register(new CheckOffItem($connections, $shoppingLists));
+        $registry->register(new UncheckItem($connections, $shoppingLists));
+        $registry->register(new RemoveFromShoppingList($connections, $shoppingLists));
+        $registry->register(new ClearCheckedItems($connections, $shoppingLists));
+        $registry->register(new DeleteShoppingList($connections, $shoppingLists));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));
