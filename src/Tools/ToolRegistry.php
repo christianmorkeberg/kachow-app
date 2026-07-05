@@ -16,6 +16,7 @@ use App\Data\Wishlist;
 use App\Data\Workouts;
 use App\Mail\Mailer;
 use App\Music\Discogs;
+use App\Weather\Dmi;
 use InvalidArgumentException;
 
 /**
@@ -47,6 +48,7 @@ final class ToolRegistry
         Vinyls $vinyls,
         Memories $memories,
         ShoppingLists $shoppingLists,
+        Dmi $weather,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -84,6 +86,7 @@ final class ToolRegistry
         $registry->register(new RemoveFromShoppingList($connections, $shoppingLists));
         $registry->register(new ClearCheckedItems($connections, $shoppingLists));
         $registry->register(new DeleteShoppingList($connections, $shoppingLists));
+        $registry->register(new GetCurrentWeather($weather));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));

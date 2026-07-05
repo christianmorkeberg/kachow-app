@@ -64,6 +64,9 @@ final class ToolSelector
             'add_vinyl', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'remove_vinyl',
             'recommend_vinyl', 'assess_vinyl',
         ],
+        'weather' => [
+            'get_current_weather',
+        ],
     ];
 
     /**
@@ -141,6 +144,13 @@ final class ToolSelector
             'a fit for', 'put on next', 'should i buy this record',
             // Danish
             'plade', 'pladesamling', 'lytte', 'kunstner', 'anbefal',
+        ],
+        'weather' => [
+            'weather', 'forecast', 'temperature', ' rain', 'raining', 'sunny', ' wind ', 'windy',
+            'how cold', 'how hot', 'umbrella', 'degrees outside',
+            // Danish
+            'vejr', 'regn', 'temperatur', 'grader', 'blæs', 'koldt', ' kold', 'varmt',
+            ' sol ', 'solskin', 'sne', 'byger', 'paraply',
         ],
     ];
 

@@ -56,14 +56,17 @@ final class AssistantLoop
      * Handles one user message in an existing conversation and returns the
      * assistant's reply text. $userId scopes all tool execution.
      */
-    public function handle(int $userId, int $conversationId, string $userMessage): string
+    /**
+     * @param array{lat: float, lon: float}|null $location optional device location (browser geolocation)
+     */
+    public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null): string
     {
         $this->conversations->addMessage($conversationId, 'user', $userMessage);
 
         $contents     = $this->buildContents($conversationId);
         // Send only the tools relevant to this message (falls back to all if unsure).
         $declarations = ToolSelector::select($this->tools->declarations(), $userMessage);
-        $system       = $this->buildSystemInstruction($userId, $userMessage);
+        $system       = $this->buildSystemInstruction($userId, $userMessage, $location);
 
         // The model is chosen on the first call (round 0, before any tool calls or
         // thoughtSignatures exist — so switching is safe) and reused for the rest of
@@ -161,10 +164,22 @@ final class AssistantLoop
      * Builds the system instruction for a turn: base prompt + current UTC time +
      * the user's stored standing instructions (so they always apply).
      */
-    private function buildSystemInstruction(int $userId, string $userMessage = ''): string
+    /**
+     * @param array{lat: float, lon: float}|null $location
+     */
+    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null): string
     {
         $system = $this->systemInstruction
             . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
+
+        if ($location !== null && isset($location['lat'], $location['lon'])) {
+            $system .= sprintf(
+                "\n\nThe user's current device location is approximately latitude %.4f, longitude %.4f. "
+                . 'Use it for location-based tools (e.g. weather) unless they name a different place.',
+                (float) $location['lat'],
+                (float) $location['lon']
+            );
+        }
 
         if ($this->instructions !== null) {
             $stored = $this->instructions->all($userId);
