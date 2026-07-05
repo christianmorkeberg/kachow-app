@@ -7,6 +7,7 @@ namespace App\Tools;
 use App\Data\Calendar;
 use App\Data\Connections;
 use App\Data\Invites;
+use App\Data\Memories;
 use App\Data\UserInstructions;
 use App\Data\Users;
 use App\Data\Vinyls;
@@ -43,6 +44,7 @@ final class ToolRegistry
         Mailer $mailer,
         Connections $connections,
         Vinyls $vinyls,
+        Memories $memories,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -59,6 +61,10 @@ final class ToolRegistry
         $registry->register(new DeleteCalendarEvent($calendar));
         $registry->register(new ListCalendars($calendar));
         $registry->register(new SetMyName($users));
+        $registry->register(new RememberAboutMe($memories));
+        $registry->register(new GetAboutMe($memories));
+        $registry->register(new UpdateAboutMe($memories));
+        $registry->register(new ForgetAboutMe($memories));
         $registry->register(new RememberInstruction($instructions));
         $registry->register(new GetInstructions($instructions));
         $registry->register(new ForgetInstruction($instructions));

@@ -20,6 +20,12 @@ namespace App\Tools;
  */
 final class ToolSelector
 {
+    /**
+     * Tools offered on EVERY request, even when the message narrows to one domain,
+     * so the assistant can proactively capture a personal fact in any conversation.
+     */
+    private const ALWAYS = ['remember_about_me'];
+
     /** group => tool names */
     private const GROUPS = [
         'workouts' => [
@@ -39,6 +45,9 @@ final class ToolSelector
         ],
         'profile' => [
             'set_my_name',
+        ],
+        'memory' => [
+            'remember_about_me', 'get_about_me', 'update_about_me', 'forget_about_me',
         ],
         'connections' => [
             'send_connection_request', 'list_connections', 'accept_connection_request',
@@ -80,6 +89,10 @@ final class ToolSelector
         'profile' => [
             'call me ', 'my name', 'change my name', 'rename me', 'i am called', "i'm called",
         ],
+        'memory' => [
+            'about me', 'know about me', 'what do you know', 'my profile', 'remember that',
+            'remember this', 'forget that', 'you know about', 'my details', 'who i am', 'note that',
+        ],
         'connections' => [
             'connect', 'connection', 'buddy', 'partner', 'share my', 'share their', 'sharing',
             ' accept', 'request', 'disconnect', 'friend',
@@ -120,6 +133,11 @@ final class ToolSelector
 
         if ($allowed === []) {
             return $declarations; // ambiguous → send everything (safe)
+        }
+
+        // Keep proactive-memory capture available even on narrowed turns.
+        foreach (self::ALWAYS as $name) {
+            $allowed[$name] = true;
         }
 
         $subset = array_values(array_filter(

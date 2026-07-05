@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Assistant;
 
 use App\Data\Conversations;
+use App\Data\Memories;
 use App\Data\UserInstructions;
 use App\Tools\ToolRegistry;
 use App\Tools\ToolSelector;
@@ -30,13 +31,20 @@ final class AssistantLoop
         . 'fill in values from memory. If a tool returns nothing, say so instead of guessing. '
         . 'When a question is about another person you are connected with, use only that person\'s '
         . 'tool result (e.g. get_connected_workouts) and attribute each number to the correct '
-        . 'person — never mix their data with your own.';
+        . 'person — never mix their data with your own. '
+        . 'Get to know the user over time: when they share a lasting, useful fact about themselves '
+        . '(their life, work, family, health, routines, goals, preferences, or important dates), '
+        . 'save it with remember_about_me — proactively, without being asked — and then briefly '
+        . 'tell them you\'ll remember it. Do not save trivia, temporary details, or clearly '
+        . 'sensitive information without a clear reason, and do not re-save something you already '
+        . 'know. Use what you know about the user to help them, but do not recite it back unprompted.';
 
     public function __construct(
         private GeminiClient $gemini,
         private ToolRegistry $tools,
         private Conversations $conversations,
         private ?UserInstructions $instructions = null,
+        private ?Memories $memories = null,
         private string $systemInstruction = self::DEFAULT_SYSTEM_INSTRUCTION,
     ) {
     }
@@ -162,6 +170,19 @@ final class AssistantLoop
                     . "unless the current message overrides one:";
                 foreach ($stored as $row) {
                     $system .= "\n- (#" . (int) $row['id'] . ') ' . (string) $row['instruction'];
+                }
+            }
+        }
+
+        if ($this->memories !== null) {
+            $facts = $this->memories->all($userId);
+            if ($facts !== []) {
+                $system .= "\n\nWhat you already know about the user (use it to help them; each has an "
+                    . "id for editing/forgetting; don't recite these back unprompted):";
+                foreach ($facts as $row) {
+                    $category = (string) ($row['category'] ?? '');
+                    $tag      = ($category !== '' && $category !== 'general') ? ' [' . $category . ']' : '';
+                    $system .= "\n- (#" . (int) $row['id'] . ')' . $tag . ' ' . (string) $row['content'];
                 }
             }
         }
