@@ -54,9 +54,26 @@ final class AssistantLoop
         $declarations = ToolSelector::select($this->tools->declarations(), $userMessage);
         $system       = $this->buildSystemInstruction($userId);
 
+        // The model is chosen on the first call (round 0, before any tool calls or
+        // thoughtSignatures exist — so switching is safe) and reused for the rest of
+        // the turn to keep thinking-model signatures consistent.
+        $models      = $this->gemini->models();
+        $chosenModel = null;
+
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
-            $response = $this->gemini->generate($contents, $declarations, $system);
-            $calls    = GeminiClient::extractFunctionCalls($response);
+            try {
+                if ($chosenModel === null) {
+                    [$response, $chosenModel] = $this->generateWithFallback($models, $contents, $declarations, $system);
+                } else {
+                    $response = $this->gemini->generate($contents, $declarations, $system, $chosenModel);
+                }
+            } catch (RateLimitException $e) {
+                $reply = "I'm being rate-limited by the model right now — please try again in a few seconds.";
+                $this->conversations->addMessage($conversationId, 'assistant', $reply);
+                return $reply;
+            }
+
+            $calls = GeminiClient::extractFunctionCalls($response);
 
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);
@@ -101,6 +118,32 @@ final class AssistantLoop
         $this->conversations->addMessage($conversationId, 'assistant', $fallback);
 
         return $fallback;
+    }
+
+    /**
+     * Sends the first request of a turn, trying each model in the chain until one
+     * answers. Returns [response, modelThatAnswered]. Only used for round 0 — before
+     * any tool calls or thoughtSignatures exist — so switching models is safe here.
+     *
+     * @param list<string>                     $models
+     * @param array<int, array<string, mixed>> $contents
+     * @param array<int, array<string, mixed>> $declarations
+     * @return array{0: array<string, mixed>, 1: string}
+     *
+     * @throws RateLimitException when every model in the chain is rate-limited.
+     */
+    private function generateWithFallback(array $models, array $contents, array $declarations, ?string $system): array
+    {
+        $last = null;
+        foreach ($models as $model) {
+            try {
+                return [$this->gemini->generate($contents, $declarations, $system, $model), $model];
+            } catch (RateLimitException $e) {
+                $last = $e;
+            }
+        }
+
+        throw $last ?? new RateLimitException('No model available.');
     }
 
     /**

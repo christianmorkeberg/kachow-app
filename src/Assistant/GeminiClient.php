@@ -20,14 +20,21 @@ final class GeminiClient
     /** @var callable(string,array,array):array{0:int,1:string} */
     private $transport;
 
+    /** @var list<string> Ordered model chain: primary first, then fallbacks. */
+    private array $models;
+
+    /**
+     * @param array<int, string>|string $models One model, or a chain (primary first).
+     */
     public function __construct(
         private string $apiKey,
-        private string $model = 'gemini-3.1-flash-lite',
+        array|string $models = ['gemini-3.5-flash'],
         ?callable $transport = null,
         // Low temperature keeps a factual, tool-grounded assistant from improvising
         // numbers/data. Override via GEMINI_TEMPERATURE if ever needed.
         private float $temperature = 0.2,
     ) {
+        $this->models = self::normalizeModels($models);
         $this->transport = $transport ?? [$this, 'curlTransport'];
     }
 
@@ -37,12 +44,25 @@ final class GeminiClient
         if ($key === '') {
             throw new RuntimeException('GEMINI_API_KEY missing from environment.');
         }
-        $model       = $_ENV['GEMINI_MODEL'] ?? 'gemini-3.1-flash-lite';
+        $primary   = $_ENV['GEMINI_MODEL'] ?? 'gemini-3.5-flash';
+        $fallbacks = $_ENV['GEMINI_FALLBACK_MODELS'] ?? 'gemini-2.5-flash,gemini-3.1-flash-lite';
+        $models    = array_merge([$primary], explode(',', $fallbacks));
+
         $temperature = isset($_ENV['GEMINI_TEMPERATURE']) && $_ENV['GEMINI_TEMPERATURE'] !== ''
             ? (float) $_ENV['GEMINI_TEMPERATURE']
             : 0.2;
 
-        return new self($key, $model, $transport, $temperature);
+        return new self($key, $models, $transport, $temperature);
+    }
+
+    /**
+     * The model chain (primary first), so the loop can fall back on rate limits.
+     *
+     * @return list<string>
+     */
+    public function models(): array
+    {
+        return $this->models;
     }
 
     /**
@@ -50,9 +70,18 @@ final class GeminiClient
      *
      * @param array<int, array<string, mixed>> $contents             Gemini "contents"
      * @param array<int, array<string, mixed>> $functionDeclarations  from ToolRegistry::declarations()
+     * @param string|null                       $model                Override; defaults to the primary.
+     *
+     * @throws RateLimitException on HTTP 429 (quota) or 503 (overloaded).
      */
-    public function generate(array $contents, array $functionDeclarations = [], ?string $systemInstruction = null): array
-    {
+    public function generate(
+        array $contents,
+        array $functionDeclarations = [],
+        ?string $systemInstruction = null,
+        ?string $model = null,
+    ): array {
+        $model ??= $this->models[0];
+
         $payload = [
             'contents'         => $contents,
             'generationConfig' => ['temperature' => $this->temperature],
@@ -65,7 +94,7 @@ final class GeminiClient
             $payload['tools'] = [['function_declarations' => $functionDeclarations]];
         }
 
-        $url = self::BASE . '/models/' . rawurlencode($this->model) . ':generateContent';
+        $url = self::BASE . '/models/' . rawurlencode($model) . ':generateContent';
         $headers = [
             'Content-Type: application/json',
             'x-goog-api-key: ' . $this->apiKey,
@@ -74,6 +103,13 @@ final class GeminiClient
         [$status, $body] = ($this->transport)($url, $payload, $headers);
 
         $decoded = json_decode($body, true);
+        if ($status === 429 || $status === 503) {
+            $message = is_array($decoded) ? ($decoded['error']['message'] ?? null) : null;
+            throw new RateLimitException(
+                'Gemini model "' . $model . '" is rate-limited (HTTP ' . $status . ')'
+                . ($message !== null ? ': ' . $message : '')
+            );
+        }
         if ($status < 200 || $status >= 300) {
             $message = is_array($decoded) ? ($decoded['error']['message'] ?? null) : null;
             throw new RuntimeException('Gemini API error: ' . ($message ?? ('HTTP ' . $status)));
@@ -83,6 +119,23 @@ final class GeminiClient
         }
 
         return $decoded;
+    }
+
+    /**
+     * @param array<int, string>|string $models
+     * @return list<string>
+     */
+    private static function normalizeModels(array|string $models): array
+    {
+        $list = [];
+        foreach ((array) $models as $m) {
+            $m = trim((string) $m);
+            if ($m !== '' && !in_array($m, $list, true)) {
+                $list[] = $m;
+            }
+        }
+
+        return $list !== [] ? $list : ['gemini-3.5-flash'];
     }
 
     /**
