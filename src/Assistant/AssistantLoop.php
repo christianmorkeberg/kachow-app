@@ -34,8 +34,10 @@ final class AssistantLoop
         . 'their connection) — use the shopping-list tools. Only use the personal wishlist when the '
         . 'user explicitly says "wishlist" or "gift"; never use it for groceries or everyday shopping. '
         . 'When the user is about to train, says they are training, or asks what they are doing today '
-        . 'or this week, call get_workout_plan (or get_week_plan) so they get the interactive '
-        . 'checklist to tick off — do not just describe it in text. '
+        . 'or this week, ALWAYS call get_workout_plan (or get_week_plan) that turn — do not answer '
+        . 'from memory. The app then renders the plan as an interactive checklist with tickboxes '
+        . 'automatically, so give only a brief one-line intro (e.g. "Here\'s today\'s plan:") and NEVER '
+        . 'write out the exercises, checkboxes, or "[ ]" marks yourself. '
         . 'Report only numbers and facts that appear in a tool result; never estimate, round, or '
         . 'fill in values from memory. If a tool returns nothing, say so instead of guessing. '
         . 'When a question is about another person you are connected with, use only that person\'s '
@@ -142,9 +144,14 @@ final class AssistantLoop
                     $result = ['error' => $e->getMessage()];
                 }
 
-                // A tool can attach a renderable card for the UI (last one wins).
-                if (is_array($result) && isset($result['_render']) && is_array($result['_render'])) {
-                    $this->lastRender = $result['_render'];
+                // A tool can attach a renderable card for the UI (last one wins). Strip it
+                // from the result so the model doesn't re-list the plan as text — the widget
+                // is the display; the model just gives a short intro.
+                if (is_array($result) && isset($result['_render'])) {
+                    if (is_array($result['_render'])) {
+                        $this->lastRender = $result['_render'];
+                    }
+                    unset($result['_render']);
                 }
 
                 $this->conversations->addMessage(

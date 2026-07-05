@@ -42,12 +42,16 @@ final class GetWorkoutPlan implements Tool
     {
         $date = CreateWorkoutPlan::resolveDate($arguments['date'] ?? null);
         $card = $this->plans->cardForDate($userId, $date);
+        $day  = $card['days'][0];
 
+        // Only a summary goes to the model (the interactive card carries the details,
+        // so the model must not re-list exercises as text).
         return [
-            'date'        => $date,
-            'has_plan'    => $card['days'][0]['plan_id'] !== null,
-            'items'       => $card['days'][0]['items'],
-            '_render'     => $card,
+            'date'      => $date,
+            'has_plan'  => $day['plan_id'] !== null,
+            'item_count' => count($day['items']),
+            'remaining' => count(array_filter($day['items'], static fn (array $i): bool => !$i['done'])),
+            '_render'   => $card,
         ];
     }
 }
