@@ -2,10 +2,13 @@
 -- Content is encrypted at rest by the app (libsodium, APP_ENCRYPTION_KEY), so
 -- this column holds base64(nonce.ciphertext), not plaintext.
 -- Run once on the server DB (kachowdk_ai).
+--
+-- NOTE: user_id is INT UNSIGNED to match users.id (int(10) unsigned) — the FK
+-- needs identical type/signedness or MySQL throws errno 150.
 
 CREATE TABLE memories (
     id         INT AUTO_INCREMENT PRIMARY KEY,
-    user_id    INT NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
     category   VARCHAR(32) NOT NULL DEFAULT 'general',
     content    TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

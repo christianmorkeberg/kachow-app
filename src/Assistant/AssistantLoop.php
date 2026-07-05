@@ -60,7 +60,7 @@ final class AssistantLoop
         $contents     = $this->buildContents($conversationId);
         // Send only the tools relevant to this message (falls back to all if unsure).
         $declarations = ToolSelector::select($this->tools->declarations(), $userMessage);
-        $system       = $this->buildSystemInstruction($userId);
+        $system       = $this->buildSystemInstruction($userId, $userMessage);
 
         // The model is chosen on the first call (round 0, before any tool calls or
         // thoughtSignatures exist — so switching is safe) and reused for the rest of
@@ -158,7 +158,7 @@ final class AssistantLoop
      * Builds the system instruction for a turn: base prompt + current UTC time +
      * the user's stored standing instructions (so they always apply).
      */
-    private function buildSystemInstruction(int $userId): string
+    private function buildSystemInstruction(int $userId, string $userMessage = ''): string
     {
         $system = $this->systemInstruction
             . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
@@ -175,7 +175,9 @@ final class AssistantLoop
         }
 
         if ($this->memories !== null) {
-            $facts = $this->memories->all($userId);
+            // Once memory grows past the budget, inject only the most-recent + the
+            // facts relevant to this message (keeps the prompt small).
+            $facts = MemorySelector::select($this->memories->all($userId), $userMessage);
             if ($facts !== []) {
                 $system .= "\n\nWhat you already know about the user (use it to help them; each has an "
                     . "id for editing/forgetting; don't recite these back unprompted):";
