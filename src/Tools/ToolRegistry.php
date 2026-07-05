@@ -13,6 +13,7 @@ use App\Data\UserInstructions;
 use App\Data\Users;
 use App\Data\Vinyls;
 use App\Data\Wishlist;
+use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Mail\Mailer;
 use App\Music\Discogs;
@@ -49,6 +50,7 @@ final class ToolRegistry
         Memories $memories,
         ShoppingLists $shoppingLists,
         Dmi $weather,
+        WorkoutPlans $workoutPlans,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -56,6 +58,14 @@ final class ToolRegistry
         $registry->register(new GetWorkoutHistory($workouts));
         $registry->register(new UpdateWorkout($workouts));
         $registry->register(new DeleteWorkout($workouts));
+        $registry->register(new CreateWorkoutPlan($workoutPlans));
+        $registry->register(new GetWorkoutPlan($workoutPlans));
+        $registry->register(new GetWeekPlan($workoutPlans));
+        $registry->register(new CheckOffExercise($workoutPlans));
+        $registry->register(new UncheckExercise($workoutPlans));
+        $registry->register(new AddPlanExercise($workoutPlans));
+        $registry->register(new RemovePlanExercise($workoutPlans));
+        $registry->register(new DeleteWorkoutPlan($workoutPlans));
         $registry->register(new AddWishlistItem($wishlist));
         $registry->register(new GetWishlist($wishlist));
         $registry->register(new UpdateWishlistItem($wishlist));

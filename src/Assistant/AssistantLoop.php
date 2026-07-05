@@ -60,6 +60,9 @@ final class AssistantLoop
         . 'taste-based recommendations; a personal gift wishlist; connecting with other people to '
         . 'share data; and setting their display name and standing preferences.';
 
+    /** A renderable card (e.g. a workout plan) emitted by a tool this turn, for the UI. */
+    private ?array $lastRender = null;
+
     public function __construct(
         private GeminiClient $gemini,
         private ToolRegistry $tools,
@@ -74,12 +77,19 @@ final class AssistantLoop
      * Handles one user message in an existing conversation and returns the
      * assistant's reply text. $userId scopes all tool execution.
      */
+    /** The renderable card emitted during the last handle() call, if any. */
+    public function lastRender(): ?array
+    {
+        return $this->lastRender;
+    }
+
     /**
      * @param array{lat: float, lon: float}|null $location optional device location (browser geolocation)
      */
     public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null): string
     {
         $this->conversations->addMessage($conversationId, 'user', $userMessage);
+        $this->lastRender = null;
 
         $contents     = $this->buildContents($conversationId);
         // Send only the tools relevant to this message (falls back to all if unsure).
@@ -124,6 +134,11 @@ final class AssistantLoop
                     $result = $this->tools->dispatch($call['name'], $call['args'], $userId);
                 } catch (Throwable $e) {
                     $result = ['error' => $e->getMessage()];
+                }
+
+                // A tool can attach a renderable card for the UI (last one wins).
+                if (is_array($result) && isset($result['_render']) && is_array($result['_render'])) {
+                    $this->lastRender = $result['_render'];
                 }
 
                 $this->conversations->addMessage(

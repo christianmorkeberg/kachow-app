@@ -31,6 +31,8 @@ final class ToolSelector
         'workouts' => [
             'log_workout', 'get_workout_history', 'update_workout', 'delete_workout',
             'get_connected_workouts',
+            'create_workout_plan', 'get_workout_plan', 'get_week_plan', 'check_off_exercise',
+            'uncheck_exercise', 'add_plan_exercise', 'remove_plan_exercise', 'delete_workout_plan',
         ],
         'wishlist' => [
             'add_wishlist_item', 'get_wishlist', 'update_wishlist_item', 'delete_wishlist_item',
@@ -81,9 +83,13 @@ final class ToolSelector
             'pull-up', 'pullup', 'push-up', 'pushup', 'rowing', 'overhead press', 'shoulder press',
             'leg press', 'chest press', 'bicep', 'tricep', 'reps', ' rep ', ' lift ', 'lifted',
             'lifting', 'weightlift', 'personal record', ' pr ', ' 1rm', 'training',
+            // planning
+            'workout plan', 'training plan', 'my plan', 'program', 'routine', 'session',
+            'schedule my', "what's left", 'remaining', 'done with', 'checklist', 'tick off',
             // Danish
             'træn', 'motion', 'løft', 'øvelse', 'bænkpres', 'dødløft', 'markløft',
             'gentagelser', 'kropsvægt', 'fitness',
+            'træningsplan', 'program', 'rutine', 'skema', 'færdig med', 'mangler jeg', 'i dag skal',
         ],
         // Personal wishlist is explicit-only now — the everyday "list"/"buy"/"shopping"
         // words route to the shared shopping list instead.
