@@ -19,7 +19,8 @@ use RuntimeException;
  */
 final class Dmi
 {
-    private const BASE = 'https://opendataapi.dmi.dk/v2/metObs';
+    private const BASE          = 'https://opendataapi.dmi.dk/v2/metObs';
+    private const FORECAST_BASE = 'https://opendataapi.dmi.dk/v1/forecastedr';
 
     /** The observation parameters we surface, in report order. */
     public const PARAMS = [
@@ -118,14 +119,111 @@ final class Dmi
     }
 
     /**
+     * Point forecast (HARMONIE DINI surface model) for the coming ~2.5 days,
+     * summarised into a few hourly steps + per-day aggregates. Times are local
+     * (Europe/Copenhagen). Temperature is converted K→°C, cloud fraction→%, and
+     * precipitation is the per-step delta of the accumulated total. [] if the point
+     * has no forecast (outside the model domain).
+     *
+     * @return array{issued:string, hourly:array<int,array<string,mixed>>, daily:array<int,array<string,mixed>>}|array{}
+     */
+    public function forecast(float $lat, float $lon, int $days = 3, int $hourlyStepH = 3, int $hourlyCount = 8): array
+    {
+        $params = ['temperature-2m', 'total-precipitation', 'wind-speed-10m', 'wind-dir-10m', 'fraction-of-cloud-cover'];
+        // Build the query by hand: EDR wants coords=POINT(lon lat) with a %20 space,
+        // and plain commas in parameter-name (http_build_query would mangle both).
+        $url = self::FORECAST_BASE . '/collections/harmonie_dini_sf/position?coords=POINT('
+            . sprintf('%.4f', $lon) . '%20' . sprintf('%.4f', $lat) . ')'
+            . '&parameter-name=' . implode(',', $params)
+            . '&crs=crs84';
+
+        $data   = $this->getJson($url);
+        $times  = $data['domain']['axes']['t']['values'] ?? [];
+        $ranges = $data['ranges'] ?? [];
+        if (!is_array($times) || $times === [] || !is_array($ranges) || $ranges === []) {
+            return [];
+        }
+
+        $temp    = $ranges['temperature-2m']['values'] ?? [];
+        $precAcc = $ranges['total-precipitation']['values'] ?? [];
+        $wind    = $ranges['wind-speed-10m']['values'] ?? [];
+        $wdir    = $ranges['wind-dir-10m']['values'] ?? [];
+        $cloud   = $ranges['fraction-of-cloud-cover']['values'] ?? [];
+
+        $tz    = new \DateTimeZone('Europe/Copenhagen');
+        $steps = [];
+        foreach ($times as $i => $iso) {
+            $dt       = (new \DateTimeImmutable((string) $iso))->setTimezone($tz);
+            $precipHr = ($i > 0 && isset($precAcc[$i], $precAcc[$i - 1])) ? max(0.0, $precAcc[$i] - $precAcc[$i - 1]) : 0.0;
+            $steps[] = [
+                'dt'        => $dt,
+                'temp_c'    => isset($temp[$i]) ? round($temp[$i] - 273.15, 1) : null,
+                'precip_mm' => round($precipHr, 2),
+                'wind_ms'   => isset($wind[$i]) ? round($wind[$i], 1) : null,
+                'wind_from' => isset($wdir[$i]) ? self::compass((float) $wdir[$i]) : null,
+                'cloud_pct' => isset($cloud[$i]) ? (int) round($cloud[$i] * 100) : null,
+            ];
+        }
+
+        // Hourly: every Nth step, first $hourlyCount of them.
+        $hourly = [];
+        for ($i = 0; $i < count($steps) && count($hourly) < $hourlyCount; $i += max(1, $hourlyStepH)) {
+            $s = $steps[$i];
+            $hourly[] = [
+                'time'      => $s['dt']->format('Y-m-d H:i'),
+                'temp_c'    => $s['temp_c'],
+                'precip_mm' => $s['precip_mm'],
+                'wind_ms'   => $s['wind_ms'],
+                'cloud_pct' => $s['cloud_pct'],
+            ];
+        }
+
+        // Daily aggregates for the next $days local days.
+        $byDay = [];
+        foreach ($steps as $s) {
+            $byDay[$s['dt']->format('Y-m-d')][] = $s;
+        }
+        $daily = [];
+        foreach ($byDay as $date => $rows) {
+            if (count($daily) >= $days) {
+                break;
+            }
+            $temps  = array_values(array_filter(array_column($rows, 'temp_c'), static fn ($v) => $v !== null));
+            $winds  = array_values(array_filter(array_column($rows, 'wind_ms'), static fn ($v) => $v !== null));
+            $clouds = array_values(array_filter(array_column($rows, 'cloud_pct'), static fn ($v) => $v !== null));
+            $daily[] = [
+                'date'          => $date,
+                'weekday'       => (new \DateTimeImmutable($date, $tz))->format('l'),
+                'temp_min_c'    => $temps !== [] ? min($temps) : null,
+                'temp_max_c'    => $temps !== [] ? max($temps) : null,
+                'precip_mm'     => round(array_sum(array_column($rows, 'precip_mm')), 1),
+                'wind_max_ms'   => $winds !== [] ? max($winds) : null,
+                'cloud_avg_pct' => $clouds !== [] ? (int) round(array_sum($clouds) / count($clouds)) : null,
+            ];
+        }
+
+        return ['issued' => $steps[0]['dt']->format('c'), 'hourly' => $hourly, 'daily' => $daily];
+    }
+
+    /**
      * @param array<string, string|int> $query
      * @return array<string, mixed>
      */
     private function get(string $path, array $query): array
     {
-        $url = self::BASE . $path . '?' . http_build_query($query);
+        return $this->getJson(self::BASE . $path . '?' . http_build_query($query));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getJson(string $url): array
+    {
         [$status, $body] = ($this->transport)($url);
 
+        if ($status === 429) {
+            throw new RuntimeException('The weather service is busy right now (rate limited) — try again in a moment.');
+        }
         if ($status < 200 || $status >= 300) {
             throw new RuntimeException('DMI API error: HTTP ' . $status);
         }
@@ -135,6 +233,13 @@ final class Dmi
         }
 
         return $decoded;
+    }
+
+    private static function compass(float $deg): string
+    {
+        $dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+        return $dirs[(int) round((fmod($deg, 360)) / 45) % 8];
     }
 
     /** @return array{0:int,1:string} [statusCode, body] */

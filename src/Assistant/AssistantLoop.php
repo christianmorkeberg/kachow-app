@@ -42,6 +42,24 @@ final class AssistantLoop
         . 'sensitive information without a clear reason, and do not re-save something you already '
         . 'know. Use what you know about the user to help them, but do not recite it back unprompted.';
 
+    /** Meta / "what can you do" triggers → inject the capability summary that turn. */
+    private const HELP_TRIGGERS = [
+        'what can you do', 'what do you do', 'what can i ask', 'what are you able',
+        'your capabilities', 'what features', 'how can you help', 'what can you help',
+        'help me with', 'who are you', 'what are you',
+        // Danish
+        'hvad kan du', 'kan du hjælpe', 'hvad kan jeg', 'dine funktioner', 'hvem er du',
+    ];
+
+    private const CAPABILITIES =
+        'If the user asks what you can do or how you can help, summarise these areas briefly and in '
+        . 'their own language: workouts (log sets, review history and personal records); Google '
+        . 'Calendar (read, add and delete events); shared shopping lists with their partner (named '
+        . 'lists, add and check off items); weather in Denmark (current conditions and a forecast, '
+        . 'from DMI); remembering personal facts about them; their vinyl record collection with '
+        . 'taste-based recommendations; a personal gift wishlist; connecting with other people to '
+        . 'share data; and setting their display name and standing preferences.';
+
     public function __construct(
         private GeminiClient $gemini,
         private ToolRegistry $tools,
@@ -179,6 +197,16 @@ final class AssistantLoop
                 (float) $location['lat'],
                 (float) $location['lon']
             );
+        }
+
+        // On a "what can you do?"-type question, add the capability summary so the
+        // assistant can describe itself reliably (tool declarations alone are narrowed).
+        $lc = mb_strtolower($userMessage);
+        foreach (self::HELP_TRIGGERS as $trigger) {
+            if (str_contains($lc, $trigger)) {
+                $system .= "\n\n" . self::CAPABILITIES;
+                break;
+            }
         }
 
         if ($this->instructions !== null) {

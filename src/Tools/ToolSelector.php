@@ -65,7 +65,7 @@ final class ToolSelector
             'recommend_vinyl', 'assess_vinyl',
         ],
         'weather' => [
-            'get_current_weather',
+            'get_current_weather', 'get_weather_forecast',
         ],
     ];
 
@@ -149,8 +149,8 @@ final class ToolSelector
             'weather', 'forecast', 'temperature', ' rain', 'raining', 'sunny', ' wind ', 'windy',
             'how cold', 'how hot', 'umbrella', 'degrees outside',
             // Danish
-            'vejr', 'regn', 'temperatur', 'grader', 'blæs', 'koldt', ' kold', 'varmt',
-            ' sol ', 'solskin', 'sne', 'byger', 'paraply',
+            'vejr', 'vejrudsigt', 'udsigt', 'regn', 'temperatur', 'grader', 'blæs', 'koldt',
+            ' kold', 'varmt', ' sol ', 'solskin', 'sne', 'byger', 'paraply',
         ],
     ];
 
