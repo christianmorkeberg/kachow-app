@@ -86,6 +86,9 @@ final class Calendar
             if ($start === '') {
                 continue;
             }
+            if ($this->isWeekNumberMarker($e)) {
+                continue; // drop "Week 28 of 2026" / "Uge 28" clutter from subscribed calendars
+            }
             $dayKey = substr($start, 0, 10);
             if (!isset($days[$dayKey])) {
                 $ts = strtotime($dayKey) ?: time();
@@ -120,6 +123,21 @@ final class Calendar
         ksort($days);
 
         return ['kind' => 'agenda', 'title' => $title, 'days' => array_values($days)];
+    }
+
+    /**
+     * True for the all-day "week number" events some calendars publish on Mondays
+     * (e.g. "Week 28 of 2026", Danish "Uge 28") — noise we drop from the agenda.
+     */
+    private function isWeekNumberMarker(array $event): bool
+    {
+        if (!($event['allDay'] ?? false)) {
+            return false;
+        }
+        $summary = trim((string) ($event['summary'] ?? ''));
+
+        return $summary !== ''
+            && (bool) preg_match('/^(week|uge|wk)\s*\d+\b/i', $summary);
     }
 
     /**
