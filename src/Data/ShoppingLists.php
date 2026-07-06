@@ -21,6 +21,9 @@ final class ShoppingLists
     /** Name of the auto-created default list (used when no list is named). */
     public const DEFAULT_NAME = 'Shopping';
 
+    /** Checked items are auto-removed once they're older than this many hours. */
+    public const KEEP_CHECKED_HOURS = 24;
+
     private PDO $db;
 
     public function __construct(?PDO $db = null)
@@ -171,6 +174,8 @@ final class ShoppingLists
      */
     public function cardForList(int $connectionId, int $listId, string $name): array
     {
+        $this->purgeStaleChecked($listId);
+
         $items = [];
         foreach ($this->items($listId) as $i) {
             $items[] = ['id' => (int) $i['id'], 'label' => (string) $i['item'], 'done' => (bool) $i['checked']];
@@ -202,7 +207,8 @@ final class ShoppingLists
             return null;
         }
 
-        $this->db->prepare('UPDATE shared_list_items SET checked = :c, checked_by = :by WHERE id = :id')
+        $whenAt = $checked ? 'NOW()' : 'NULL';
+        $this->db->prepare("UPDATE shared_list_items SET checked = :c, checked_by = :by, checked_at = {$whenAt} WHERE id = :id")
             ->execute([':c' => $checked ? 1 : 0, ':by' => $checked ? $userId : null, ':id' => $itemId]);
 
         return ['list_id' => (int) $row['list_id'], 'connection_id' => (int) $row['connection_id'], 'name' => (string) $row['name']];
@@ -228,9 +234,10 @@ final class ShoppingLists
         if ($ids === []) {
             return 0;
         }
-        $in   = implode(',', array_fill(0, count($ids), '?'));
-        $stmt = $this->db->prepare(
-            "UPDATE shared_list_items SET checked = ?, checked_by = ? WHERE id IN ({$in})"
+        $in    = implode(',', array_fill(0, count($ids), '?'));
+        $whenAt = $checked ? 'NOW()' : 'NULL';
+        $stmt  = $this->db->prepare(
+            "UPDATE shared_list_items SET checked = ?, checked_by = ?, checked_at = {$whenAt} WHERE id IN ({$in})"
         );
         $stmt->execute(array_merge([$checked ? 1 : 0, $checked ? $userId : null], $ids));
 
@@ -249,6 +256,24 @@ final class ShoppingLists
         $stmt->execute($ids);
 
         return count($ids);
+    }
+
+    /**
+     * Removes checked items that have been checked longer than KEEP_CHECKED_HOURS
+     * (also legacy checked rows with no checked_at). Called lazily on list read, so
+     * checked items linger ~a day then self-clean without a cron.
+     */
+    public function purgeStaleChecked(int $listId, ?int $hours = null): int
+    {
+        $h = max(1, (int) ($hours ?? self::KEEP_CHECKED_HOURS));
+        $stmt = $this->db->prepare(
+            "DELETE FROM shared_list_items
+             WHERE list_id = :lid AND checked = 1
+               AND (checked_at IS NULL OR checked_at < (NOW() - INTERVAL {$h} HOUR))"
+        );
+        $stmt->execute([':lid' => $listId]);
+
+        return $stmt->rowCount();
     }
 
     /** Removes all checked-off items from a list. Returns count removed. */
