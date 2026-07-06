@@ -164,12 +164,18 @@ final class ToolSelector
      * Returns the subset of $declarations relevant to $message (or all of them if
      * nothing matched).
      *
+     * $recentContext is a little prior conversation (e.g. the last user message or
+     * two) so a keyword-less follow-up inherits its domain: "how's the weather?"
+     * then "and tomorrow?" should still offer the weather tools, not just calendar.
+     * Extra tools from stale context are harmless (the class only ever narrows when
+     * confident); dropping a needed tool is the failure we avoid.
+     *
      * @param array<int, array<string, mixed>> $declarations
      * @return array<int, array<string, mixed>>
      */
-    public static function select(array $declarations, string $message): array
+    public static function select(array $declarations, string $message, string $recentContext = ''): array
     {
-        $text = ' ' . mb_strtolower($message) . ' ';
+        $text = ' ' . mb_strtolower($message . ' ' . $recentContext) . ' ';
 
         $allowed = [];
         foreach (self::KEYWORDS as $group => $keywords) {

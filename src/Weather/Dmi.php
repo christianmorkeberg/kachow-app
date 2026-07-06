@@ -133,7 +133,10 @@ final class Dmi
      */
     public function forecast(float $lat, float $lon, int $days = 3, int $hourlyStepH = 3, int $hourlyCount = 8): array
     {
-        $params = ['temperature-2m', 'total-precipitation', 'wind-speed-10m', 'wind-dir-10m', 'fraction-of-cloud-cover'];
+        // Only the parameters the card/summary actually uses — wind direction was
+        // fetched but never surfaced, and every extra parameter enlarges DMI's
+        // (already slow) response, so it's dropped to help latency.
+        $params = ['temperature-2m', 'total-precipitation', 'wind-speed-10m', 'fraction-of-cloud-cover'];
         // Build the query by hand: EDR wants coords=POINT(lon lat) with a %20 space,
         // and plain commas in parameter-name (http_build_query would mangle both).
         $url = self::FORECAST_BASE . '/collections/harmonie_dini_sf/position?coords=POINT('
@@ -151,7 +154,6 @@ final class Dmi
         $temp    = $ranges['temperature-2m']['values'] ?? [];
         $precAcc = $ranges['total-precipitation']['values'] ?? [];
         $wind    = $ranges['wind-speed-10m']['values'] ?? [];
-        $wdir    = $ranges['wind-dir-10m']['values'] ?? [];
         $cloud   = $ranges['fraction-of-cloud-cover']['values'] ?? [];
 
         $tz    = new \DateTimeZone('Europe/Copenhagen');
@@ -164,7 +166,6 @@ final class Dmi
                 'temp_c'    => isset($temp[$i]) ? round($temp[$i] - 273.15, 1) : null,
                 'precip_mm' => round($precipHr, 2),
                 'wind_ms'   => isset($wind[$i]) ? round($wind[$i], 1) : null,
-                'wind_from' => isset($wdir[$i]) ? self::compass((float) $wdir[$i]) : null,
                 'cloud_pct' => isset($cloud[$i]) ? (int) round($cloud[$i] * 100) : null,
             ];
         }
@@ -260,11 +261,14 @@ final class Dmi
         }
     }
 
-    /** Backoff between retries: ~0.4s, ~0.9s, … with a little jitter, bounded. */
+    /**
+     * Backoff between retries: ~0.7s, ~1.4s, … with jitter, bounded. DMI's rate
+     * limiter needs more than a few hundred ms of breathing room to clear.
+     */
     private function backoff(int $attempt): void
     {
-        $ms = 300 * $attempt + random_int(0, 300);
-        usleep(min($ms, 2000) * 1000);
+        $ms = 600 * $attempt + random_int(0, 400);
+        usleep(min($ms, 2500) * 1000);
     }
 
     private static function compass(float $deg): string
@@ -280,7 +284,11 @@ final class Dmi
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 20,
+            // The forecast endpoint is legitimately slow (~7-12s healthy), so give a
+            // single attempt enough room to finish rather than timing out into DMI's
+            // rate limiter. Connect timeout stays short to fail fast on a dead host.
+            CURLOPT_TIMEOUT        => 28,
+            CURLOPT_CONNECTTIMEOUT => 8,
             CURLOPT_HTTPHEADER     => ['Accept: application/geo+json'],
         ]);
         $body = curl_exec($ch);

@@ -51,16 +51,23 @@ final class GetWeatherForecast implements Tool
             return ['error' => 'I need a latitude and longitude to get a forecast.'];
         }
 
-        $fc = $this->dmi->forecast((float) $arguments['latitude'], (float) $arguments['longitude']);
+        $lat = (float) $arguments['latitude'];
+        $lon = (float) $arguments['longitude'];
+
+        $fc = $this->dmi->forecast($lat, $lon);
         if ($fc === []) {
             return ['error' => 'No forecast is available for that location (DMI covers Denmark and nearby).'];
         }
 
-        $place = (string) ($arguments['place'] ?? '');
-        $label = $place !== '' ? $place : 'that location';
+        // Prefer a place the model named; otherwise (e.g. device location) label it
+        // with the nearest weather station so the card doesn't read "that location".
+        $place = trim((string) ($arguments['place'] ?? ''));
+        if ($place === '') {
+            $place = $this->nearestPlace($lat, $lon);
+        }
 
         return [
-            'place'   => $label,
+            'place'   => $place !== '' ? $place : 'your location',
             'issued'  => $fc['issued'],
             'hourly'  => $fc['hourly'],
             'daily'   => $fc['daily'],
@@ -68,11 +75,23 @@ final class GetWeatherForecast implements Tool
             // specifics, but should summarise — the card shows the detail visually).
             '_render' => [
                 'kind'    => 'weather',
-                'title'   => $label,
+                'title'   => $place !== '' ? $place : null,
                 'current' => null,
                 'hourly'  => $fc['hourly'],
                 'days'    => $fc['daily'],
             ],
         ];
+    }
+
+    /** Nearest station name for a nice card label, or '' if unavailable. */
+    private function nearestPlace(float $lat, float $lon): string
+    {
+        try {
+            $stations = $this->dmi->nearbyStations($lat, $lon, 1);
+
+            return $stations !== [] ? (string) $stations[0]['name'] : '';
+        } catch (\Throwable $e) {
+            return ''; // never let labelling break the forecast
+        }
     }
 }

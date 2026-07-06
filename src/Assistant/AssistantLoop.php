@@ -110,7 +110,13 @@ final class AssistantLoop
 
         $contents     = $this->buildContents($conversationId);
         // Send only the tools relevant to this message (falls back to all if unsure).
-        $declarations = ToolSelector::select($this->tools->declarations(), $userMessage);
+        // Include a little prior context so keyword-less follow-ups ("and tomorrow?")
+        // keep the previous turn's domain tools available.
+        $declarations = ToolSelector::select(
+            $this->tools->declarations(),
+            $userMessage,
+            $this->recentUserContext($contents)
+        );
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location);
 
         // The model is chosen on the first call (round 0, before any tool calls or
@@ -286,6 +292,28 @@ final class AssistantLoop
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * The previous user turn(s), for tool-selection context — the current message
+     * (the last user entry) is excluded so it isn't double-counted. Returns the
+     * last up-to-2 prior user messages joined, capped in length.
+     *
+     * @param array<int, array{role:string, parts:array<int,array{text?:string}>}> $contents
+     */
+    private function recentUserContext(array $contents): string
+    {
+        $userTexts = [];
+        foreach ($contents as $c) {
+            if (($c['role'] ?? '') === 'user') {
+                $userTexts[] = (string) ($c['parts'][0]['text'] ?? '');
+            }
+        }
+        array_pop($userTexts); // drop the current message
+
+        $recent = array_slice($userTexts, -2);
+
+        return mb_substr(trim(implode(' ', $recent)), -400);
+    }
+
     private function buildContents(int $conversationId): array
     {
         $contents = [];
