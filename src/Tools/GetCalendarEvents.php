@@ -57,9 +57,30 @@ final class GetCalendarEvents implements Tool
 
         $events = $this->calendar->getEvents($userId, $from, $to);
 
+        // The app renders these as an interactive agenda card (see _render); the
+        // model gets the events too so it can answer specific questions (e.g.
+        // "am I free Friday?"), but it should summarise rather than re-list them.
         return [
-            'count'  => count($events),
-            'events' => $events,
+            'count'   => count($events),
+            'events'  => $events,
+            '_render' => $this->calendar->buildCard($events, $this->titleForRange($from, $to)),
         ];
+    }
+
+    /** A short human label for the range, e.g. "Fri 10 Jul" or "10 Jul – 16 Jul". */
+    private function titleForRange(string $from, string $to): string
+    {
+        $start = strtotime($from) ?: time();
+        // The range end is exclusive, so the last covered day is one second before it.
+        $endTs = (strtotime($to) ?: time()) - 1;
+        if ($endTs < $start) {
+            $endTs = $start;
+        }
+
+        if (date('Y-m-d', $start) === date('Y-m-d', $endTs)) {
+            return date('D j M', $start); // single day → "Fri 10 Jul"
+        }
+
+        return date('j M', $start) . ' – ' . date('j M', $endTs);
     }
 }

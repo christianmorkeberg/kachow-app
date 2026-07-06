@@ -67,6 +67,62 @@ final class Calendar
     }
 
     /**
+     * Builds a renderable agenda card (kind = agenda) from a set of events,
+     * grouped by day and ordered by time. Display-only — calendar events are
+     * read from Google, so there are no tickboxes.
+     *
+     * Times are taken verbatim from each event's own RFC3339 string (which
+     * already carries the event's local offset), so no timezone juggling is
+     * needed: the date is the first 10 chars, the clock time chars 11–15.
+     *
+     * @param array<int, array<string, mixed>> $events as returned by getEvents()
+     * @return array{kind:string, title:string, days:array<int,array{date:string, weekday:string, label:string, events:array<int,array{time:string, all_day:bool, summary:string, location:?string, calendar:?string}>}>}
+     */
+    public function buildCard(array $events, string $title): array
+    {
+        $days = [];
+        foreach ($events as $e) {
+            $start = (string) ($e['start'] ?? '');
+            if ($start === '') {
+                continue;
+            }
+            $dayKey = substr($start, 0, 10);
+            if (!isset($days[$dayKey])) {
+                $ts = strtotime($dayKey) ?: time();
+                $days[$dayKey] = [
+                    'date'    => $dayKey,
+                    'weekday' => date('D', $ts),  // Mon, Tue…
+                    'label'   => date('j M', $ts), // 10 Jul
+                    'events'  => [],
+                ];
+            }
+
+            $allDay = (bool) ($e['allDay'] ?? false);
+            $time   = 'All day';
+            if (!$allDay) {
+                $time = substr($start, 11, 5); // HH:MM
+                $end  = (string) ($e['end'] ?? '');
+                // Append the end time only if the event ends on the same day.
+                if (strlen($end) >= 16 && substr($end, 0, 10) === $dayKey) {
+                    $time .= '–' . substr($end, 11, 5);
+                }
+            }
+
+            $days[$dayKey]['events'][] = [
+                'time'     => $time,
+                'all_day'  => $allDay,
+                'summary'  => (string) ($e['summary'] ?? '(no title)'),
+                'location' => ($e['location'] ?? null) ? (string) $e['location'] : null,
+                'calendar' => ($e['calendar'] ?? null) ? (string) $e['calendar'] : null,
+            ];
+        }
+
+        ksort($days);
+
+        return ['kind' => 'agenda', 'title' => $title, 'days' => array_values($days)];
+    }
+
+    /**
      * Creates an event on the primary calendar and returns the created event.
      *
      * $start/$end are RFC3339 timestamps. Times are interpreted in $timeZone
