@@ -94,6 +94,23 @@ final class GetCurrentWeather implements Tool
             'pressure_hpa'      => $val('pressure_at_sea'),
         ];
 
+        // Interactive weather card for the chat (the model gets the numbers too, but
+        // should summarise rather than recite them — the card shows the detail).
+        $result['_render'] = [
+            'kind'    => 'weather',
+            'title'   => $result['place'],
+            'current' => array_filter([
+                'temp_c'       => $val('temp_dry'),
+                'precip_mm'    => $val('precip_past1h'),
+                'humidity_pct' => $val('humidity'),
+                'wind_ms'      => $val('wind_speed'),
+                'wind_from'    => $result['wind_from'],
+                'station'      => $station['name'],
+                'observed'     => $result['observed'],
+            ], static fn ($v): bool => $v !== null && $v !== ''),
+            'days'    => [],
+        ];
+
         // Drop keys we couldn't measure so the model doesn't report nulls.
         return array_filter($result, static fn ($v): bool => $v !== null && $v !== '');
     }

@@ -57,12 +57,22 @@ final class GetWeatherForecast implements Tool
         }
 
         $place = (string) ($arguments['place'] ?? '');
+        $label = $place !== '' ? $place : 'that location';
 
         return [
-            'place'  => $place !== '' ? $place : 'that location',
-            'issued' => $fc['issued'],
-            'hourly' => $fc['hourly'],
-            'daily'  => $fc['daily'],
+            'place'   => $label,
+            'issued'  => $fc['issued'],
+            'hourly'  => $fc['hourly'],
+            'daily'   => $fc['daily'],
+            // Interactive weather card (the model still gets the numbers to answer
+            // specifics, but should summarise — the card shows the detail visually).
+            '_render' => [
+                'kind'    => 'weather',
+                'title'   => $label,
+                'current' => null,
+                'hourly'  => $fc['hourly'],
+                'days'    => $fc['daily'],
+            ],
         ];
     }
 }

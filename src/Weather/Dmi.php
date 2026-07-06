@@ -31,9 +31,13 @@ final class Dmi
     /** @var callable(string):array{0:int,1:string} */
     private $transport;
 
-    public function __construct(?callable $transport = null)
+    /** How many times to attempt a request before giving up (DMI rate-limits often). */
+    private int $maxAttempts;
+
+    public function __construct(?callable $transport = null, int $maxAttempts = 3)
     {
-        $this->transport = $transport ?? [$this, 'curlGet'];
+        $this->transport  = $transport ?? [$this, 'curlGet'];
+        $this->maxAttempts = max(1, $maxAttempts);
     }
 
     public static function fromEnv(?callable $transport = null): self
@@ -219,20 +223,48 @@ final class Dmi
      */
     private function getJson(string $url): array
     {
-        [$status, $body] = ($this->transport)($url);
+        // DMI's free tier rate-limits (429) and occasionally 503s under load, so
+        // retry a few times with a short backoff before surfacing an error. Most
+        // rejections clear within a second or two, so this recovers transparently.
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                [$status, $body] = ($this->transport)($url);
+            } catch (RuntimeException $e) {
+                if ($attempt < $this->maxAttempts) {
+                    $this->backoff($attempt);
+                    continue; // transient transport failure (timeout, dropped connection)
+                }
+                throw $e;
+            }
 
-        if ($status === 429) {
-            throw new RuntimeException('The weather service is busy right now (rate limited) — try again in a moment.');
-        }
-        if ($status < 200 || $status >= 300) {
-            throw new RuntimeException('DMI API error: HTTP ' . $status);
-        }
-        $decoded = json_decode($body, true);
-        if (!is_array($decoded)) {
-            throw new RuntimeException('DMI API returned invalid JSON.');
-        }
+            if (($status === 429 || $status === 503) && $attempt < $this->maxAttempts) {
+                $this->backoff($attempt);
+                continue;
+            }
+            if ($status === 429 || $status === 503) {
+                throw new RuntimeException(
+                    'The weather service (DMI) is busy right now and kept rate-limiting the request, '
+                    . 'even after retrying. Please try again in a moment.'
+                );
+            }
+            if ($status < 200 || $status >= 300) {
+                throw new RuntimeException('DMI API error: HTTP ' . $status);
+            }
 
-        return $decoded;
+            $decoded = json_decode($body, true);
+            if (!is_array($decoded)) {
+                throw new RuntimeException('DMI API returned invalid JSON.');
+            }
+
+            return $decoded;
+        }
+    }
+
+    /** Backoff between retries: ~0.4s, ~0.9s, … with a little jitter, bounded. */
+    private function backoff(int $attempt): void
+    {
+        $ms = 300 * $attempt + random_int(0, 300);
+        usleep(min($ms, 2000) * 1000);
     }
 
     private static function compass(float $deg): string
