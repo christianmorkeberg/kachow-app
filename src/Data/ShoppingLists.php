@@ -164,6 +164,50 @@ final class ShoppingLists
         return $out;
     }
 
+    /**
+     * Renderable card for the chat widget (kind = shopping_list).
+     *
+     * @return array{kind:string, title:string, list_id:int, items:array<int,array{id:int,label:string,done:bool}>}
+     */
+    public function cardForList(int $connectionId, int $listId, string $name): array
+    {
+        $items = [];
+        foreach ($this->items($listId) as $i) {
+            $items[] = ['id' => (int) $i['id'], 'label' => (string) $i['item'], 'done' => (bool) $i['checked']];
+        }
+
+        return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items];
+    }
+
+    /**
+     * Toggles an item's checked state by id, authorising via connection membership
+     * (join through the list → connection → the acting user). Returns the list's
+     * connection/name for rebuilding the card, or null if not found/authorised.
+     *
+     * @return array{list_id:int, connection_id:int, name:string}|null
+     */
+    public function toggleItem(int $userId, int $itemId, bool $checked): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT i.list_id, l.connection_id, l.name
+             FROM shared_list_items i
+             JOIN shared_lists l ON l.id = i.list_id
+             JOIN user_connections c ON c.id = l.connection_id
+             WHERE i.id = :id AND c.status = "accepted" AND (c.requester_id = :u1 OR c.addressee_id = :u2)
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $itemId, ':u1' => $userId, ':u2' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+
+        $this->db->prepare('UPDATE shared_list_items SET checked = :c, checked_by = :by WHERE id = :id')
+            ->execute([':c' => $checked ? 1 : 0, ':by' => $checked ? $userId : null, ':id' => $itemId]);
+
+        return ['list_id' => (int) $row['list_id'], 'connection_id' => (int) $row['connection_id'], 'name' => (string) $row['name']];
+    }
+
     public function addItem(int $listId, string $item, int $addedBy): int
     {
         $stmt = $this->db->prepare(

@@ -38,6 +38,8 @@ final class AssistantLoop
         . 'from memory. The app then renders the plan as an interactive checklist with tickboxes '
         . 'automatically, so give only a brief one-line intro (e.g. "Here\'s today\'s plan:") and NEVER '
         . 'write out the exercises, checkboxes, or "[ ]" marks yourself. '
+        . 'The same applies to shopping lists: whenever you show or change one, the app displays it as '
+        . 'an interactive checklist, so give a brief intro and never write the items or "[ ]" as text. '
         . 'Report only numbers and facts that appear in a tool result; never estimate, round, or '
         . 'fill in values from memory. If a tool returns nothing, say so instead of guessing. '
         . 'When a question is about another person you are connected with, use only that person\'s '

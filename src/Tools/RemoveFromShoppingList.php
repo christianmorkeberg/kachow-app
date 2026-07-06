@@ -58,7 +58,11 @@ final class RemoveFromShoppingList implements Tool
         $n = $this->lists->removeItem((int) $list['id'], $item);
 
         return $n > 0
-            ? ['removed' => $item, 'list' => $list['name']]
+            ? [
+                'removed' => $item,
+                'list'    => $list['name'],
+                '_render' => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
+            ]
             : ['error' => "\"{$item}\" isn't on the {$list['name']} list."];
     }
 }

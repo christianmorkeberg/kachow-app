@@ -52,6 +52,10 @@ final class ClearCheckedItems implements Tool
 
         $n = $this->lists->clearChecked((int) $list['id']);
 
-        return ['cleared' => $n, 'list' => $list['name']];
+        return [
+            'cleared' => $n,
+            'list'    => $list['name'],
+            '_render' => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
+        ];
     }
 }

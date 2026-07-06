@@ -54,11 +54,13 @@ final class GetShoppingList implements Tool
 
         $items = $this->lists->items((int) $list['id']);
 
+        // Summary to the model (the interactive card carries the item details, so the
+        // model must not re-list them as text).
         return [
             'list'      => $list['name'],
             'count'     => count($items),
             'remaining' => count(array_filter($items, static fn (array $i): bool => !$i['checked'])),
-            'items'     => $items,
+            '_render'   => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
         ];
     }
 }

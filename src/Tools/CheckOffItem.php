@@ -58,7 +58,11 @@ final class CheckOffItem implements Tool
         $n = $this->lists->setChecked((int) $list['id'], $item, true, $userId);
 
         return $n > 0
-            ? ['checked_off' => $item, 'list' => $list['name']]
+            ? [
+                'checked_off' => $item,
+                'list'        => $list['name'],
+                '_render'     => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
+            ]
             : ['error' => "\"{$item}\" isn't on the {$list['name']} list."];
     }
 }

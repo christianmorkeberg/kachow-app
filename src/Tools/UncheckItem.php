@@ -58,7 +58,11 @@ final class UncheckItem implements Tool
         $n = $this->lists->setChecked((int) $list['id'], $item, false, $userId);
 
         return $n > 0
-            ? ['unchecked' => $item, 'list' => $list['name']]
+            ? [
+                'unchecked' => $item,
+                'list'      => $list['name'],
+                '_render'   => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
+            ]
             : ['error' => "\"{$item}\" isn't on the {$list['name']} list."];
     }
 }

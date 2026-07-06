@@ -75,6 +75,7 @@ final class AddToShoppingList implements Tool
             'added'        => $items,
             'list'         => $list['name'],
             'list_created' => $list['created'] ?? false,
+            '_render'      => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
         ];
     }
 }
