@@ -69,6 +69,9 @@ final class ToolSelector
         'weather' => [
             'get_current_weather', 'get_weather_forecast',
         ],
+        'worktime' => [
+            'get_work_hours', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
+        ],
     ];
 
     /**
@@ -157,6 +160,14 @@ final class ToolSelector
             // Danish
             'vejr', 'vejrudsigt', 'udsigt', 'regn', 'temperatur', 'grader', 'blæs', 'koldt',
             ' kold', 'varmt', ' sol ', 'solskin', 'sne', 'byger', 'paraply',
+        ],
+        // "work" alone is avoided (it's inside "workout"); use specific phrases.
+        'worktime' => [
+            'clock in', 'clock out', 'clocked', 'clock-in', 'clock-out', 'work hours', 'hours worked',
+            'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
+            'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
+            // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
+            'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
         ],
     ];
 

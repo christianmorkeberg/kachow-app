@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\ApiTokens;
 use App\Data\Calendar;
 use App\Data\Connections;
 use App\Data\Invites;
@@ -13,6 +14,7 @@ use App\Data\UserInstructions;
 use App\Data\Users;
 use App\Data\Vinyls;
 use App\Data\Wishlist;
+use App\Data\WorkEvents;
 use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Mail\Mailer;
@@ -51,6 +53,8 @@ final class ToolRegistry
         ShoppingLists $shoppingLists,
         Dmi $weather,
         WorkoutPlans $workoutPlans,
+        WorkEvents $workEvents,
+        ApiTokens $apiTokens,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -98,6 +102,10 @@ final class ToolRegistry
         $registry->register(new DeleteShoppingList($connections, $shoppingLists));
         $registry->register(new GetCurrentWeather($weather));
         $registry->register(new GetWeatherForecast($weather));
+        $registry->register(new GetWorkHours($workEvents));
+        $registry->register(new LogWorkEvent($workEvents));
+        $registry->register(new DeleteWorkEvent($workEvents));
+        $registry->register(new GetWorkTrackingSetup($apiTokens));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));

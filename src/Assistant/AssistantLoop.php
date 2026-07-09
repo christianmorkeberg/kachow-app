@@ -47,6 +47,8 @@ final class AssistantLoop
         . 'summary (or answer the specific question) rather than reciting every measurement. If a '
         . 'weather tool reports that DMI is busy even after retrying, tell the user plainly and offer '
         . 'to try again shortly. '
+        . 'Work hours work the same way too: get_work_hours renders a card, so give a brief summary '
+        . '(e.g. total and whether they are still clocked in) instead of listing every session. '
         . 'Report only numbers and facts that appear in a tool result; never estimate, round, or '
         . 'fill in values from memory. If a tool returns nothing, say so instead of guessing. '
         . 'When a question is about another person you are connected with, use only that person\'s '
@@ -73,9 +75,11 @@ final class AssistantLoop
         . 'their own language: workouts (log sets, review history and personal records); Google '
         . 'Calendar (read, add and delete events); shared shopping lists with their partner (named '
         . 'lists, add and check off items); weather in Denmark (current conditions and a forecast, '
-        . 'from DMI); remembering personal facts about them; their vinyl record collection with '
-        . 'taste-based recommendations; a personal gift wishlist; connecting with other people to '
-        . 'share data; and setting their display name and standing preferences.';
+        . 'from DMI); work-time tracking (clock in/out — automatically via an iPhone location '
+        . 'automation they can set up, or manually — and hours worked today/this week); remembering '
+        . 'personal facts about them; their vinyl record collection with taste-based recommendations; '
+        . 'a personal gift wishlist; connecting with other people to share data; and setting their '
+        . 'display name and standing preferences.';
 
     /** A renderable card (e.g. a workout plan) emitted by a tool this turn, for the UI. */
     private ?array $lastRender = null;
