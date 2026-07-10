@@ -52,23 +52,31 @@ final class Conversations
 
     /**
      * Appends a message. $role is 'user', 'assistant', or 'tool'; $toolName is
-     * populated for tool messages. Returns the new message id.
+     * populated for tool messages; $cardJson persists an assistant turn's rendered
+     * card (JSON) so it can be re-shown when the conversation is reopened. Returns
+     * the new message id.
      */
-    public function addMessage(int $conversationId, string $role, string $content, ?string $toolName = null): int
-    {
+    public function addMessage(
+        int $conversationId,
+        string $role,
+        string $content,
+        ?string $toolName = null,
+        ?string $cardJson = null
+    ): int {
         if (!in_array($role, self::ROLES, true)) {
             throw new InvalidArgumentException("Invalid message role: {$role}");
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO messages (conversation_id, role, content, tool_name)
-             VALUES (:conversation_id, :role, :content, :tool_name)'
+            'INSERT INTO messages (conversation_id, role, content, tool_name, card)
+             VALUES (:conversation_id, :role, :content, :tool_name, :card)'
         );
         $stmt->execute([
             ':conversation_id' => $conversationId,
             ':role'            => $role,
             ':content'         => $content,
             ':tool_name'       => $toolName,
+            ':card'            => $cardJson,
         ]);
 
         return (int) $this->db->lastInsertId();
@@ -240,7 +248,7 @@ final class Conversations
      */
     public function messages(int $conversationId, ?int $limit = null): array
     {
-        $sql = 'SELECT id, role, content, tool_name, created_at
+        $sql = 'SELECT id, role, content, tool_name, card, created_at
                 FROM messages
                 WHERE conversation_id = :conversation_id
                 ORDER BY id ASC';

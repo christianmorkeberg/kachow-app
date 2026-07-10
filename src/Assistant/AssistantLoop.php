@@ -109,6 +109,14 @@ final class AssistantLoop
         return $this->lastRender;
     }
 
+    /** The current turn's card as JSON for persistence, or null if none. */
+    private function lastRenderJson(): ?string
+    {
+        return $this->lastRender !== null
+            ? (string) json_encode($this->lastRender, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : null;
+    }
+
     /**
      * @param array{lat: float, lon: float}|null $location optional device location (browser geolocation)
      */
@@ -151,7 +159,9 @@ final class AssistantLoop
 
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);
-                $this->conversations->addMessage($conversationId, 'assistant', $reply);
+                // Persist any card this turn produced with the reply, so reopening the
+                // conversation can re-render the interactive widget (not just text).
+                $this->conversations->addMessage($conversationId, 'assistant', $reply, null, $this->lastRenderJson());
                 return $reply;
             }
 
