@@ -33,9 +33,8 @@ interface EmailProvider
     public function send(EmailDraft $draft): string;
 
     /**
-     * Send a previously created draft. OAuth providers send the existing draft by
-     * id (which also removes it from Drafts and keeps threading); IMAP falls back
-     * to sending the given content over SMTP. Gated by EmailService.
+     * Delete a draft by id (cleanup after sending its edited content fresh).
+     * Best-effort — implementations may no-op if they can't address the draft.
      */
-    public function sendDraft(string $draftId, EmailDraft $draft): string;
+    public function deleteDraft(string $draftId): void;
 }

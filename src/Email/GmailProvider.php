@@ -118,18 +118,11 @@ final class GmailProvider implements EmailProvider
         return (string) $sent->getId();
     }
 
-    public function sendDraft(string $draftId, EmailDraft $draft): string
+    public function deleteDraft(string $draftId): void
     {
         if ($draftId !== '' && $draftId !== 'draft') {
-            // Sends the existing draft (removes it from Drafts, preserves threading).
-            $gDraft = new GmailDraft();
-            $gDraft->setId($draftId);
-            $sent = $this->service->users_drafts->send('me', $gDraft);
-
-            return (string) $sent->getId();
+            $this->service->users_drafts->delete('me', $draftId);
         }
-
-        return $this->send($draft);
     }
 
     // ---- helpers -----------------------------------------------------------

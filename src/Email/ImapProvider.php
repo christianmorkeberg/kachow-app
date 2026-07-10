@@ -174,10 +174,10 @@ final class ImapProvider implements EmailProvider
         return 'sent';
     }
 
-    public function sendDraft(string $draftId, EmailDraft $draft): string
+    public function deleteDraft(string $draftId): void
     {
-        // IMAP can't send an existing draft; send the content over SMTP.
-        return $this->send($draft);
+        // Our IMAP APPEND doesn't capture the new draft's UID (no UIDPLUS
+        // handling), so we can't reliably delete just that message — no-op.
     }
 
     /**

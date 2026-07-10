@@ -132,7 +132,16 @@ final class EmailService
             throw new SendLockedException('Sending email is currently turned off.');
         }
         [$account, $provider] = $this->resolve($userId, $accountId);
-        $messageId = $provider->sendDraft($draftId, $draft);
+        // Send the (possibly edited) content fresh, then remove the placeholder
+        // draft so it doesn't linger in Drafts.
+        $messageId = $provider->send($draft);
+        if ($draftId !== '' && $draftId !== 'draft') {
+            try {
+                $provider->deleteDraft($draftId);
+            } catch (\Throwable $e) {
+                error_log('deleteDraft after send: ' . $e->getMessage());
+            }
+        }
 
         return ['account_id' => $account['id'], 'message_id' => $messageId];
     }
