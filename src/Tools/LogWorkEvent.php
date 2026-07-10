@@ -84,6 +84,16 @@ final class LogWorkEvent implements Tool
             }
         }
 
+        // Clocking out without naming a place: if there's exactly one open session,
+        // attach to it (a placeless 'out' otherwise wouldn't pair with a placed
+        // 'in', since pairing is per workplace). "I punched out at 4pm" → closes it.
+        if ($kind === 'out' && ($place === null || trim($place) === '')) {
+            $open = $this->events->openSessions($userId);
+            if (count($open) === 1) {
+                $place = $open[0]['place'];
+            }
+        }
+
         try {
             $res = $this->events->add($userId, $kind, $atUtc, 'assistant', $note, $place);
         } catch (\Exception $e) {

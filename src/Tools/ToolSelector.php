@@ -166,6 +166,7 @@ final class ToolSelector
             'clock in', 'clock out', 'clocked', 'clock-in', 'clock-out', 'work hours', 'hours worked',
             'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
+            'punch', 'punched', 'punch in', 'punch out',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
         ],

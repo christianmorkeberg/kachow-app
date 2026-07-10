@@ -137,6 +137,39 @@ final class WorkEvents
     }
 
     /**
+     * The user's currently-open sessions (latest event per workplace is an 'in').
+     *
+     * @return array<int, array{place:?string, in_id:int, occurred_at:string}>
+     */
+    public function openSessions(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, kind, location, occurred_at FROM work_events
+             WHERE user_id = :u AND occurred_at >= (NOW() - INTERVAL 60 DAY)
+             ORDER BY occurred_at ASC, id ASC"
+        );
+        $stmt->execute([':u' => $userId]);
+
+        $latest = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $latest[(string) ($r['location'] ?? '')] = $r;
+        }
+
+        $out = [];
+        foreach ($latest as $r) {
+            if ((string) $r['kind'] === 'in') {
+                $out[] = [
+                    'place'       => $r['location'] !== null ? (string) $r['location'] : null,
+                    'in_id'       => (int) $r['id'],
+                    'occurred_at' => (string) $r['occurred_at'],
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Currently-open sessions (per user + workplace) that haven't been nudged yet —
      * i.e. the latest event for that (user, place) is an 'in' with no clock-out and
      * nudged_at still NULL. The cron decides which of these are worth a reminder.
