@@ -54,6 +54,10 @@ final class AssistantLoop
         . 'When a question is about another person you are connected with, use only that person\'s '
         . 'tool result (e.g. get_connected_workouts) and attribute each number to the correct '
         . 'person — never mix their data with your own. '
+        . 'When the user proposes an idea for developing or improving the app itself — a feature to '
+        . 'build later or a change to how Kachow works, often phrased "for later", "for the backlog", '
+        . 'or "idea for the app" — save it with note_dev_idea and confirm briefly. This dev backlog is '
+        . 'separate from their personal gift wishlist and their shopping list; do not confuse them. '
         . 'Get to know the user over time: when they share a lasting, useful fact about themselves '
         . '(their life, work, family, health, routines, goals, preferences, or important dates), '
         . 'save it with remember_about_me — proactively, without being asked — and then briefly '
@@ -77,7 +81,8 @@ final class AssistantLoop
         . 'lists, add and check off items); weather in Denmark (current conditions and a forecast, '
         . 'from DMI); work-time tracking (clock in/out — automatically via an iPhone location '
         . 'automation they can set up, or manually — and hours worked today/this week); remembering '
-        . 'personal facts about them; their vinyl record collection with taste-based recommendations; '
+        . 'personal facts about them; a backlog of their ideas for developing the app further ("for '
+        . 'later: …"); their vinyl record collection with taste-based recommendations; '
         . 'a personal gift wishlist; connecting with other people to share data; and setting their '
         . 'display name and standing preferences.';
 

@@ -7,6 +7,7 @@ namespace App\Tools;
 use App\Data\ApiTokens;
 use App\Data\Calendar;
 use App\Data\Connections;
+use App\Data\DevIdeas;
 use App\Data\Invites;
 use App\Data\Memories;
 use App\Data\ShoppingLists;
@@ -55,6 +56,7 @@ final class ToolRegistry
         WorkoutPlans $workoutPlans,
         WorkEvents $workEvents,
         ApiTokens $apiTokens,
+        DevIdeas $devIdeas,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -106,6 +108,9 @@ final class ToolRegistry
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
+        $registry->register(new NoteDevIdea($devIdeas));
+        $registry->register(new ListDevIdeas($devIdeas));
+        $registry->register(new RemoveDevIdea($devIdeas));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));

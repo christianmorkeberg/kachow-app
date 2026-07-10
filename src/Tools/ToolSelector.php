@@ -72,6 +72,9 @@ final class ToolSelector
         'worktime' => [
             'get_work_hours', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
         ],
+        'devideas' => [
+            'note_dev_idea', 'list_dev_ideas', 'remove_dev_idea',
+        ],
     ];
 
     /**
@@ -169,6 +172,13 @@ final class ToolSelector
             'punch', 'punched', 'punch in', 'punch out',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
+        ],
+        'devideas' => [
+            'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
+            'feature idea', 'app idea', 'idea for the app', 'note this idea', 'note an idea',
+            'improvement idea', 'build later', 'develop', 'my ideas', 'noted ideas',
+            // Danish
+            'til senere', 'til backlog', 'ide til app', 'app-ide', 'funktion senere', 'mine ideer',
         ],
     ];
 
