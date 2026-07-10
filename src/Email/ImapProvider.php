@@ -346,13 +346,20 @@ final class ImapProvider implements EmailProvider
         $enc  = static fn (string $v): string => preg_match('/[\x80-\xFF]/', $v)
             ? '=?UTF-8?B?' . base64_encode($v) . '?=' : $v;
 
+        $from = (string) ($this->creds['username'] ?? '');
+
         $lines = [];
+        if ($from !== '') {
+            $lines[] = 'From: ' . $safe($from);
+        }
         $lines[] = 'To: ' . $safe($draft->to);
         if ($draft->cc !== '') {
             $lines[] = 'Cc: ' . $safe($draft->cc);
         }
         $lines[] = 'Subject: ' . $enc($safe($draft->subject));
         $lines[] = 'Date: ' . date('r');
+        $domain  = str_contains($from, '@') ? substr(strrchr($from, '@'), 1) : 'localhost';
+        $lines[] = 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . $domain . '>';
         $lines[] = 'MIME-Version: 1.0';
         $lines[] = 'Content-Type: text/plain; charset=UTF-8';
         $lines[] = 'Content-Transfer-Encoding: base64';
