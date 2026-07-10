@@ -118,6 +118,8 @@ final class ToolRegistry
         $registry->register(new AddExpense($receipts));
         $registry->register(new UpdateReceipt($receipts));
         $registry->register(new DeleteReceipt($receipts, $receiptStorage));
+        $registry->register(new GetExpenses($receipts));
+        $registry->register(new ExportExpensesCsv($receipts));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));

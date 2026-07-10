@@ -76,7 +76,7 @@ final class ToolSelector
             'note_dev_idea', 'list_dev_ideas', 'remove_dev_idea',
         ],
         'receipts' => [
-            'add_expense', 'update_receipt', 'delete_receipt',
+            'add_expense', 'update_receipt', 'delete_receipt', 'get_expenses', 'export_expenses_csv',
         ],
     ];
 
@@ -184,10 +184,13 @@ final class ToolSelector
             'til senere', 'til backlog', 'ide til app', 'app-ide', 'funktion senere', 'mine ideer',
         ],
         'receipts' => [
-            'expense', 'receipt', 'moms', 'vat', 'deductible', 'write off', 'write-off', 'i paid',
-            'paid for', 'business cost', 'reimburse', 'log a cost',
+            'expense', 'expenses', 'receipt', 'receipts', 'moms', 'vat', 'deductible', 'write off',
+            'write-off', 'i paid', 'paid for', 'business cost', 'reimburse', 'log a cost',
+            'how much have i spent', 'have i spent', 'what have i spent', 'spending', 'my spend',
+            'export', 'csv', 'accountant', 'bookkeeping',
             // Danish
-            'udgift', 'kvittering', 'bilag', 'fradrag', 'regning', 'jeg betalte', 'moms',
+            'udgift', 'udgifter', 'kvittering', 'bilag', 'fradrag', 'regning', 'jeg betalte', 'moms',
+            'hvad har jeg brugt', 'brugt på', 'regnskab', 'bogføring', 'eksport', 'revisor',
         ],
     ];
 

@@ -144,6 +144,83 @@ final class Receipts
         ];
     }
 
+    /**
+     * Filtered expense summary for reporting: matching receipts (newest first) plus
+     * totals and a per-category breakdown. Dates are inclusive 'Y-m-d' or null.
+     *
+     * @return array{items:array<int,array<string,mixed>>, count:int, total:float, vat:float, by_category:array<int,array{category:string,total:float}>}
+     */
+    public function summary(
+        int $userId,
+        ?string $from = null,
+        ?string $to = null,
+        ?string $category = null,
+        string $status = 'confirmed'
+    ): array {
+        $where  = ['user_id = :u'];
+        $params = [':u' => $userId];
+        if ($status === 'confirmed' || $status === 'draft') {
+            $where[]      = 'status = :st';
+            $params[':st'] = $status;
+        }
+        if ($from !== null) {
+            $where[]        = 'purchased_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]      = 'purchased_at <= :to';
+            $params[':to'] = $to;
+        }
+        if ($category !== null && $category !== '') {
+            $where[]       = 'category = :cat';
+            $params[':cat'] = $category;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id, vendor, purchased_at, total, vat, currency, category, status
+             FROM receipts WHERE ' . implode(' AND ', $where) . '
+             ORDER BY purchased_at DESC, id DESC LIMIT 300'
+        );
+        $stmt->execute($params);
+
+        $items = [];
+        $total = 0.0;
+        $vat   = 0.0;
+        $byCat = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $t = (float) $r['total'];
+            $v = (float) $r['vat'];
+            $total += $t;
+            $vat   += $v;
+            $cat = (string) ($r['category'] ?? '') ?: 'Other';
+            $byCat[$cat] = ($byCat[$cat] ?? 0) + $t;
+
+            $items[] = [
+                'id'       => (int) $r['id'],
+                'vendor'   => $r['vendor'] !== null ? (string) $r['vendor'] : '',
+                'date'     => $r['purchased_at'] !== null ? (string) $r['purchased_at'] : '',
+                'total'    => $t,
+                'vat'      => $v,
+                'currency' => (string) ($r['currency'] ?? 'DKK'),
+                'category' => $cat,
+            ];
+        }
+
+        arsort($byCat);
+        $breakdown = [];
+        foreach ($byCat as $c => $sum) {
+            $breakdown[] = ['category' => $c, 'total' => round($sum, 2)];
+        }
+
+        return [
+            'items'       => $items,
+            'count'       => count($items),
+            'total'       => round($total, 2),
+            'vat'         => round($vat, 2),
+            'by_category' => $breakdown,
+        ];
+    }
+
     /** Snaps a free category to the closest allowed one (case-insensitive), else 'Other'. */
     public static function normalizeCategory(?string $category): ?string
     {
