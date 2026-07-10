@@ -19,6 +19,7 @@ use App\Data\Wishlist;
 use App\Data\WorkEvents;
 use App\Data\WorkoutPlans;
 use App\Data\Workouts;
+use App\Email\EmailService;
 use App\Mail\Mailer;
 use App\Music\Discogs;
 use App\Receipts\ReceiptStorage;
@@ -61,6 +62,7 @@ final class ToolRegistry
         DevIdeas $devIdeas,
         Receipts $receipts,
         ReceiptStorage $receiptStorage,
+        EmailService $email,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -120,6 +122,11 @@ final class ToolRegistry
         $registry->register(new DeleteReceipt($receipts, $receiptStorage));
         $registry->register(new GetExpenses($receipts));
         $registry->register(new ExportExpensesCsv($receipts));
+        $registry->register(new GetEmails($email));
+        $registry->register(new ReadEmail($email));
+        $registry->register(new DraftEmail($email));
+        $registry->register(new SendEmail($email));
+        $registry->register(new ListEmailAccounts($email));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));

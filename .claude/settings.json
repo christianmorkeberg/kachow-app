@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r ' *)",
+      "Bash(php -l src/Auth/GmailConnect.php)",
+      "Bash(php -l api/google-callback.php)"
+    ]
+  }
+}

@@ -78,6 +78,9 @@ final class ToolSelector
         'receipts' => [
             'add_expense', 'update_receipt', 'delete_receipt', 'get_expenses', 'export_expenses_csv',
         ],
+        'email' => [
+            'get_emails', 'read_email', 'draft_email', 'send_email', 'list_email_accounts',
+        ],
     ];
 
     /**
@@ -191,6 +194,12 @@ final class ToolSelector
             // Danish
             'udgift', 'udgifter', 'kvittering', 'bilag', 'fradrag', 'regning', 'jeg betalte', 'moms',
             'hvad har jeg brugt', 'brugt på', 'regnskab', 'bogføring', 'eksport', 'revisor',
+        ],
+        'email' => [
+            'email', 'e-mail', ' mail', 'inbox', 'gmail', 'outlook', 'hotmail', 'unread',
+            'reply to', 'draft', 'compose', 'my messages', 'new mail', 'check my mail',
+            // Danish (indbakke=inbox, ulæst=unread, skriv til=write to, svar på=reply to)
+            'indbakke', 'ulæst', 'skriv en mail', 'skriv til', 'svar på mail', 'post fra', 'e-post',
         ],
     ];
 
