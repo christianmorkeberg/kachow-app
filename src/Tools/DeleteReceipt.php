@@ -45,15 +45,27 @@ final class DeleteReceipt implements Tool
             return ['error' => 'A valid receipt id is required.'];
         }
 
-        $fileRef = $this->receipts->delete($userId, $id);
-        if ($fileRef === null && $this->receipts->get($userId, $id) === null) {
-            // Either deleted (image-less) or never existed — treat idempotently.
-            return ['deleted' => true];
+        // Read it first so the "deleted" card can name what was removed.
+        $row = $this->receipts->get($userId, $id);
+        if ($row === null) {
+            return ['deleted' => false, 'error' => 'No such expense (it may already be gone).'];
         }
+
+        $fileRef = $this->receipts->delete($userId, $id);
         if ($fileRef !== null) {
             $this->storage->delete($userId, $fileRef);
         }
 
-        return ['deleted' => true];
+        $vendor   = trim((string) ($row['vendor'] ?? '')) ?: 'Expense';
+        $currency = (string) ($row['currency'] ?? 'DKK');
+        $detail   = $row['total'] !== null
+            ? $vendor . ' · ' . number_format((float) $row['total'], 2) . ' ' . $currency
+            : $vendor;
+
+        return [
+            'deleted' => true,
+            // A distinct "deleted" card so the turn doesn't re-show the expense as if live.
+            '_render' => ['kind' => 'notice', 'tone' => 'deleted', 'title' => 'Expense deleted', 'detail' => $detail],
+        ];
     }
 }
