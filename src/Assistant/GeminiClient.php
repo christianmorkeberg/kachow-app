@@ -79,12 +79,13 @@ final class GeminiClient
         array $functionDeclarations = [],
         ?string $systemInstruction = null,
         ?string $model = null,
+        ?array $generationConfig = null,
     ): array {
         $model ??= $this->models[0];
 
         $payload = [
             'contents'         => $contents,
-            'generationConfig' => ['temperature' => $this->temperature],
+            'generationConfig' => array_merge(['temperature' => $this->temperature], $generationConfig ?? []),
         ];
 
         if ($systemInstruction !== null && $systemInstruction !== '') {

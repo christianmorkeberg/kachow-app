@@ -75,6 +75,9 @@ final class ToolSelector
         'devideas' => [
             'note_dev_idea', 'list_dev_ideas', 'remove_dev_idea',
         ],
+        'receipts' => [
+            'add_expense', 'update_receipt', 'delete_receipt',
+        ],
     ];
 
     /**
@@ -179,6 +182,12 @@ final class ToolSelector
             'improvement idea', 'build later', 'develop', 'my ideas', 'noted ideas',
             // Danish
             'til senere', 'til backlog', 'ide til app', 'app-ide', 'funktion senere', 'mine ideer',
+        ],
+        'receipts' => [
+            'expense', 'receipt', 'moms', 'vat', 'deductible', 'write off', 'write-off', 'i paid',
+            'paid for', 'business cost', 'reimburse', 'log a cost',
+            // Danish
+            'udgift', 'kvittering', 'bilag', 'fradrag', 'regning', 'jeg betalte', 'moms',
         ],
     ];
 

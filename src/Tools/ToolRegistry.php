@@ -10,6 +10,7 @@ use App\Data\Connections;
 use App\Data\DevIdeas;
 use App\Data\Invites;
 use App\Data\Memories;
+use App\Data\Receipts;
 use App\Data\ShoppingLists;
 use App\Data\UserInstructions;
 use App\Data\Users;
@@ -20,6 +21,7 @@ use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Mail\Mailer;
 use App\Music\Discogs;
+use App\Receipts\ReceiptStorage;
 use App\Weather\Dmi;
 use InvalidArgumentException;
 
@@ -57,6 +59,8 @@ final class ToolRegistry
         WorkEvents $workEvents,
         ApiTokens $apiTokens,
         DevIdeas $devIdeas,
+        Receipts $receipts,
+        ReceiptStorage $receiptStorage,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -111,6 +115,9 @@ final class ToolRegistry
         $registry->register(new NoteDevIdea($devIdeas));
         $registry->register(new ListDevIdeas($devIdeas));
         $registry->register(new RemoveDevIdea($devIdeas));
+        $registry->register(new AddExpense($receipts));
+        $registry->register(new UpdateReceipt($receipts));
+        $registry->register(new DeleteReceipt($receipts, $receiptStorage));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));
