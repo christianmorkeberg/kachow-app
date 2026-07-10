@@ -193,6 +193,7 @@ final class EmailService
                 $this->googleClientId,
                 $this->googleClientSecret,
                 (string) ($creds['refresh_token'] ?? ''),
+                $meta['email'],
             ),
             'outlook' => new OutlookProvider(
                 $this->msClientId,

@@ -24,12 +24,15 @@ use RuntimeException;
 final class GmailProvider implements EmailProvider
 {
     private Gmail $service;
+    private string $fromAddress;
 
     public function __construct(
         string $clientId,
         string $clientSecret,
         string $refreshToken,
+        string $fromAddress = '',
     ) {
+        $this->fromAddress = $fromAddress;
         $client = new GoogleClient();
         $client->setClientId($clientId);
         $client->setClientSecret($clientSecret);
@@ -186,6 +189,12 @@ final class GmailProvider implements EmailProvider
     private function rawFor(EmailDraft $draft): string
     {
         $lines   = [];
+        // Explicit From = this connected account, so Gmail sends from the real
+        // account identity rather than any "send mail as" default (which would
+        // spoof another domain and fail its DMARC).
+        if ($this->fromAddress !== '') {
+            $lines[] = 'From: ' . $this->headerSafe($this->fromAddress);
+        }
         $lines[] = 'To: ' . $this->headerSafe($draft->to);
         if ($draft->cc !== '') {
             $lines[] = 'Cc: ' . $this->headerSafe($draft->cc);
