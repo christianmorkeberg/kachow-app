@@ -1,0 +1,134 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Scheduled notification runner — run hourly by cron:
+ *
+ *     0 * * * * php /home/kachowdk/assistant-app/bin/notify-cron.php >/dev/null 2>&1
+ *
+ * It decides what to do using Europe/Copenhagen local time (so one hourly entry
+ * works regardless of the server's timezone or DST):
+ *   - Checkout nudge: for anyone still clocked in after 19:00 (day session) or
+ *     past a 10h shift — once per session.
+ *   - Weekly summary: Sunday evening, last week's hours per user.
+ *
+ * Safe to run every hour; both jobs are de-duplicated (work_events.nudged_at and
+ * the notification_log ledger), and it exits quietly if push isn't configured.
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../config.php';
+
+use App\Data\NotificationLog;
+use App\Data\PushSubscriptions;
+use App\Data\WorkEvents;
+use App\Notify\NotificationTypes;
+use App\Notify\Notifier;
+use App\Notify\WebPush;
+
+if (!WebPush::isConfigured()) {
+    fwrite(STDERR, "notify-cron: VAPID not configured; nothing to do.\n");
+    exit(0);
+}
+
+// Tunables.
+const EVENING_HOUR      = 19;   // "still clocked in this evening"
+const EVENING_MIN_MIN   = 120;  // …but only after being in ≥2h (avoid nudging a fresh evening start)
+const LONG_SHIFT_MIN    = 600;  // 10h
+const WEEKLY_HOUR       = 19;   // Sunday from 19:00
+
+$tz       = new DateTimeZone(WorkEvents::LOCAL_TZ);
+$utc      = new DateTimeZone('UTC');
+$nowLocal = new DateTimeImmutable('now', $tz);
+
+$notifier = Notifier::fromEnv();
+$work     = new WorkEvents();
+$log      = new NotificationLog();
+
+// Only users with a subscribed device are worth processing.
+$subscribed = array_flip((new PushSubscriptions())->subscribedUserIds());
+
+// ---------- Checkout nudge ----------
+try {
+    foreach ($work->openSessionsForNudge() as $s) {
+        $uid = $s['user_id'];
+        if (!isset($subscribed[$uid])) {
+            continue;
+        }
+
+        $inUtc    = new DateTimeImmutable($s['occurred_at'], $utc);
+        $inLocal  = $inUtc->setTimezone($tz);
+        $durMin   = (int) round(($nowLocal->getTimestamp() - $inUtc->getTimestamp()) / 60);
+        $sameDay  = $inLocal->format('Y-m-d') === $nowLocal->format('Y-m-d');
+
+        $longShift = $durMin >= LONG_SHIFT_MIN;
+        $evening   = (int) $nowLocal->format('G') >= EVENING_HOUR && $sameDay && $durMin >= EVENING_MIN_MIN;
+        if (!$longShift && !$evening) {
+            continue;
+        }
+
+        // Claim first so the reminder fires exactly once, even on overlapping runs.
+        if (!$work->claimNudge($s['id'])) {
+            continue;
+        }
+
+        $place = trim((string) ($s['location'] ?? ''));
+        $where = $place !== '' ? ' at ' . $place : '';
+        $notifier->notify(
+            $uid,
+            NotificationTypes::CHECKOUT_NUDGE,
+            'Still clocked in',
+            "You've been clocked in{$where} since {$inLocal->format('H:i')} ("
+                . fmtDur($durMin) . '). Did you forget to clock out?',
+            '/'
+        );
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron nudge: ' . $e->getMessage());
+}
+
+// ---------- Weekly summary (Sunday evening) ----------
+try {
+    if ((int) $nowLocal->format('N') === 7 && (int) $nowLocal->format('G') >= WEEKLY_HOUR) {
+        $periodKey = $nowLocal->format('o-\WW'); // ISO year-week, unique per week
+
+        foreach (array_keys($subscribed) as $uid) {
+            $sum = $work->summary($uid, 'lastweek');
+            if ($sum['total_minutes'] <= 0) {
+                continue; // nothing to report
+            }
+            if (!$log->claim($uid, NotificationTypes::WEEKLY_SUMMARY, $periodKey)) {
+                continue; // already sent this week
+            }
+
+            $body = 'You worked ' . $sum['total_label'] . ' last week';
+            if (count($sum['places']) > 1) {
+                $parts = array_map(
+                    static fn (array $p): string => ($p['place'] !== '' ? $p['place'] : '—') . ' ' . $p['total'],
+                    $sum['places']
+                );
+                $body .= ' (' . implode(' · ', $parts) . ')';
+            }
+            $body .= '.';
+
+            $notifier->notify($uid, NotificationTypes::WEEKLY_SUMMARY, 'Last week at work', $body, '/');
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron weekly: ' . $e->getMessage());
+}
+
+exit(0);
+
+function fmtDur(int $minutes): string
+{
+    $minutes = max(0, $minutes);
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    if ($h === 0) {
+        return $m . 'm';
+    }
+
+    return $m === 0 ? $h . 'h' : $h . 'h ' . $m . 'm';
+}

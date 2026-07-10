@@ -137,7 +137,63 @@ final class WorkEvents
     }
 
     /**
-     * Summarises worked time over a scope ('today' | 'yesterday' | 'week') or an
+     * Currently-open sessions (per user + workplace) that haven't been nudged yet —
+     * i.e. the latest event for that (user, place) is an 'in' with no clock-out and
+     * nudged_at still NULL. The cron decides which of these are worth a reminder.
+     *
+     * @return array<int, array{id:int, user_id:int, location:?string, occurred_at:string}>
+     */
+    public function openSessionsForNudge(): array
+    {
+        // Single scan over recent events, grouped in PHP (the table stays small for
+        // a personal app, and this avoids a self-join). The latest event per
+        // (user, place) that is an un-nudged 'in' is an open session to consider.
+        // Bounded to 60 days so the scan can't grow unbounded; an open session
+        // older than that is a stale forgotten punch handled via the hours card.
+        $rows = $this->db->query(
+            "SELECT id, user_id, kind, location, occurred_at, nudged_at
+             FROM work_events
+             WHERE occurred_at >= (NOW() - INTERVAL 60 DAY)
+             ORDER BY user_id ASC, occurred_at ASC, id ASC"
+        )->fetchAll();
+
+        $latest = [];
+        foreach ($rows as $r) {
+            $key          = $r['user_id'] . '|' . (string) ($r['location'] ?? '');
+            $latest[$key] = $r; // ascending order → last write per group is the latest event
+        }
+
+        $out = [];
+        foreach ($latest as $r) {
+            if ((string) $r['kind'] === 'in' && $r['nudged_at'] === null) {
+                $out[] = [
+                    'id'          => (int) $r['id'],
+                    'user_id'     => (int) $r['user_id'],
+                    'location'    => $r['location'] !== null ? (string) $r['location'] : null,
+                    'occurred_at' => (string) $r['occurred_at'],
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Marks an open session's clock-in as nudged, atomically. Returns true only if
+     * this call is the one that claimed it (so the reminder fires exactly once even
+     * if two cron runs overlap).
+     */
+    public function claimNudge(int $inEventId): bool
+    {
+        $stmt = $this->db->prepare('UPDATE work_events SET nudged_at = NOW() WHERE id = :id AND nudged_at IS NULL');
+        $stmt->execute([':id' => $inEventId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Summarises worked time over a scope ('today' | 'yesterday' | 'week' |
+     * 'lastweek') or an
      * explicit local date (YYYY-MM-DD). Returns totals, the sessions overlapping
      * the range, any forgotten clock-outs to fix, and a renderable card.
      *
@@ -389,11 +445,13 @@ final class WorkEvents
             return [$d, $d->modify('+1 day'), $d->format('D j M'), $d->format('D j M')];
         }
 
-        if ($scope === 'week') {
-            $dow   = (int) $now->format('N'); // 1 = Mon
-            $start = $now->setTime(0, 0)->modify('-' . ($dow - 1) . ' days');
-            $end   = $start->modify('+7 days');
-            return [$start, $end, $start->format('j M') . ' – ' . $end->modify('-1 day')->format('j M'), 'This week'];
+        if ($scope === 'week' || $scope === 'lastweek') {
+            $dow     = (int) $now->format('N'); // 1 = Mon
+            $thisMon = $now->setTime(0, 0)->modify('-' . ($dow - 1) . ' days');
+            $start   = $scope === 'lastweek' ? $thisMon->modify('-7 days') : $thisMon;
+            $end     = $start->modify('+7 days');
+            $label   = $scope === 'lastweek' ? 'Last week' : 'This week';
+            return [$start, $end, $start->format('j M') . ' – ' . $end->modify('-1 day')->format('j M'), $label];
         }
 
         if ($scope === 'yesterday') {
