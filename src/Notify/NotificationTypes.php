@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Notify;
+
+/**
+ * The catalogue of push notification types. This is the single place that makes
+ * notifications modular: add an entry here and it automatically appears as a
+ * toggle in the app's settings and can be sent with Notifier::notify($type).
+ *
+ * Each type has a stable key (stored in prefs), a user-facing label + blurb, and
+ * a default on/off used when the user hasn't set a preference.
+ */
+final class NotificationTypes
+{
+    public const CHECKOUT_NUDGE = 'checkout_nudge';
+    public const WEEKLY_SUMMARY = 'weekly_summary';
+
+    /** @var array<string, array{label:string, description:string, default:bool}> */
+    private const CATALOGUE = [
+        self::CHECKOUT_NUDGE => [
+            'label'       => 'Forgot to clock out',
+            'description' => 'A reminder if you are still clocked in late in the evening or after a long shift.',
+            'default'     => true,
+        ],
+        self::WEEKLY_SUMMARY => [
+            'label'       => 'Weekly work summary',
+            'description' => 'A recap of last week\'s hours, sent Sunday evening.',
+            'default'     => true,
+        ],
+    ];
+
+    public static function exists(string $key): bool
+    {
+        return isset(self::CATALOGUE[$key]);
+    }
+
+    public static function defaultEnabled(string $key): bool
+    {
+        return self::CATALOGUE[$key]['default'] ?? false;
+    }
+
+    /** @return array<int, string> */
+    public static function keys(): array
+    {
+        return array_keys(self::CATALOGUE);
+    }
+
+    /**
+     * The catalogue as a list, each entry with its key (for building the settings UI).
+     *
+     * @return array<int, array{key:string, label:string, description:string, default:bool}>
+     */
+    public static function all(): array
+    {
+        $out = [];
+        foreach (self::CATALOGUE as $key => $meta) {
+            $out[] = ['key' => $key] + $meta;
+        }
+
+        return $out;
+    }
+}
