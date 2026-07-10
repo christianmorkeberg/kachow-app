@@ -79,13 +79,19 @@ final class MsGraph
             'Accept: application/json',
         ], $extraHeaders);
 
+        $method = strtoupper($method);
         curl_setopt($ch, CURLOPT_URL, str_starts_with($path, 'http') ? $path : self::GRAPH . $path);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 20);
         if ($json !== null) {
             $headers[] = 'Content-Type: application/json';
             curl_setopt($ch, CURLOPT_POSTFIELDS, (string) json_encode($json, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        } elseif (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+            // Body-less POST (e.g. /messages/{id}/send) still needs an explicit
+            // Content-Length or Graph returns HTTP 411 "Length Required".
+            curl_setopt($ch, CURLOPT_POSTFIELDS, '');
+            $headers[] = 'Content-Length: 0';
         }
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
