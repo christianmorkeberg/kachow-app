@@ -76,7 +76,7 @@ final class AddExpense implements Tool
             'created' => true,
             'id'      => $id,
             'status'  => 'draft',
-            '_render' => $row !== null ? $this->receipts->card($row) : null,
+            '_render' => $row !== null ? $this->receipts->cardWithChecks($userId, $row) : null,
         ];
     }
 }

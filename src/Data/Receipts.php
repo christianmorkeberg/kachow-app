@@ -145,10 +145,15 @@ final class Receipts
     }
 
     /**
-     * Filtered expense summary for reporting: matching receipts (newest first) plus
-     * totals and a per-category breakdown. Dates are inclusive 'Y-m-d' or null.
+     * Filtered expense summary for reporting: matching receipts (newest first),
+     * totals PER CURRENCY (never blended), and a per (category, currency)
+     * breakdown. Dates are inclusive 'Y-m-d' or null.
      *
-     * @return array{items:array<int,array<string,mixed>>, count:int, total:float, vat:float, by_category:array<int,array{category:string,total:float}>}
+     * @return array{
+     *   items:array<int,array<string,mixed>>, count:int,
+     *   currencies:array<int,array{currency:string,total:float,vat:float,count:int}>,
+     *   by_category:array<int,array{category:string,currency:string,total:float}>
+     * }
      */
     public function summary(
         int $userId,
@@ -183,17 +188,23 @@ final class Receipts
         );
         $stmt->execute($params);
 
-        $items = [];
-        $total = 0.0;
-        $vat   = 0.0;
-        $byCat = [];
+        $items    = [];
+        $byCur    = [];  // currency => [total, vat, count]
+        $byCatCur = [];  // "cat\x1Fcur" => [category, currency, total]
         foreach ($stmt->fetchAll() as $r) {
-            $t = (float) $r['total'];
-            $v = (float) $r['vat'];
-            $total += $t;
-            $vat   += $v;
+            $t   = (float) $r['total'];
+            $v   = (float) $r['vat'];
+            $cur = (string) ($r['currency'] ?? 'DKK') ?: 'DKK';
             $cat = (string) ($r['category'] ?? '') ?: 'Other';
-            $byCat[$cat] = ($byCat[$cat] ?? 0) + $t;
+
+            $byCur[$cur] ??= ['total' => 0.0, 'vat' => 0.0, 'count' => 0];
+            $byCur[$cur]['total'] += $t;
+            $byCur[$cur]['vat']   += $v;
+            $byCur[$cur]['count']++;
+
+            $key = $cat . "\x1F" . $cur;
+            $byCatCur[$key] ??= ['category' => $cat, 'currency' => $cur, 'total' => 0.0];
+            $byCatCur[$key]['total'] += $t;
 
             $items[] = [
                 'id'       => (int) $r['id'],
@@ -201,25 +212,97 @@ final class Receipts
                 'date'     => $r['purchased_at'] !== null ? (string) $r['purchased_at'] : '',
                 'total'    => $t,
                 'vat'      => $v,
-                'currency' => (string) ($r['currency'] ?? 'DKK'),
+                'currency' => $cur,
                 'category' => $cat,
                 'note'     => $r['note'] !== null ? (string) $r['note'] : '',
             ];
         }
 
-        arsort($byCat);
-        $breakdown = [];
-        foreach ($byCat as $c => $sum) {
-            $breakdown[] = ['category' => $c, 'total' => round($sum, 2)];
+        $currencies = [];
+        foreach ($byCur as $cur => $agg) {
+            $currencies[] = ['currency' => $cur, 'total' => round($agg['total'], 2), 'vat' => round($agg['vat'], 2), 'count' => $agg['count']];
         }
+        usort($currencies, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
+
+        $breakdown = array_values(array_map(
+            static fn (array $x): array => ['category' => $x['category'], 'currency' => $x['currency'], 'total' => round($x['total'], 2)],
+            $byCatCur
+        ));
+        usort($breakdown, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
 
         return [
             'items'       => $items,
             'count'       => count($items),
-            'total'       => round($total, 2),
-            'vat'         => round($vat, 2),
+            'currencies'  => $currencies,
             'by_category' => $breakdown,
         ];
+    }
+
+    /**
+     * Finds an existing receipt that looks like a duplicate of the given one —
+     * same vendor (case-insensitive) + date + amount — excluding $excludeId.
+     * Prefers a confirmed match. Returns a compact record or null.
+     *
+     * @return array{id:int, vendor:string, date:string, total:float, currency:string, status:string}|null
+     */
+    public function findDuplicate(int $userId, ?string $vendor, ?string $date, ?float $total, ?int $excludeId = null): ?array
+    {
+        $vendor = trim((string) $vendor);
+        $date   = trim((string) $date);
+        if ($vendor === '' || $date === '' || $total === null) {
+            return null;
+        }
+
+        $sql = 'SELECT id, vendor, purchased_at, total, currency, status
+                FROM receipts
+                WHERE user_id = :u AND LOWER(vendor) = LOWER(:v)
+                  AND purchased_at = :d AND ABS(total - :t) < 0.005';
+        $params = [':u' => $userId, ':v' => $vendor, ':d' => $date, ':t' => $total];
+        if ($excludeId !== null) {
+            $sql .= ' AND id <> :ex';
+            $params[':ex'] = $excludeId;
+        }
+        $sql .= ' ORDER BY (status = "confirmed") DESC, id DESC LIMIT 1';
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'id'       => (int) $row['id'],
+            'vendor'   => (string) $row['vendor'],
+            'date'     => (string) $row['purchased_at'],
+            'total'    => (float) $row['total'],
+            'currency' => (string) ($row['currency'] ?? 'DKK'),
+            'status'   => (string) $row['status'],
+        ];
+    }
+
+    /**
+     * Card for a receipt row plus a `duplicate` field if a look-alike already
+     * exists (so the panel can warn). Use this when building a draft's card.
+     *
+     * @param array<string, mixed> $r
+     * @return array<string, mixed>
+     */
+    public function cardWithChecks(int $userId, array $r): array
+    {
+        $card = $this->card($r);
+        $dup  = $this->findDuplicate(
+            $userId,
+            $r['vendor'] ?? null,
+            $r['purchased_at'] ?? null,
+            $r['total'] !== null ? (float) $r['total'] : null,
+            (int) $r['id']
+        );
+        if ($dup !== null) {
+            $card['duplicate'] = ['date' => $dup['date'], 'vendor' => $dup['vendor'], 'confirmed' => $dup['status'] === 'confirmed'];
+        }
+
+        return $card;
     }
 
     /** Snaps a free category to the closest allowed one (case-insensitive), else 'Other'. */

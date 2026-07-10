@@ -75,7 +75,7 @@ final class UpdateReceipt implements Tool
         return [
             'updated' => true,
             'status'  => $row !== null ? (string) $row['status'] : 'draft',
-            '_render' => $row !== null ? $this->receipts->card($row) : null,
+            '_render' => $row !== null ? $this->receipts->cardWithChecks($userId, $row) : null,
         ];
     }
 }

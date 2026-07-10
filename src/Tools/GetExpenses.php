@@ -64,9 +64,7 @@ final class GetExpenses implements Tool
         $card = [
             'kind'        => 'expenses',
             'title'       => $label . ($category ? ' · ' . $category : ''),
-            'currency'    => 'DKK',
-            'total'       => $s['total'],
-            'vat'         => $s['vat'],
+            'currencies'  => $s['currencies'],  // per-currency totals (never blended)
             'count'       => $s['count'],
             'by_category' => $category ? [] : $s['by_category'],
             'items'       => array_map(static fn (array $i): array => [
@@ -83,8 +81,7 @@ final class GetExpenses implements Tool
 
         return [
             'period'      => $label,
-            'total'       => $s['total'],
-            'vat'         => $s['vat'],
+            'currencies'  => $s['currencies'],
             'count'       => $s['count'],
             'by_category' => $s['by_category'],
             // Ids included so a follow-up like "delete the Elgiganten one" can act.
@@ -93,6 +90,7 @@ final class GetExpenses implements Tool
                 'vendor'   => $i['vendor'],
                 'date'     => $i['date'],
                 'total'    => $i['total'],
+                'currency' => $i['currency'],
                 'category' => $i['category'],
             ], $s['items']),
             '_render'     => $card,
