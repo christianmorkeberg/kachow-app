@@ -111,9 +111,47 @@ final class ImapProvider implements EmailProvider
 
     public function createDraft(EmailDraft $draft): string
     {
-        $this->client->append($this->draftFolder, $this->rawFor($draft));
+        $raw  = $this->rawFor($draft);
+        $last = null;
+        foreach ($this->draftCandidates() as $folder) {
+            try {
+                $this->client->append($folder, $raw);
 
-        return 'draft';
+                return 'draft';
+            } catch (\Throwable $e) {
+                $last = $e;   // e.g. wrong folder name — try the next candidate
+            }
+        }
+        throw $last ?? new \RuntimeException('Could not save the draft to any Drafts folder.');
+    }
+
+    /**
+     * Candidate Drafts-folder names to APPEND to, best first: the server's
+     * special-use \Drafts folder, then any folder named "…Drafts", then the
+     * configured name, then common cPanel/Dovecot defaults (INBOX.Drafts).
+     *
+     * @return array<int, string>
+     */
+    private function draftCandidates(): array
+    {
+        $cands = [$this->draftFolder];
+        try {
+            $folders = $this->client->listFolders();
+            $named   = [];
+            foreach ($folders as $f) {
+                if (stripos($f['flags'], '\\Drafts') !== false) {
+                    array_unshift($cands, $f['name']);   // special-use wins
+                } elseif (preg_match('/(^|[.\/])drafts$/i', $f['name'])) {
+                    $named[] = $f['name'];
+                }
+            }
+            $cands = array_merge($cands, $named);
+        } catch (\Throwable) {
+            // LIST unsupported/failed — fall back to the static candidates below.
+        }
+        $cands = array_merge($cands, ['INBOX.Drafts', 'Drafts', 'INBOX.Draft']);
+
+        return array_values(array_unique(array_filter($cands, 'strlen')));
     }
 
     public function send(EmailDraft $draft): string

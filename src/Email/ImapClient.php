@@ -97,6 +97,28 @@ final class ImapClient
         return $this->firstLiteral($raw);
     }
 
+    /**
+     * List mailboxes with their attribute flags (e.g. \Drafts special-use).
+     *
+     * @return array<int, array{flags:string, name:string}>
+     */
+    public function listFolders(): array
+    {
+        $raw = $this->command('LIST "" "*"');
+        $out = [];
+        foreach (preg_split('/\r?\n/', $raw) ?: [] as $line) {
+            if (preg_match('/^\* LIST \(([^)]*)\) (?:"[^"]*"|NIL) (.+)$/i', trim($line), $m)) {
+                $name = trim($m[2]);
+                if (strlen($name) >= 2 && $name[0] === '"' && substr($name, -1) === '"') {
+                    $name = str_replace('\\"', '"', substr($name, 1, -1));
+                }
+                $out[] = ['flags' => $m[1], 'name' => $name];
+            }
+        }
+
+        return $out;
+    }
+
     /** Append a raw message to a folder with the \Draft flag. */
     public function append(string $folder, string $rawMessage): void
     {
