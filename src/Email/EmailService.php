@@ -19,6 +19,8 @@ final class EmailService
         private EmailAccounts $accounts,
         private string $googleClientId = '',
         private string $googleClientSecret = '',
+        private string $msClientId = '',
+        private string $msClientSecret = '',
     ) {
     }
 
@@ -28,6 +30,8 @@ final class EmailService
             $accounts ?? new EmailAccounts(),
             (string) ($_ENV['GOOGLE_CLIENT_ID'] ?? ''),
             (string) ($_ENV['GOOGLE_CLIENT_SECRET'] ?? ''),
+            (string) ($_ENV['MS_CLIENT_ID'] ?? ''),
+            (string) ($_ENV['MS_CLIENT_SECRET'] ?? ''),
         );
     }
 
@@ -68,10 +72,19 @@ final class EmailService
             return (int) $hint;
         }
         $needle = mb_strtolower($hint);
+        // Common spoken aliases → stored provider.
+        $aliases = [
+            'gmail' => 'gmail', 'google' => 'gmail',
+            'outlook' => 'outlook', 'hotmail' => 'outlook', 'live' => 'outlook',
+            'microsoft' => 'outlook', 'msn' => 'outlook',
+        ];
+        $providerHint = $aliases[$needle] ?? null;
+
         foreach ($this->accounts->listForUser($userId) as $a) {
             if (mb_strtolower($a['email']) === $needle
                 || str_contains(mb_strtolower($a['email']), $needle)
                 || $a['provider'] === $needle
+                || $a['provider'] === $providerHint
                 || ($a['display_name'] !== null && str_contains(mb_strtolower($a['display_name']), $needle))
             ) {
                 return $a['id'];
@@ -164,6 +177,12 @@ final class EmailService
                 $this->googleClientSecret,
                 (string) ($creds['refresh_token'] ?? ''),
             ),
+            'outlook' => new OutlookProvider(
+                $this->msClientId,
+                $this->msClientSecret,
+                (string) ($creds['refresh_token'] ?? ''),
+            ),
+            'imap' => new ImapProvider($creds),
             default => throw new RuntimeException(
                 'The ' . $meta['provider'] . ' provider is not wired up yet.'
             ),
