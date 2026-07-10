@@ -23,8 +23,10 @@ final class DeleteReceipt implements Tool
 
     public function description(): string
     {
-        return 'Deletes an expense/receipt by its id (get it from get_receipts). Permanent; also '
-            . 'removes the photo if there is one. Only delete one the user clearly identified.';
+        return 'Deletes an expense/receipt by its id (get it from get_expenses, whose results include '
+            . 'each item id). Permanent; also removes the photo if there is one. If which expense is '
+            . 'unclear, call get_expenses first to find the right id. Only delete one the user clearly '
+            . 'identified.';
     }
 
     public function parameters(): array

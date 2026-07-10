@@ -70,9 +70,11 @@ final class GetExpenses implements Tool
             'count'       => $s['count'],
             'by_category' => $category ? [] : $s['by_category'],
             'items'       => array_map(static fn (array $i): array => [
+                'id'       => $i['id'],
                 'vendor'   => $i['vendor'],
                 'date'     => $i['date'],
                 'total'    => $i['total'],
+                'vat'      => $i['vat'],
                 'currency' => $i['currency'],
                 'category' => $i['category'],
             ], $s['items']),
@@ -84,6 +86,14 @@ final class GetExpenses implements Tool
             'vat'         => $s['vat'],
             'count'       => $s['count'],
             'by_category' => $s['by_category'],
+            // Ids included so a follow-up like "delete the Elgiganten one" can act.
+            'items'       => array_map(static fn (array $i): array => [
+                'id'       => $i['id'],
+                'vendor'   => $i['vendor'],
+                'date'     => $i['date'],
+                'total'    => $i['total'],
+                'category' => $i['category'],
+            ], $s['items']),
             '_render'     => $card,
         ];
     }

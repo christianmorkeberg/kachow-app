@@ -25,7 +25,7 @@ final class UpdateReceipt implements Tool
     {
         return 'Updates one or more fields of an existing expense/receipt by id (for corrections). '
             . 'Also use to confirm it by setting confirm=true. Get the id from add_expense or '
-            . 'get_receipts. Categories: ' . implode(', ', Receipts::CATEGORIES) . '.';
+            . 'get_expenses. Categories: ' . implode(', ', Receipts::CATEGORIES) . '.';
     }
 
     public function parameters(): array
