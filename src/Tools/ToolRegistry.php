@@ -167,10 +167,18 @@ final class ToolRegistry
     {
         $declarations = [];
         foreach ($this->tools as $tool) {
+            $params = $tool->parameters();
+            // Gemini requires parameters.properties to be a JSON object ({}), but a
+            // no-arg tool's empty PHP array encodes as a JSON list ([]), which Gemini
+            // rejects ("Cannot bind a list to map for field 'properties'"). Force an
+            // object for parameter-less tools.
+            if (($params['properties'] ?? null) === []) {
+                $params['properties'] = new \stdClass();
+            }
             $declarations[] = [
                 'name'        => $tool->name(),
                 'description' => $tool->description(),
-                'parameters'  => $tool->parameters(),
+                'parameters'  => $params,
             ];
         }
 
