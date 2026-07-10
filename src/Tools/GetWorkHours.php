@@ -26,9 +26,11 @@ final class GetWorkHours implements Tool
         return 'Reports how much time the user has spent at work, from their clock in/out events '
             . '(logged automatically when they arrive at / leave work, or added manually). Use for '
             . '"how long have I worked today / this week", "when did I arrive", "am I still clocked in". '
-            . 'The app shows the result as a card, so summarise briefly rather than listing every '
-            . 'session. If it reports needs_fix, tell the user they have a session with no clock-out '
-            . 'and ask when they left so it can be corrected with log_work_event.';
+            . 'The user may have more than one workplace; pass "place" to limit to one, or omit it for '
+            . 'all (the result then breaks time down per workplace). The app shows the result as a '
+            . 'card, so summarise briefly rather than listing every session. If it reports needs_fix, '
+            . 'tell the user they have a session with no clock-out and ask when they left so it can be '
+            . 'corrected with log_work_event.';
     }
 
     public function parameters(): array
@@ -45,6 +47,10 @@ final class GetWorkHours implements Tool
                     'type'        => 'string',
                     'description' => 'A specific local date (YYYY-MM-DD) to summarise instead of scope.',
                 ],
+                'place' => [
+                    'type'        => 'string',
+                    'description' => 'Limit to one workplace by its label (e.g. "Office"). Omit for all.',
+                ],
             ],
             'required' => [],
         ];
@@ -54,8 +60,9 @@ final class GetWorkHours implements Tool
     {
         $scope = (string) ($arguments['scope'] ?? 'today');
         $date  = isset($arguments['date']) ? (string) $arguments['date'] : null;
+        $place = isset($arguments['place']) ? (string) $arguments['place'] : null;
 
-        $summary = $this->events->summary($userId, $scope, $date);
+        $summary = $this->events->summary($userId, $scope, $date, $place);
 
         // The card carries the detail; give the model the numbers to talk about.
         return [
@@ -64,6 +71,7 @@ final class GetWorkHours implements Tool
             'total_minutes' => $summary['total_minutes'],
             'clocked_in'    => $summary['ongoing'],
             'session_count' => count($summary['sessions']),
+            'by_place'      => $summary['places'],
             'sessions'      => $summary['sessions'],
             'needs_fix'     => $summary['needs_fix'],
             '_render'       => $summary['card'],

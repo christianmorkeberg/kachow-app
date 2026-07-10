@@ -46,21 +46,30 @@ final class WorkEvents
         string $kind,
         ?string $occurredAtUtc = null,
         string $source = 'manual',
-        ?string $note = null
+        ?string $note = null,
+        ?string $location = null
     ): array {
         $kind = $kind === 'out' ? 'out' : 'in';
+        $loc  = $location !== null ? mb_substr(trim($location), 0, 64) : null;
+        if ($loc === '') {
+            $loc = null;
+        }
         $at   = $occurredAtUtc !== null && $occurredAtUtc !== ''
             ? (new DateTimeImmutable($occurredAtUtc))->setTimezone(new DateTimeZone('UTC'))
             : new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $atStr = $at->format('Y-m-d H:i:s');
 
+        // A bounce is the same punch (same kind AND same place) within the window;
+        // a quick out-here / in-there across two workplaces is NOT a duplicate.
         $last = $this->lastEvent($userId);
-        if ($last !== null && $last['kind'] === $kind) {
+        if ($last !== null && $last['kind'] === $kind
+            && $this->locKey($last['location']) === $this->locKey($loc)) {
             $lastAt = new DateTimeImmutable($last['occurred_at'], new DateTimeZone('UTC'));
             if (abs($at->getTimestamp() - $lastAt->getTimestamp()) <= self::DEDUP_MINUTES * 60) {
                 return [
                     'status'      => 'duplicate',
                     'kind'        => $kind,
+                    'location'    => $loc,
                     'occurred_at' => $atStr,
                     'local'       => $this->toLocal($atStr)->format('H:i'),
                 ];
@@ -68,15 +77,16 @@ final class WorkEvents
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO work_events (user_id, kind, occurred_at, source, note)
-             VALUES (:u, :k, :at, :src, :note)'
+            'INSERT INTO work_events (user_id, kind, occurred_at, location, source, note)
+             VALUES (:u, :k, :at, :loc, :src, :note)'
         );
-        $stmt->execute([':u' => $userId, ':k' => $kind, ':at' => $atStr, ':src' => $source, ':note' => $note]);
+        $stmt->execute([':u' => $userId, ':k' => $kind, ':at' => $atStr, ':loc' => $loc, ':src' => $source, ':note' => $note]);
 
         return [
             'status'      => 'ok',
             'id'          => (int) $this->db->lastInsertId(),
             'kind'        => $kind,
+            'location'    => $loc,
             'occurred_at' => $atStr,
             'local'       => $this->toLocal($atStr)->format('H:i'),
         ];
@@ -91,11 +101,11 @@ final class WorkEvents
         return $stmt->rowCount() > 0;
     }
 
-    /** @return array{id:int, kind:string, occurred_at:string}|null */
+    /** @return array{id:int, kind:string, occurred_at:string, location:?string}|null */
     public function lastEvent(int $userId): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, kind, occurred_at FROM work_events WHERE user_id = :u ORDER BY occurred_at DESC, id DESC LIMIT 1'
+            'SELECT id, kind, occurred_at, location FROM work_events WHERE user_id = :u ORDER BY occurred_at DESC, id DESC LIMIT 1'
         );
         $stmt->execute([':u' => $userId]);
         $r = $stmt->fetch();
@@ -103,7 +113,12 @@ final class WorkEvents
             return null;
         }
 
-        return ['id' => (int) $r['id'], 'kind' => (string) $r['kind'], 'occurred_at' => (string) $r['occurred_at']];
+        return [
+            'id'          => (int) $r['id'],
+            'kind'        => (string) $r['kind'],
+            'occurred_at' => (string) $r['occurred_at'],
+            'location'    => $r['location'] !== null ? (string) $r['location'] : null,
+        ];
     }
 
     /**
@@ -132,7 +147,7 @@ final class WorkEvents
      *   needs_fix:array<int,array<string,mixed>>, card:array<string,mixed>
      * }
      */
-    public function summary(int $userId, string $scope = 'today', ?string $date = null): array
+    public function summary(int $userId, string $scope = 'today', ?string $date = null, ?string $place = null): array
     {
         $tz  = new DateTimeZone(self::LOCAL_TZ);
         $utc = new DateTimeZone('UTC');
@@ -144,15 +159,21 @@ final class WorkEvents
         $queryFrom = $fromUtc->modify('-18 hours');
 
         $events   = $this->eventsBetween($userId, $queryFrom->format('Y-m-d H:i:s'), $toUtc->format('Y-m-d H:i:s'));
-        $sessions = $this->pair($events);
+        $sessions = $this->pairByLocation($events); // pairs per workplace, tags each session with its place
 
-        $nowUtc        = new DateTimeImmutable('now', $utc);
-        $totalMinutes  = 0;
-        $ongoing       = false;
+        $filterKey = ($place !== null && trim($place) !== '') ? $this->locKey($place) : null;
+
+        $nowUtc          = new DateTimeImmutable('now', $utc);
+        $totalMinutes    = 0;
+        $ongoing         = false;
         $displaySessions = [];
         $needsFix        = [];
+        $perLoc          = []; // locKey => ['place'=>label, 'minutes'=>int]
 
         foreach ($sessions as $s) {
+            if ($filterKey !== null && $this->locKey($s['location']) !== $filterKey) {
+                continue;
+            }
             $in  = new DateTimeImmutable($s['in'], $utc);
             $out = $s['out'] !== null ? new DateTimeImmutable($s['out'], $utc) : null;
 
@@ -167,6 +188,7 @@ final class WorkEvents
                     if ($in >= $fromUtc && $in < $toUtc) {
                         $needsFix[] = [
                             'in_id' => $s['in_id'],
+                            'place' => $s['location'],
                             'day'   => $this->toLocal($s['in'])->format('D j M'),
                             'in'    => $this->toLocal($s['in'])->format('H:i'),
                         ];
@@ -176,10 +198,14 @@ final class WorkEvents
             }
 
             // Overlap of [in, end] with the range → the minutes that count.
-            $ovStart = max($in->getTimestamp(), $fromUtc->getTimestamp());
-            $ovEnd   = min($end->getTimestamp(), $toUtc->getTimestamp());
-            if ($ovEnd > $ovStart) {
-                $totalMinutes += (int) round(($ovEnd - $ovStart) / 60);
+            $ovStart  = max($in->getTimestamp(), $fromUtc->getTimestamp());
+            $ovEnd    = min($end->getTimestamp(), $toUtc->getTimestamp());
+            $inRange  = $ovEnd > $ovStart ? (int) round(($ovEnd - $ovStart) / 60) : 0;
+            $totalMinutes += $inRange;
+            if ($inRange > 0) {
+                $k = $this->locKey($s['location']);
+                $perLoc[$k] ??= ['place' => $s['location'], 'minutes' => 0];
+                $perLoc[$k]['minutes'] += $inRange;
             }
 
             // Show sessions that started within the range.
@@ -188,6 +214,7 @@ final class WorkEvents
                 $displaySessions[] = [
                     'in_id'    => $s['in_id'],
                     'out_id'   => $s['out_id'],
+                    'place'    => $s['location'],
                     'day'      => $this->toLocal($s['in'])->format('D j M'),
                     'in'       => $this->toLocal($s['in'])->format('H:i'),
                     'out'      => $out !== null ? $this->toLocal($s['out'])->format('H:i') : null,
@@ -199,21 +226,37 @@ final class WorkEvents
             }
         }
 
+        // Per-workplace breakdown (only meaningful when >1 labelled place appears).
+        $places = [];
+        foreach ($perLoc as $row) {
+            $places[] = ['place' => $row['place'], 'total' => self::fmtDuration($row['minutes']), 'minutes' => $row['minutes']];
+        }
+        usort($places, static fn (array $a, array $b): int => $b['minutes'] <=> $a['minutes']);
+        $labelledCount = count(array_filter($places, static fn (array $p): bool => trim((string) $p['place']) !== ''));
+        $multiPlace    = $labelledCount > 1;
+
         $totalLabel = self::fmtDuration($totalMinutes);
         $card = [
-            'kind'     => 'work_hours',
-            'title'    => $scopeLabel,
-            'range'    => $rangeLabel,
-            'total'    => $totalLabel,
-            'ongoing'  => $ongoing,
-            'sessions' => array_map(static fn (array $s): array => [
+            'kind'        => 'work_hours',
+            'title'       => $scopeLabel . ($filterKey !== null ? ' · ' . $place : ''),
+            'range'       => $rangeLabel,
+            'total'       => $totalLabel,
+            'ongoing'     => $ongoing,
+            'multi_place' => $multiPlace,
+            'places'      => $multiPlace
+                ? array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total']], $places)
+                : [],
+            'sessions'    => array_map(static fn (array $s): array => [
                 'day'      => $s['day'],
+                'place'    => $s['place'],
                 'in'       => $s['in'],
                 'out'      => $s['out'],
                 'ongoing'  => $s['ongoing'],
                 'duration' => $s['duration'],
             ], $displaySessions),
-            'needs_fix' => $needsFix,
+            'needs_fix'   => array_map(static fn (array $f): array => [
+                'day' => $f['day'], 'in' => $f['in'], 'place' => $f['place'],
+            ], $needsFix),
         ];
 
         return [
@@ -224,15 +267,56 @@ final class WorkEvents
             'ongoing'       => $ongoing,
             'sessions'      => $displaySessions,
             'needs_fix'     => $needsFix,
+            'places'        => $places,
             'card'          => $card,
         ];
     }
 
     /**
-     * Pairs a time-ordered event list into sessions. Rule: the first 'in' opens a
-     * session; a following 'out' closes it; extra 'in's while open and extra 'out's
-     * while closed are ignored (dedup/misfire tolerance). A trailing open 'in' is
-     * returned with out=null.
+     * Groups events per workplace and pairs each group into sessions, so a
+     * clock-out at one place doesn't close an open session at another. Each session
+     * is tagged with its place label (null if unlabelled).
+     *
+     * @param array<int,array{id:int,kind:string,occurred_at:string,location:?string}> $events ordered asc
+     * @return array<int,array{in:string, out:?string, in_id:int, out_id:?int, location:?string}>
+     */
+    private function pairByLocation(array $events): array
+    {
+        $groups = [];
+        foreach ($events as $e) {
+            $groups[$this->locKey($e['location'] ?? null)][] = $e;
+        }
+
+        $sessions = [];
+        foreach ($groups as $groupEvents) {
+            $label = null;
+            foreach ($groupEvents as $ge) {
+                if (trim((string) ($ge['location'] ?? '')) !== '') {
+                    $label = (string) $ge['location'];
+                    break;
+                }
+            }
+            foreach ($this->pair($groupEvents) as $sess) {
+                $sess['location'] = $label;
+                $sessions[]       = $sess;
+            }
+        }
+
+        usort($sessions, static fn (array $a, array $b): int => strcmp($a['in'], $b['in']));
+
+        return $sessions;
+    }
+
+    private function locKey(?string $s): string
+    {
+        return strtolower(trim((string) $s));
+    }
+
+    /**
+     * Pairs a time-ordered (single-workplace) event list into sessions. Rule: the
+     * first 'in' opens a session; a following 'out' closes it; extra 'in's while
+     * open and extra 'out's while closed are ignored (dedup/misfire tolerance). A
+     * trailing open 'in' is returned with out=null.
      *
      * @param array<int,array{id:int,kind:string,occurred_at:string}> $events ordered asc
      * @return array<int,array{in:string, out:?string, in_id:int, out_id:?int}>
@@ -268,12 +352,12 @@ final class WorkEvents
     }
 
     /**
-     * @return array<int,array{id:int, kind:string, occurred_at:string}>
+     * @return array<int,array{id:int, kind:string, occurred_at:string, location:?string}>
      */
     private function eventsBetween(int $userId, string $fromUtc, string $toUtc): array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, kind, occurred_at FROM work_events
+            'SELECT id, kind, occurred_at, location FROM work_events
              WHERE user_id = :u AND occurred_at >= :from AND occurred_at < :to
              ORDER BY occurred_at ASC, id ASC'
         );
@@ -281,7 +365,12 @@ final class WorkEvents
 
         $out = [];
         foreach ($stmt->fetchAll() as $r) {
-            $out[] = ['id' => (int) $r['id'], 'kind' => (string) $r['kind'], 'occurred_at' => (string) $r['occurred_at']];
+            $out[] = [
+                'id'          => (int) $r['id'],
+                'kind'        => (string) $r['kind'],
+                'occurred_at' => (string) $r['occurred_at'],
+                'location'    => $r['location'] !== null ? (string) $r['location'] : null,
+            ];
         }
 
         return $out;

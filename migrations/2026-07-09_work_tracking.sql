@@ -23,6 +23,7 @@ CREATE TABLE work_events (
     user_id     INT UNSIGNED NOT NULL,
     kind        ENUM('in','out') NOT NULL,
     occurred_at DATETIME NOT NULL,             -- stored in UTC
+    location    VARCHAR(64) NULL,              -- workplace label (from the URL &p=), NULL if unlabelled
     source      VARCHAR(32) NOT NULL DEFAULT 'ios_geofence',
     note        VARCHAR(255) NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -27,7 +27,9 @@ final class LogWorkEvent implements Tool
         return 'Manually records a work clock-in or clock-out, for corrections or when the automatic '
             . 'trigger was missed (e.g. "I forgot to clock out yesterday, I left at 17:00"). Provide '
             . '"at" as an RFC3339 UTC timestamp; omit it to use now. To clock out a session, log an '
-            . '"out" at the time they left. Use get_work_hours first if you need to see current state.';
+            . '"out" at the time they left. If the user has multiple workplaces, pass "place" (the '
+            . 'same label used for that workplace) so it pairs with the right session. Use '
+            . 'get_work_hours first if you need to see current state.';
     }
 
     public function parameters(): array
@@ -44,6 +46,10 @@ final class LogWorkEvent implements Tool
                     'type'        => 'string',
                     'description' => 'When it happened, RFC3339 UTC (e.g. "2026-07-08T15:00:00Z"). Omit for now.',
                 ],
+                'place' => [
+                    'type'        => 'string',
+                    'description' => 'Workplace label, if the user has more than one (e.g. "Office").',
+                ],
                 'note' => [
                     'type'        => 'string',
                     'description' => 'Optional short note.',
@@ -59,11 +65,12 @@ final class LogWorkEvent implements Tool
         if ($kind !== 'in' && $kind !== 'out') {
             return ['error' => 'kind must be "in" or "out".'];
         }
-        $at   = isset($arguments['at']) ? (string) $arguments['at'] : null;
-        $note = isset($arguments['note']) ? (string) $arguments['note'] : null;
+        $at    = isset($arguments['at']) ? (string) $arguments['at'] : null;
+        $note  = isset($arguments['note']) ? (string) $arguments['note'] : null;
+        $place = isset($arguments['place']) ? (string) $arguments['place'] : null;
 
         try {
-            $res = $this->events->add($userId, $kind, $at, 'assistant', $note);
+            $res = $this->events->add($userId, $kind, $at, 'assistant', $note, $place);
         } catch (\Exception $e) {
             return ['error' => 'I could not read that time. Give it as a clear date/time.'];
         }
