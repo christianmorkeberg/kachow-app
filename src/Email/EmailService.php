@@ -111,13 +111,13 @@ final class EmailService
         return $provider->get($messageId);
     }
 
-    /** @return array{account_id:int, draft_id:string} */
+    /** @return array{account_id:int, account_email:string, draft_id:string} */
     public function createDraft(int $userId, ?int $accountId, EmailDraft $draft): array
     {
         [$account, $provider] = $this->resolve($userId, $accountId);
         $draftId = $provider->createDraft($draft);
 
-        return ['account_id' => $account['id'], 'draft_id' => $draftId];
+        return ['account_id' => $account['id'], 'account_email' => $account['email'], 'draft_id' => $draftId];
     }
 
     /**

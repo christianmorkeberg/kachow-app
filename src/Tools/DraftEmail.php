@@ -40,7 +40,7 @@ final class DraftEmail implements Tool
                 'body'      => ['type' => 'string', 'description' => 'Plain-text body.'],
                 'cc'        => ['type' => 'string', 'description' => 'Optional Cc address(es).'],
                 'thread_id' => ['type' => 'string', 'description' => 'Optional Gmail thread id to reply within.'],
-                'account'   => ['type' => 'string', 'description' => 'Which mailbox (email or provider), if several.'],
+                'account'   => ['type' => 'string', 'description' => 'The mailbox to send FROM (email address, or provider like "gmail"/"hotmail"). ALWAYS pass this when the user names a sender/from-address; otherwise the default mailbox is used.'],
             ],
             'required' => ['to', 'subject', 'body'],
         ];
@@ -82,6 +82,7 @@ final class DraftEmail implements Tool
             '_render'  => [
                 'kind'         => 'email_draft',
                 'title'        => 'Draft ready',
+                'from'         => $res['account_email'],
                 'to'           => $to,
                 'cc'           => $draft->cc,
                 'subject'      => $draft->subject,
