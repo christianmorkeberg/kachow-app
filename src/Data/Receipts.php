@@ -177,7 +177,7 @@ final class Receipts
         }
 
         $stmt = $this->db->prepare(
-            'SELECT id, vendor, purchased_at, total, vat, currency, category, status
+            'SELECT id, vendor, purchased_at, total, vat, currency, category, note, status
              FROM receipts WHERE ' . implode(' AND ', $where) . '
              ORDER BY purchased_at DESC, id DESC LIMIT 300'
         );
@@ -203,6 +203,7 @@ final class Receipts
                 'vat'      => $v,
                 'currency' => (string) ($r['currency'] ?? 'DKK'),
                 'category' => $cat,
+                'note'     => $r['note'] !== null ? (string) $r['note'] : '',
             ];
         }
 
