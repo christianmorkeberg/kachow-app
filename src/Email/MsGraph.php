@@ -19,7 +19,9 @@ final class MsGraph
 {
     public const AUTHORITY = 'https://login.microsoftonline.com/common/oauth2/v2.0';
     public const GRAPH     = 'https://graph.microsoft.com/v1.0';
-    public const SCOPES    = 'offline_access User.Read Mail.ReadWrite';
+    // Read + draft + send. Mail.Send is included so, once the user grants it in
+    // Azure and reconnects, the token can send (gated by EMAIL_SEND_ENABLED).
+    public const SCOPES    = 'offline_access User.Read Mail.ReadWrite Mail.Send';
 
     /**
      * Exchange an authorization code for tokens (access + refresh).

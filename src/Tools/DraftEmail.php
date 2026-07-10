@@ -74,18 +74,26 @@ final class DraftEmail implements Tool
             return ['error' => 'I could not save that draft just now.'];
         }
 
+        $canSend = $this->email->sendEnabled();
+
         return [
             'drafted'  => true,
             'draft_id' => $res['draft_id'],
             '_render'  => [
-                'kind'     => 'email_draft',
-                'title'    => 'Draft saved',
-                'to'       => $to,
-                'cc'       => $draft->cc,
-                'subject'  => $draft->subject,
-                'body'     => $body,
-                'note'     => 'Saved to your Drafts — review and send it yourself.',
-                'sent'     => false,
+                'kind'         => 'email_draft',
+                'title'        => 'Draft ready',
+                'to'           => $to,
+                'cc'           => $draft->cc,
+                'subject'      => $draft->subject,
+                'body'         => $body,
+                'note'         => $canSend
+                    ? 'Review it, then tap Send.'
+                    : 'Saved to your Drafts — review and send it yourself.',
+                'sent'         => false,
+                'account_id'   => $res['account_id'],
+                'draft_id'     => $res['draft_id'],
+                'thread_id'    => $draft->threadId,
+                'send_enabled' => $canSend,
             ],
         ];
     }

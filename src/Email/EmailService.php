@@ -121,6 +121,23 @@ final class EmailService
     }
 
     /**
+     * Send a draft the user has confirmed (via the Send button). Enforces the
+     * send lock. Returns the account id and provider message id/marker.
+     *
+     * @return array{account_id:int, message_id:string}
+     */
+    public function sendDraft(int $userId, ?int $accountId, string $draftId, EmailDraft $draft): array
+    {
+        if (!$this->sendEnabled()) {
+            throw new SendLockedException('Sending email is currently turned off.');
+        }
+        [$account, $provider] = $this->resolve($userId, $accountId);
+        $messageId = $provider->sendDraft($draftId, $draft);
+
+        return ['account_id' => $account['id'], 'message_id' => $messageId];
+    }
+
+    /**
      * Send — refused unless the send lock is open. Throws SendLockedException so
      * the tool can present a clear, non-error message.
      *

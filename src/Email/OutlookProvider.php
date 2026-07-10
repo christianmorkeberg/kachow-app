@@ -109,6 +109,18 @@ final class OutlookProvider implements EmailProvider
         return 'sent';
     }
 
+    public function sendDraft(string $draftId, EmailDraft $draft): string
+    {
+        if ($draftId !== '' && $draftId !== 'draft') {
+            // Sends the existing draft message; it moves to Sent Items.
+            MsGraph::request($this->accessToken, 'POST', '/me/messages/' . rawurlencode($draftId) . '/send');
+
+            return $draftId;
+        }
+
+        return $this->send($draft);
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     /** @param array<string, mixed> $m */

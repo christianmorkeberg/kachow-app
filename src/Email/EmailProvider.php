@@ -31,4 +31,11 @@ interface EmailProvider
 
     /** Send a message; returns the provider message id. Gated by EmailService. */
     public function send(EmailDraft $draft): string;
+
+    /**
+     * Send a previously created draft. OAuth providers send the existing draft by
+     * id (which also removes it from Drafts and keeps threading); IMAP falls back
+     * to sending the given content over SMTP. Gated by EmailService.
+     */
+    public function sendDraft(string $draftId, EmailDraft $draft): string;
 }

@@ -18,10 +18,13 @@ final class ImapProvider implements EmailProvider
 {
     private ImapClient $client;
     private string $draftFolder;
+    /** @var array<string, mixed> */
+    private array $creds;
 
-    /** @param array<string, mixed> $creds host/port/ssl/username/password/draft_folder */
+    /** @param array<string, mixed> $creds host/port/ssl/username/password/draft_folder[/smtp_*] */
     public function __construct(array $creds)
     {
+        $this->creds  = $creds;
         $this->client = new ImapClient(
             (string) ($creds['host'] ?? ''),
             (int) ($creds['port'] ?? 993),
@@ -115,7 +118,51 @@ final class ImapProvider implements EmailProvider
 
     public function send(EmailDraft $draft): string
     {
-        throw new \RuntimeException('Sending over IMAP requires SMTP, which is not enabled.');
+        // Send over SMTP (IMAP has no send). SMTP host/port default sensibly from
+        // the IMAP settings (cPanel uses the same host on 465 SSL).
+        $username = (string) ($this->creds['username'] ?? '');
+        $host     = (string) ($this->creds['smtp_host'] ?? $this->creds['host'] ?? '');
+        $port     = (int) ($this->creds['smtp_port'] ?? 465);
+        $secure   = (string) ($this->creds['smtp_secure'] ?? ($port === 587 ? 'tls' : 'ssl'));
+
+        $smtp = new SmtpClient($host, $port, $secure);
+        try {
+            $smtp->login($username, (string) ($this->creds['password'] ?? ''));
+            $smtp->send($username, $this->addresses($draft), $this->rawFor($draft));
+        } finally {
+            $smtp->close();
+        }
+
+        return 'sent';
+    }
+
+    public function sendDraft(string $draftId, EmailDraft $draft): string
+    {
+        // IMAP can't send an existing draft; send the content over SMTP.
+        return $this->send($draft);
+    }
+
+    /**
+     * Bare recipient addresses (To + Cc) for the SMTP envelope.
+     *
+     * @return array<int, string>
+     */
+    private function addresses(EmailDraft $draft): array
+    {
+        $out = [];
+        foreach (array_merge(explode(',', $draft->to), explode(',', $draft->cc)) as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            if (preg_match('/<([^>]+)>/', $part, $m)) {
+                $out[] = trim($m[1]);
+            } else {
+                $out[] = $part;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     // ---- helpers -----------------------------------------------------------

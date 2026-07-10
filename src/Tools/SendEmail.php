@@ -6,12 +6,12 @@ namespace App\Tools;
 
 use App\Email\EmailDraft;
 use App\Email\EmailService;
-use App\Email\SendLockedException;
 
 /**
- * Tool: send an email. Sending is LOCKED for now (EMAIL_SEND_ENABLED off): the
- * tool exists so the model can attempt it, but it falls back to saving a draft
- * and tells the user sending is disabled. When unlocked later, it sends for real.
+ * Tool: prepare an email for sending. The assistant NEVER sends autonomously —
+ * it drafts the message and presents it with a Send button for the user to
+ * confirm with one tap. (If sending is turned off entirely, it's just saved as a
+ * draft to send from their mail app.)
  */
 final class SendEmail implements Tool
 {
@@ -26,9 +26,10 @@ final class SendEmail implements Tool
 
     public function description(): string
     {
-        return 'Sends an email on the user\'s behalf. NOTE: sending is currently locked, so this will save '
-            . 'the message as a draft and tell the user instead of sending. Prefer draft_email; only call this '
-            . 'if the user explicitly asks to send. account is optional when several mailboxes exist.';
+        return 'Prepares an email the user asked to send: writes it, saves it as a draft, and shows it '
+            . 'with a Send button for the user to confirm — it does NOT send on its own. Use when the user '
+            . 'says to send/email someone. For a reply, pass thread_id (from get_emails). account is '
+            . 'optional when several mailboxes exist.';
     }
 
     public function parameters(): array
@@ -40,7 +41,7 @@ final class SendEmail implements Tool
                 'subject'   => ['type' => 'string'],
                 'body'      => ['type' => 'string', 'description' => 'Plain-text body.'],
                 'cc'        => ['type' => 'string'],
-                'thread_id' => ['type' => 'string', 'description' => 'Optional Gmail thread id to reply within.'],
+                'thread_id' => ['type' => 'string', 'description' => 'Optional thread id to reply within.'],
                 'account'   => ['type' => 'string', 'description' => 'Which mailbox (email or provider), if several.'],
             ],
             'required' => ['to', 'subject', 'body'],
@@ -69,41 +70,34 @@ final class SendEmail implements Tool
         );
 
         try {
-            $res = $this->email->send($userId, $accountId, $draft);
-
-            return [
-                'sent'       => true,
-                'message_id' => $res['message_id'],
-                '_render'    => ['kind' => 'email_draft', 'title' => 'Email sent', 'to' => $to,
-                    'subject' => $draft->subject, 'body' => $body, 'sent' => true, 'note' => 'Sent.'],
-            ];
-        } catch (SendLockedException) {
-            // Locked — fall back to a draft so the user's intent isn't lost.
-            try {
-                $this->email->createDraft($userId, $accountId, $draft);
-            } catch (\Throwable $e) {
-                error_log('send_email (draft fallback): ' . $e->getMessage());
-            }
-
-            return [
-                'sent'      => false,
-                'locked'    => true,
-                'message'   => 'Sending email is turned off right now, so I saved it to your Drafts instead.',
-                '_render'   => [
-                    'kind'    => 'email_draft',
-                    'title'   => 'Saved as draft (sending is off)',
-                    'to'      => $to,
-                    'cc'      => $draft->cc,
-                    'subject' => $draft->subject,
-                    'body'    => $body,
-                    'note'    => 'Sending is currently locked. I saved this to your Drafts — send it yourself, '
-                        . 'or unlock sending later.',
-                    'sent'    => false,
-                ],
-            ];
+            $res = $this->email->createDraft($userId, $accountId, $draft);
         } catch (\Throwable $e) {
             error_log('send_email: ' . $e->getMessage());
-            return ['error' => 'I could not send that just now.'];
+            return ['error' => 'I could not prepare that email just now.'];
         }
+
+        $canSend = $this->email->sendEnabled();
+
+        return [
+            'drafted'  => true,
+            'awaiting_confirmation' => $canSend,
+            'draft_id' => $res['draft_id'],
+            '_render'  => [
+                'kind'         => 'email_draft',
+                'title'        => $canSend ? 'Ready to send' : 'Saved as draft (sending is off)',
+                'to'           => $to,
+                'cc'           => $draft->cc,
+                'subject'      => $draft->subject,
+                'body'         => $body,
+                'note'         => $canSend
+                    ? 'Review it and tap Send when you\'re happy.'
+                    : 'Sending is currently off, so I saved this to your Drafts to send yourself.',
+                'sent'         => false,
+                'account_id'   => $res['account_id'],
+                'draft_id'     => $res['draft_id'],
+                'thread_id'    => $draft->threadId,
+                'send_enabled' => $canSend,
+            ],
+        ];
     }
 }
