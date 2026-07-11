@@ -20,9 +20,13 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../config.php';
 
+use App\Auth\GoogleOAuth;
+use App\Data\Calendar;
 use App\Data\NotificationLog;
 use App\Data\PushSubscriptions;
+use App\Data\Users;
 use App\Data\WorkEvents;
+use App\Data\WorkLog;
 use App\Notify\NotificationTypes;
 use App\Notify\Notifier;
 use App\Notify\WebPush;
@@ -117,6 +121,60 @@ try {
     }
 } catch (\Throwable $e) {
     error_log('notify-cron weekly: ' . $e->getMessage());
+}
+
+// ---------- Work-log nudge (mid-afternoon on work days) ----------
+// On a day the user has an "Arbejde" calendar event, if they haven't logged what
+// they did yet, nudge them. Fires from LOG_NUDGE_HOUR onward (hourly cron ⇒ ~15:00),
+// once per day per user via the notification ledger.
+const LOG_NUDGE_HOUR = 15;
+try {
+    $hour = (int) $nowLocal->format('G');
+    if ($hour >= LOG_NUDGE_HOUR && $hour < 20) {
+        $today    = $nowLocal->format('Y-m-d');
+        $calendar = new Calendar(GoogleOAuth::fromEnv(new Users()));
+        $worklog  = new WorkLog();
+
+        foreach (array_keys($subscribed) as $uid) {
+            try {
+                $events = $calendar->eventsForDay($uid, $today, WorkLog::WORK_CALENDAR);
+            } catch (\Throwable $e) {
+                continue; // no Google connection / no such calendar
+            }
+
+            $jobs = [];
+            foreach ($events as $e) {
+                $j = WorkLog::jobFromTitle((string) ($e['summary'] ?? ''));
+                if ($j !== '' && !in_array($j, $jobs, true)) {
+                    $jobs[] = $j;
+                }
+            }
+            if ($jobs === []) {
+                continue; // no work today
+            }
+
+            $pending = array_values(array_diff($jobs, $worklog->loggedJobsForDate($uid, $today)));
+            if ($pending === []) {
+                continue; // already logged everything
+            }
+
+            // Claim only when actually nudging, so a transient failure can retry next hour.
+            if (!$log->claim($uid, NotificationTypes::WORK_LOG_NUDGE, $today)) {
+                continue;
+            }
+
+            $where = 'at ' . (count($pending) === 1 ? $pending[0] : implode(' and ', $pending));
+            $notifier->notify(
+                $uid,
+                NotificationTypes::WORK_LOG_NUDGE,
+                'What did you get done?',
+                "You're {$where} today — tap to log what you worked on.",
+                '/'
+            );
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron worklog: ' . $e->getMessage());
 }
 
 exit(0);
