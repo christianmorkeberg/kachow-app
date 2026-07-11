@@ -183,8 +183,11 @@ final class ToolSelector
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
             'feature idea', 'app idea', 'idea for the app', 'note this idea', 'note an idea',
             'improvement idea', 'build later', 'develop', 'my ideas', 'noted ideas',
-            // Danish
+            // Danish (udviklingside* covers udviklingsidé/-ideer plain-e; udviklingsidé has the
+            // accented é so it needs its own entry; assistenten skal = "the assistant should …")
             'til senere', 'til backlog', 'ide til app', 'app-ide', 'funktion senere', 'mine ideer',
+            'udviklingside', 'udviklingsidé', 'idé til assistent', 'ide til assistent',
+            'gem denne idé', 'gem denne ide', 'gem idé', 'gem ide', 'assistenten skal', 'noteret idé',
         ],
         'receipts' => [
             'expense', 'expenses', 'receipt', 'receipts', 'moms', 'vat', 'deductible', 'write off',

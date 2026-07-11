@@ -24,8 +24,10 @@ final class NoteDevIdea implements Tool
     {
         return 'Saves an idea for developing or improving the Kachow app itself (a feature to build '
             . 'later, a change to how it works) to a dev backlog. Use when the user proposes such an '
-            . 'idea — e.g. "for later:", "for the backlog", "idea for the app". This is NOT the '
-            . 'personal gift wishlist and NOT the shopping list. Capture the idea in a clear sentence.';
+            . 'idea — e.g. "for later:", "for the backlog", "idea for the app", or in Danish '
+            . '"udviklingsidé", "gem denne idé", "assistenten skal kunne …". ALWAYS actually call this '
+            . 'tool to persist it — do not just acknowledge in text. This is NOT the personal gift '
+            . 'wishlist and NOT the shopping list. Capture the idea in a clear sentence.';
     }
 
     public function parameters(): array
