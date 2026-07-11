@@ -114,9 +114,11 @@ final class ToolSelector
             'shopping', 'grocer', 'the list', 'our list', 'shared list', 'a list', 'shopping list',
             ' buy ', 'need to buy', 'we need', 'pick up', 'picked up', 'ran out', 'cross off',
             'check off', 'tick off', 'checked off', 'clear the list', 'on the list', 'off the list',
+            // To-do / task lists are named shared lists too (same tools, checklist card).
+            'to-do', 'todo', 'to-do list', 'task list', 'checklist', 'check list',
             // Danish (køb also catches indkøb/købe/køber)
             'køb', 'indkøb', 'dagligvarer', 'mangler', 'skal bruge', 'løbet tør', 'kryds af',
-            'på listen', ' liste', 'streg',
+            'på listen', ' liste', 'streg', 'huskeliste', 'gøremål', 'opgaveliste', 'tjekliste', 'to-do liste',
         ],
         'calendar' => [
             'calendar', 'event', 'schedule', 'appointment', 'meeting', 'busy', ' free ', 'availab',
