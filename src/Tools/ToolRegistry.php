@@ -17,6 +17,7 @@ use App\Data\Users;
 use App\Data\Vinyls;
 use App\Data\Wishlist;
 use App\Data\WorkEvents;
+use App\Data\WorkLog;
 use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Email\EmailService;
@@ -58,6 +59,7 @@ final class ToolRegistry
         Dmi $weather,
         WorkoutPlans $workoutPlans,
         WorkEvents $workEvents,
+        WorkLog $workLog,
         ApiTokens $apiTokens,
         DevIdeas $devIdeas,
         Receipts $receipts,
@@ -114,6 +116,9 @@ final class ToolRegistry
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
+        $registry->register(new LogWorkTime($workLog, $calendar));
+        $registry->register(new GetWorkLog($workLog));
+        $registry->register(new ExportWorkLog($workLog));
         $registry->register(new NoteDevIdea($devIdeas));
         $registry->register(new ListDevIdeas($devIdeas));
         $registry->register(new RemoveDevIdea($devIdeas));

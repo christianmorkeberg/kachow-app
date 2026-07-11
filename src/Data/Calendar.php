@@ -201,6 +201,31 @@ final class Calendar
      *
      * @return array<int, array{id: string, name: string, primary: bool, access_role: string, can_write: bool}>
      */
+    /**
+     * Events on one local day (Europe/Copenhagen), optionally only from the
+     * calendar with the given name (case-insensitive) — used to read the user's
+     * "Arbejde" work schedule.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function eventsForDay(int $userId, string $localDate, ?string $calendarName = null): array
+    {
+        $tz   = new \DateTimeZone('Europe/Copenhagen');
+        $from = (new \DateTimeImmutable($localDate . ' 00:00:00', $tz))->format(DATE_RFC3339);
+        $to   = (new \DateTimeImmutable($localDate . ' 23:59:59', $tz))->format(DATE_RFC3339);
+
+        $events = $this->getEvents($userId, $from, $to);
+        if ($calendarName !== null && $calendarName !== '') {
+            $needle = mb_strtolower($calendarName);
+            $events = array_values(array_filter(
+                $events,
+                static fn (array $e): bool => mb_strtolower((string) ($e['calendar'] ?? '')) === $needle
+            ));
+        }
+
+        return $events;
+    }
+
     public function listCalendars(int $userId): array
     {
         $service = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));

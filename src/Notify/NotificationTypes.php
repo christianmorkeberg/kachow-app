@@ -16,6 +16,7 @@ final class NotificationTypes
 {
     public const CHECKOUT_NUDGE = 'checkout_nudge';
     public const WEEKLY_SUMMARY = 'weekly_summary';
+    public const WORK_LOG_NUDGE = 'work_log_nudge';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -27,6 +28,11 @@ final class NotificationTypes
         self::WEEKLY_SUMMARY => [
             'label'       => 'Weekly work summary',
             'description' => 'A recap of last week\'s hours, sent Sunday evening.',
+            'default'     => true,
+        ],
+        self::WORK_LOG_NUDGE => [
+            'label'       => 'Log what you did',
+            'description' => 'On a work day (from your Arbejde calendar), a mid-afternoon nudge to log what you got done if you haven\'t yet.',
             'default'     => true,
         ],
     ];

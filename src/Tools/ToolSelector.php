@@ -72,6 +72,9 @@ final class ToolSelector
         'worktime' => [
             'get_work_hours', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
         ],
+        'worklog' => [
+            'log_work_time', 'get_work_log', 'export_work_log',
+        ],
         'devideas' => [
             'note_dev_idea', 'list_dev_ideas', 'remove_dev_idea',
         ],
@@ -180,6 +183,14 @@ final class ToolSelector
             'punch', 'punched', 'punch in', 'punch out',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
+        ],
+        // What I DID at work (free-text log per job), distinct from clock-in hours above.
+        'worklog' => [
+            'work log', 'worklog', 'what did i do', 'what i did', 'what i got done', 'log what',
+            'log my work', 'log that i', ' at dtu', ' at dsb', ' dtu', ' dsb',
+            // Danish
+            'arbejdslog', 'hvad lavede jeg', 'hvad har jeg lavet', 'hvad jeg lavede', 'loggede',
+            'log mit arbejde', 'log hvad', 'på dtu', 'på dsb', 'noter hvad jeg',
         ],
         'devideas' => [
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
