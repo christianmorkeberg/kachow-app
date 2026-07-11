@@ -64,17 +64,46 @@ final class ShoppingLists
         return $out;
     }
 
-    /** Finds a list by name (case-insensitive) within a connection, or null. */
+    /**
+     * Finds a list by name within a connection, or null. Matches leniently so
+     * near-identical names resolve to the same list: first an exact
+     * case-insensitive match, then a "loose" match that ignores case, spaces,
+     * hyphens and punctuation (so "to-do", "to do" and "todo" are the same list).
+     */
     public function findByName(int $connectionId, string $name): ?array
     {
+        $name = trim($name);
+
         $stmt = $this->db->prepare(
             'SELECT id, name, is_default FROM shared_lists
              WHERE connection_id = :cid AND LOWER(name) = LOWER(:name) LIMIT 1'
         );
-        $stmt->execute([':cid' => $connectionId, ':name' => trim($name)]);
+        $stmt->execute([':cid' => $connectionId, ':name' => $name]);
         $r = $stmt->fetch();
+        if ($r !== false) {
+            return $r;
+        }
 
-        return $r === false ? null : $r;
+        // Loose fallback: compare normalised names across the connection's lists.
+        $target = $this->normalizeName($name);
+        if ($target === '') {
+            return null;
+        }
+        $all = $this->db->prepare('SELECT id, name, is_default FROM shared_lists WHERE connection_id = :cid');
+        $all->execute([':cid' => $connectionId]);
+        foreach ($all->fetchAll() as $row) {
+            if ($this->normalizeName((string) $row['name']) === $target) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /** Lowercase and strip everything but letters/digits (spaces, hyphens, punctuation). */
+    private function normalizeName(string $s): string
+    {
+        return (string) preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower(trim($s), 'UTF-8'));
     }
 
     public function create(int $connectionId, string $name, int $createdBy, bool $isDefault = false): int
