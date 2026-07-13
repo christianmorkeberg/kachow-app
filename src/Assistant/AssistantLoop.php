@@ -34,6 +34,11 @@ final class AssistantLoop
         . 'matching tool and only confirm once it succeeds. Never tell the user you saved/noted/added '
         . 'something without having called the tool — an acknowledgement without a tool call is a bug. '
         . 'When a tool returns an error, explain it plainly to the user. '
+        . 'When you ask the user a short yes/no or approval question, or offer a small set of choices, '
+        . 'end your message with a suggestions marker like [[suggest: Yes | No]] (or '
+        . '[[suggest: DTU | DSB]]). The app turns each option into a tap button and removes the marker '
+        . 'from your text, so the user can reply with one tap. Keep options to 1–3 words, in the user\'s '
+        . 'language, max four. Do NOT use it for open-ended questions. '
         . 'Treat "shopping", "groceries", and "the list" as the SHARED shopping list (shared with '
         . 'their connection) — use the shopping-list tools. Only use the personal wishlist when the '
         . 'user explicitly says "wishlist" or "gift"; never use it for groceries or everyday shopping. '
@@ -59,7 +64,8 @@ final class AssistantLoop
         . '(e.g. total and whether they are still clocked in) instead of listing every session. '
         . 'Separately, there is a WORK LOG for what they did at each job (jobs like DTU/DSB come from '
         . 'their "Arbejde" calendar): when the user describes what they worked on, call log_work_time '
-        . '(it infers the job from the calendar if not stated; ask for hours if they did not say). Use '
+        . '(it infers the job from the calendar if not stated). Hours are optional — do NOT ask for '
+        . 'them; only record hours if the user volunteers them. The point is capturing the task. Use '
         . 'get_work_log to review it (renders a card — give a brief summary, not every entry) and '
         . 'export_work_log for a CSV link. This "what I did" log is distinct from clock-in/out hours. '
         . 'When the user describes a business expense they paid (an amount, usually with a vendor or '
@@ -125,6 +131,9 @@ final class AssistantLoop
     /** A renderable card (e.g. a workout plan) emitted by a tool this turn, for the UI. */
     private ?array $lastRender = null;
 
+    /** Quick-reply chips suggested by the assistant this turn (e.g. ["Yes","No"]). */
+    private ?array $lastSuggestions = null;
+
     public function __construct(
         private GeminiClient $gemini,
         private ToolRegistry $tools,
@@ -145,6 +154,33 @@ final class AssistantLoop
         return $this->lastRender;
     }
 
+    /** Quick-reply chips from the last handle() call (e.g. ["Yes","No"]), or null. */
+    public function lastSuggestions(): ?array
+    {
+        return $this->lastSuggestions;
+    }
+
+    /**
+     * Pull a trailing "[[suggest: A | B]]" marker out of the reply, returning the
+     * cleaned text and up to 4 short chip labels (or null if none).
+     *
+     * @return array{0:string, 1:?array<int,string>}
+     */
+    private function extractSuggestions(string $reply): array
+    {
+        if (!preg_match('/\[\[\s*suggest\s*:\s*(.+?)\]\]/is', $reply, $m)) {
+            return [$reply, null];
+        }
+        $clean = trim((string) preg_replace('/\[\[\s*suggest\s*:\s*.+?\]\]/is', '', $reply));
+        $opts  = array_values(array_filter(array_map(
+            static fn (string $o): string => mb_substr(trim($o), 0, 40),
+            explode('|', $m[1])
+        ), 'strlen'));
+        $opts = array_slice($opts, 0, 4);
+
+        return [$clean, $opts === [] ? null : $opts];
+    }
+
     /** The current turn's card as JSON for persistence, or null if none. */
     private function lastRenderJson(): ?string
     {
@@ -160,6 +196,7 @@ final class AssistantLoop
     {
         $this->conversations->addMessage($conversationId, 'user', $userMessage);
         $this->lastRender = null;
+        $this->lastSuggestions = null;
 
         $contents     = $this->buildContents($conversationId);
         // Send only the tools relevant to this message (falls back to all if unsure).
@@ -195,6 +232,8 @@ final class AssistantLoop
 
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);
+                // Pull out any quick-reply chips the assistant suggested.
+                [$reply, $this->lastSuggestions] = $this->extractSuggestions($reply);
                 // Persist any card this turn produced with the reply, so reopening the
                 // conversation can re-render the interactive widget (not just text).
                 $this->conversations->addMessage($conversationId, 'assistant', $reply, null, $this->lastRenderJson());

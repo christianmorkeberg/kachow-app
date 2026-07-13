@@ -26,10 +26,10 @@ final class LogWorkTime implements Tool
     public function description(): string
     {
         return 'Records what the user did at work on a day (free-text), for their work log. Use when '
-            . 'they describe what they worked on — e.g. "at DTU today I prepped the lecture, ~4 hours", '
-            . 'or when answering the afternoon "what did you get done?" nudge. job is DTU/DSB etc.; if '
-            . 'omitted it is inferred from that day\'s "Arbejde" calendar event. hours is optional (ask '
-            . 'if the user hasn\'t said). Defaults the day to today.';
+            . 'they describe what they worked on — e.g. "at DTU today I prepped the lecture", or when '
+            . 'answering the afternoon "what did you get done?" nudge. job is DTU/DSB etc.; if omitted it '
+            . 'is inferred from that day\'s "Arbejde" calendar event. hours is OPTIONAL — do NOT ask for '
+            . 'it; only include hours if the user states them. Defaults the day to today.';
     }
 
     public function parameters(): array
