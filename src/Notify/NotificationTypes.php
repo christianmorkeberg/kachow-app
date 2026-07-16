@@ -36,11 +36,11 @@ final class NotificationTypes
             'description' => 'On a work day (from your Arbejde calendar), a mid-afternoon nudge to log what you got done if you haven\'t yet.',
             'default'     => true,
         ],
-        // Infrastructure is in place (toggle + predictions); the scheduled sender is
-        // not wired yet. Off by default until it's built.
+        // Sent by notify-cron when a logged period is due/overdue but not yet
+        // registered. Off by default (sensitive) — the user opts in.
         self::CYCLE_UPCOMING => [
             'label'       => 'Period reminder',
-            'description' => 'A heads-up a couple of days before your predicted period.',
+            'description' => 'A reminder to log your period when it\'s expected but you haven\'t registered it yet.',
             'default'     => false,
         ],
     ];

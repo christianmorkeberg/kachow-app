@@ -22,9 +22,11 @@ require __DIR__ . '/../config.php';
 
 use App\Auth\GoogleOAuth;
 use App\Data\Calendar;
+use App\Data\CycleTracker;
 use App\Data\NotificationLog;
 use App\Data\PushSubscriptions;
 use App\Data\Users;
+use App\Data\UserSettings;
 use App\Data\WorkEvents;
 use App\Data\WorkLog;
 use App\Notify\NotificationTypes;
@@ -134,10 +136,12 @@ try {
         $today    = $nowLocal->format('Y-m-d');
         $calendar = new Calendar(GoogleOAuth::fromEnv(new Users()));
         $worklog  = new WorkLog();
+        $settings = new UserSettings();
 
         foreach (array_keys($subscribed) as $uid) {
+            $calName = $settings->get($uid, 'work_calendar') ?? WorkLog::WORK_CALENDAR;
             try {
-                $events = $calendar->eventsForDay($uid, $today, WorkLog::WORK_CALENDAR);
+                $events = $calendar->eventsForDay($uid, $today, $calName);
             } catch (\Throwable $e) {
                 continue; // no Google connection / no such calendar
             }
@@ -175,6 +179,40 @@ try {
     }
 } catch (\Throwable $e) {
     error_log('notify-cron worklog: ' . $e->getMessage());
+}
+
+// ---------- Cycle: "register your period" reminder ----------
+// Once at least one period is logged, when the predicted next start has arrived (up
+// to a few days overdue) and no new period has been registered, remind the user to
+// log it. Fires from CYCLE_REMIND_HOUR (hourly cron ⇒ ~10:00), once per day per user
+// via the ledger, and only if they enabled the "Period reminder" toggle (default off).
+const CYCLE_REMIND_HOUR = 10;
+try {
+    $hour = (int) $nowLocal->format('G');
+    if ($hour >= CYCLE_REMIND_HOUR && $hour < 13) {
+        $today = $nowLocal->format('Y-m-d');
+        $cycle = new CycleTracker();
+
+        foreach (array_keys($subscribed) as $uid) {
+            $due = $cycle->reminderDue($uid);
+            if ($due === null) {
+                continue;
+            }
+            // Claim only when actually reminding, so a transient failure can retry next hour.
+            if (!$log->claim($uid, NotificationTypes::CYCLE_UPCOMING, $today)) {
+                continue;
+            }
+
+            $late = (int) $due['days_late'];
+            $body = $late === 0
+                ? 'Your period is expected today — tap to log it when it starts.'
+                : 'Your period was expected ' . $late . ' day' . ($late === 1 ? '' : 's')
+                    . ' ago — tap to log it if it has started.';
+            $notifier->notify($uid, NotificationTypes::CYCLE_UPCOMING, 'Period check-in', $body, '/');
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron cycle: ' . $e->getMessage());
 }
 
 exit(0);

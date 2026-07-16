@@ -87,6 +87,9 @@ final class ToolSelector
         'cycle' => [
             'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle',
         ],
+        'settings' => [
+            'get_settings', 'update_setting',
+        ],
     ];
 
     /**
@@ -229,6 +232,13 @@ final class ToolSelector
             // Danish (menstruation/-scyklus, periode, cyklus, ægløsning, frugtbar, mensen)
             'menstruation', 'menstruationscyklus', 'periode', 'cyklus', 'ægløsning', 'frugtbar',
             'frugtbarhed', 'mensen', 'min menstruation', 'min periode', 'ægløsn',
+        ],
+        'settings' => [
+            'setting', 'settings', 'preference', 'configure', 'which calendar', 'work calendar',
+            'use my calendar', 'change calendar', 'calendar for work', 'calendar name',
+            // Danish
+            'indstilling', 'indstillinger', 'konfigurer', 'foretrukne', 'hvilken kalender',
+            'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
         ],
     ];
 

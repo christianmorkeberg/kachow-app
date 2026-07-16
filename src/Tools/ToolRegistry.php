@@ -15,6 +15,7 @@ use App\Data\Receipts;
 use App\Data\ShoppingLists;
 use App\Data\UserInstructions;
 use App\Data\Users;
+use App\Data\UserSettings;
 use App\Data\Vinyls;
 use App\Data\Wishlist;
 use App\Data\WorkEvents;
@@ -67,6 +68,7 @@ final class ToolRegistry
         ReceiptStorage $receiptStorage,
         EmailService $email,
         CycleTracker $cycle,
+        UserSettings $userSettings,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -118,7 +120,7 @@ final class ToolRegistry
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
-        $registry->register(new LogWorkTime($workLog, $calendar));
+        $registry->register(new LogWorkTime($workLog, $calendar, $userSettings));
         $registry->register(new GetWorkLog($workLog));
         $registry->register(new ExportWorkLog($workLog));
         $registry->register(new NoteDevIdea($devIdeas));
@@ -141,6 +143,8 @@ final class ToolRegistry
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));
         $registry->register(new GetConnectedCycle($connections, $cycle));
+        $registry->register(new GetSettings($userSettings));
+        $registry->register(new UpdateSetting($userSettings));
         $registry->register(new AddVinyl($vinyls, $discogs));
         $registry->register(new GetVinyls($vinyls));
         $registry->register(new RateVinyl($vinyls));

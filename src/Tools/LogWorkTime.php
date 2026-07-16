@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Calendar;
+use App\Data\UserSettings;
 use App\Data\WorkLog;
 
 /**
@@ -14,8 +15,11 @@ use App\Data\WorkLog;
  */
 final class LogWorkTime implements Tool
 {
-    public function __construct(private WorkLog $log, private Calendar $calendar)
-    {
+    public function __construct(
+        private WorkLog $log,
+        private Calendar $calendar,
+        private UserSettings $settings,
+    ) {
     }
 
     public function name(): string
@@ -88,8 +92,9 @@ final class LogWorkTime implements Tool
     /** @return array<int, string> distinct jobs from the day's Arbejde events */
     private function jobsForDay(int $userId, string $date): array
     {
+        $calendarName = $this->settings->get($userId, 'work_calendar') ?? WorkLog::WORK_CALENDAR;
         try {
-            $events = $this->calendar->eventsForDay($userId, $date, WorkLog::WORK_CALENDAR);
+            $events = $this->calendar->eventsForDay($userId, $date, $calendarName);
         } catch (\Throwable) {
             return [];
         }

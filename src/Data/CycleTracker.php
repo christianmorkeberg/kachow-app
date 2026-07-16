@@ -38,6 +38,9 @@ final class CycleTracker
     private const FERTILE_BEFORE = 5;
     private const FERTILE_AFTER  = 1;
 
+    /** Stop the "register your period" reminder this many days after it was due. */
+    private const REMIND_MAX_LATE = 5;
+
     public const FLOWS = ['light', 'medium', 'heavy'];
 
     private PDO $db;
@@ -198,6 +201,29 @@ final class CycleTracker
             'fertile_to'    => $fertileTo->format('Y-m-d'),
             'in_fertile'    => $inFertile,
         ];
+    }
+
+    /**
+     * Whether to remind the user to register their period: once there's at least one
+     * logged period, the predicted next start has arrived (or is up to REMIND_MAX_LATE
+     * days overdue) and no newer period has been logged. Returns details, or null when
+     * no reminder is due. (Logging a new period advances the prediction, so the
+     * reminder naturally stops once they register it.)
+     *
+     * @return array{next_period:string, days_late:int}|null
+     */
+    public function reminderDue(int $userId): ?array
+    {
+        $s = $this->status($userId);
+        if (empty($s['has_data'])) {
+            return null;
+        }
+        $daysUntil = (int) $s['days_until'];
+        if ($daysUntil > 0 || $daysUntil < -self::REMIND_MAX_LATE) {
+            return null; // not due yet, or too stale to keep nagging
+        }
+
+        return ['next_period' => (string) $s['next_period'], 'days_late' => -$daysUntil];
     }
 
     /**
