@@ -50,6 +50,11 @@ final class Receipts
         $data['file_ref'] = isset($fields['file_ref']) ? (string) $fields['file_ref'] : null;
         $data['mime']     = isset($fields['mime']) ? (string) $fields['mime'] : null;
 
+        // Line items (from a photo read) are stored as JSON; null when none.
+        if (isset($fields['line_items']) && is_array($fields['line_items']) && $fields['line_items'] !== []) {
+            $data['line_items'] = json_encode(array_values($fields['line_items']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
         $cols = array_keys($data);
         $ph   = array_map(static fn (string $c): string => ':' . $c, $cols);
         $stmt = $this->db->prepare(
@@ -140,8 +145,40 @@ final class Receipts
             'currency'   => (string) ($r['currency'] ?? 'DKK'),
             'category'   => $r['category'] !== null ? (string) $r['category'] : '',
             'note'       => $r['note'] !== null ? (string) $r['note'] : '',
+            'line_items' => self::decodeLineItems($r['line_items'] ?? null),
             'categories' => self::CATEGORIES,
         ];
+    }
+
+    /**
+     * Decodes the stored line_items JSON into a clean list for the card. Tolerant of
+     * null/garbage (returns []).
+     *
+     * @return array<int, array{description:string, qty:?float, amount:?float}>
+     */
+    private static function decodeLineItems(mixed $raw): array
+    {
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item) || !isset($item['description'])) {
+                continue;
+            }
+            $out[] = [
+                'description' => (string) $item['description'],
+                'qty'         => isset($item['qty']) && is_numeric($item['qty']) ? (float) $item['qty'] : null,
+                'amount'      => isset($item['amount']) && is_numeric($item['amount']) ? (float) $item['amount'] : null,
+            ];
+        }
+
+        return $out;
     }
 
     /**

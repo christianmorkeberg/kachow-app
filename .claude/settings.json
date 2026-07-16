@@ -3,7 +3,9 @@
     "allow": [
       "Bash(php -r ' *)",
       "Bash(php -l src/Auth/GmailConnect.php)",
-      "Bash(php -l api/google-callback.php)"
+      "Bash(php -l api/google-callback.php)",
+      "Bash(php -l src/Receipts/ReceiptReader.php)",
+      "Bash(php -l src/Data/Receipts.php)"
     ]
   }
 }
