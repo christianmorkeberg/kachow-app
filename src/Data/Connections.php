@@ -18,7 +18,7 @@ use PDO;
 final class Connections
 {
     /** Apps that can be shared over a connection. */
-    public const APPS = ['workouts', 'wishlist', 'calendar'];
+    public const APPS = ['workouts', 'wishlist', 'calendar', 'cycle'];
 
     private PDO $db;
 

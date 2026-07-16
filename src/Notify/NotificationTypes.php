@@ -17,6 +17,7 @@ final class NotificationTypes
     public const CHECKOUT_NUDGE = 'checkout_nudge';
     public const WEEKLY_SUMMARY = 'weekly_summary';
     public const WORK_LOG_NUDGE = 'work_log_nudge';
+    public const CYCLE_UPCOMING = 'cycle_upcoming';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -34,6 +35,13 @@ final class NotificationTypes
             'label'       => 'Log what you did',
             'description' => 'On a work day (from your Arbejde calendar), a mid-afternoon nudge to log what you got done if you haven\'t yet.',
             'default'     => true,
+        ],
+        // Infrastructure is in place (toggle + predictions); the scheduled sender is
+        // not wired yet. Off by default until it's built.
+        self::CYCLE_UPCOMING => [
+            'label'       => 'Period reminder',
+            'description' => 'A heads-up a couple of days before your predicted period.',
+            'default'     => false,
         ],
     ];
 

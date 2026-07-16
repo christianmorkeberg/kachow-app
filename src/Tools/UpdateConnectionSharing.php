@@ -23,7 +23,7 @@ final class UpdateConnectionSharing implements Tool
     public function description(): string
     {
         return 'Changes what YOU share with a connected person (by their email or name). Provide the '
-            . 'full new list in "share" (any of: workouts, wishlist, calendar) — it replaces your '
+            . 'full new list in "share" (any of: workouts, wishlist, calendar, cycle) — it replaces your '
             . 'previous choice. Pass an empty list to stop sharing anything with them (without removing '
             . 'the connection). Only affects your side of the sharing.';
     }
@@ -40,7 +40,7 @@ final class UpdateConnectionSharing implements Tool
                 'share' => [
                     'type'        => 'array',
                     'description' => 'The full set you want to share with them now: any of "workouts", '
-                        . '"wishlist", "calendar". Empty to share nothing.',
+                        . '"wishlist", "calendar", "cycle". Empty to share nothing.',
                     'items'       => ['type' => 'string'],
                 ],
             ],

@@ -29,8 +29,9 @@ final class AcceptConnectionRequest implements Tool
     {
         return 'Accepts a pending incoming connection request. Identify the requester by their email '
             . 'or name (see list_connections). Specify what YOU want to share back via "share" (any of: '
-            . 'workouts, wishlist, calendar; defaults to workouts). Only pending requests sent to you '
-            . 'can be accepted.';
+            . 'workouts, wishlist, calendar, cycle; defaults to workouts). "cycle" shares your menstrual '
+            . 'cycle status — only add it if the user explicitly asks to. Only pending requests sent to '
+            . 'you can be accepted.';
     }
 
     public function parameters(): array
@@ -44,7 +45,7 @@ final class AcceptConnectionRequest implements Tool
                 ],
                 'share' => [
                     'type'        => 'array',
-                    'description' => 'What you want to share back: any of "workouts", "wishlist", "calendar".',
+                    'description' => 'What you want to share back: any of "workouts", "wishlist", "calendar", "cycle".',
                     'items'       => ['type' => 'string'],
                 ],
             ],

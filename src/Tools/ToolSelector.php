@@ -84,6 +84,9 @@ final class ToolSelector
         'email' => [
             'get_emails', 'read_email', 'draft_email', 'send_email', 'list_email_accounts',
         ],
+        'cycle' => [
+            'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle',
+        ],
     ];
 
     /**
@@ -216,6 +219,16 @@ final class ToolSelector
             'reply to', 'draft', 'compose', 'my messages', 'new mail', 'check my mail',
             // Danish (indbakke=inbox, ulæst=unread, skriv til=write to, svar på=reply to)
             'indbakke', 'ulæst', 'skriv en mail', 'skriv til', 'svar på mail', 'post fra', 'e-post',
+        ],
+        // Menstrual cycle tracking. " cycle" is space-padded so it doesn't match inside
+        // bicycle/recycle/motorcycle; "period" is common enough in context to include.
+        'cycle' => [
+            'period', 'menstru', ' cycle', 'my cycle', 'cycle day', 'ovulation', 'ovulating',
+            'fertile', 'fertility', 'luteal', 'follicular', ' pms', 'cramps', 'next period',
+            'time of the month', 'am i fertile',
+            // Danish (menstruation/-scyklus, periode, cyklus, ægløsning, frugtbar, mensen)
+            'menstruation', 'menstruationscyklus', 'periode', 'cyklus', 'ægløsning', 'frugtbar',
+            'frugtbarhed', 'mensen', 'min menstruation', 'min periode', 'ægløsn',
         ],
     ];
 

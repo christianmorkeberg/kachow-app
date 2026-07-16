@@ -7,6 +7,7 @@ namespace App\Tools;
 use App\Data\ApiTokens;
 use App\Data\Calendar;
 use App\Data\Connections;
+use App\Data\CycleTracker;
 use App\Data\DevIdeas;
 use App\Data\Invites;
 use App\Data\Memories;
@@ -65,6 +66,7 @@ final class ToolRegistry
         Receipts $receipts,
         ReceiptStorage $receiptStorage,
         EmailService $email,
+        CycleTracker $cycle,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -132,9 +134,13 @@ final class ToolRegistry
         $registry->register(new DraftEmail($email));
         $registry->register(new SendEmail($email));
         $registry->register(new ListEmailAccounts($email));
+        $registry->register(new LogPeriod($cycle));
+        $registry->register(new GetCycleStatus($cycle));
+        $registry->register(new RemovePeriod($cycle));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));
+        $registry->register(new GetConnectedCycle($connections, $cycle));
         $registry->register(new AddVinyl($vinyls, $discogs));
         $registry->register(new GetVinyls($vinyls));
         $registry->register(new RateVinyl($vinyls));
