@@ -77,6 +77,7 @@ final class GmailProvider implements EmailProvider
 
         $summary = $this->summaryFrom($msg);
         $body    = $this->extractBody($msg->getPayload());
+        $html    = $this->extractHtml($msg->getPayload());
 
         return new EmailMessage(
             id:       $summary->id,
@@ -88,6 +89,7 @@ final class GmailProvider implements EmailProvider
             date:     $summary->date,
             unread:   $summary->unread,
             bodyText: $body,
+            bodyHtml: $html,
         );
     }
 
@@ -176,6 +178,28 @@ final class GmailProvider implements EmailProvider
         }
 
         return $htmlFallback;
+    }
+
+    /** Recursively pull the first text/html part out of a Gmail payload (raw HTML). */
+    private function extractHtml(?\Google\Service\Gmail\MessagePart $part): string
+    {
+        if ($part === null) {
+            return '';
+        }
+        $mime = (string) $part->getMimeType();
+        $data = $part->getBody()?->getData();
+
+        if ($mime === 'text/html' && $data) {
+            return trim($this->b64urlDecode($data));
+        }
+        foreach ($part->getParts() ?? [] as $child) {
+            $html = $this->extractHtml($child);
+            if ($html !== '') {
+                return $html;
+            }
+        }
+
+        return '';
     }
 
     /** Build a base64url RFC 2822 message for drafts/sends. */

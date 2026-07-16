@@ -95,6 +95,7 @@ final class ImapProvider implements EmailProvider
         [$headerText, $bodyRaw] = $this->splitHeaders($raw);
         $headers = $this->parseHeaders($headerText);
         $body    = $this->extractText($headerText, $bodyRaw);
+        $html    = $this->extractHtml($headerText, $bodyRaw);
 
         return new EmailMessage(
             id:       $messageId,
@@ -106,6 +107,7 @@ final class ImapProvider implements EmailProvider
             date:     $this->normalizeDate($headers['date'] ?? ''),
             unread:   false,
             bodyText: trim($body),
+            bodyHtml: $html,
         );
     }
 
@@ -281,6 +283,31 @@ final class ImapProvider implements EmailProvider
         }
 
         return $decoded;
+    }
+
+    /** Recursively pull the first text/html part out of a MIME message (raw HTML). */
+    private function extractHtml(string $headerText, string $body): string
+    {
+        $headers  = $this->parseHeaders($headerText);
+        $ctypeRaw = $headers['content-type'] ?? 'text/plain';
+        $ctype    = strtolower($ctypeRaw);
+
+        if (str_starts_with($ctype, 'multipart/') && preg_match('/boundary="?([^";]+)"?/i', $ctypeRaw, $b)) {
+            foreach ($this->splitMultipart($body, $b[1]) as $part) {
+                [$ph, $pb] = $this->splitHeaders($part);
+                $html      = $this->extractHtml($ph, $pb);
+                if ($html !== '') {
+                    return $html;
+                }
+            }
+            return '';
+        }
+
+        if (str_starts_with($ctype, 'text/html')) {
+            return trim($this->decodeBody($body, strtolower($headers['content-transfer-encoding'] ?? ''), $ctype));
+        }
+
+        return '';
     }
 
     /** @return array<int, string> */

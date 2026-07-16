@@ -6,7 +6,9 @@ namespace App\Email;
 
 /**
  * A provider-agnostic email message. List views populate the summary fields and
- * leave $bodyText empty; a full fetch (get) fills $bodyText in.
+ * leave $bodyText empty; a full fetch (get) fills $bodyText in. $bodyHtml holds the
+ * original HTML part when the message has one — surfaced to the render card only
+ * (rendered in a sandboxed iframe), never fed to the model, which gets $bodyText.
  */
 final class EmailMessage
 {
@@ -20,6 +22,7 @@ final class EmailMessage
         public readonly string $date,      // ISO-8601 (UTC) when known, else raw header
         public readonly bool $unread,
         public readonly string $bodyText = '',
+        public readonly string $bodyHtml = '',
     ) {
     }
 

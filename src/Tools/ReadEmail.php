@@ -63,9 +63,17 @@ final class ReadEmail implements Tool
 
         $data = $msg->toArray(true);
 
+        // The card gets the original HTML (rendered client-side in a sandboxed iframe);
+        // the model only ever sees the plain-text body, so its context stays lean/cheap.
+        // Cap the HTML so a giant marketing email can't bloat the stored card.
+        $render = ['kind' => 'email', 'account_id' => $accountId] + $data;
+        if ($msg->bodyHtml !== '') {
+            $render['body_html'] = mb_substr($msg->bodyHtml, 0, 400000);
+        }
+
         return [
             'email'   => $data,
-            '_render' => ['kind' => 'email', 'account_id' => $accountId] + $data,
+            '_render' => $render,
         ];
     }
 }

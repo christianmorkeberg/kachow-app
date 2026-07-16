@@ -57,13 +57,13 @@ final class OutlookProvider implements EmailProvider
     {
         $select = 'id,conversationId,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,body';
         try {
-            // Prefer plain text body over HTML.
+            // Ask for HTML so we can render it richly; we derive the plain text from it.
             $m = MsGraph::request(
                 $this->accessToken,
                 'GET',
                 '/me/messages/' . rawurlencode($messageId) . '?$select=' . rawurlencode($select),
                 null,
-                ['Prefer: outlook.body-content-type="text"'],
+                ['Prefer: outlook.body-content-type="html"'],
             );
         } catch (\Throwable) {
             return null;
@@ -72,11 +72,13 @@ final class OutlookProvider implements EmailProvider
             return null;
         }
 
-        $summary = $this->summaryFrom($m);
-        $body    = (string) ($m['body']['content'] ?? '');
-        if (($m['body']['contentType'] ?? '') === 'html') {
-            $body = trim(html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        }
+        $summary  = $this->summaryFrom($m);
+        $content  = (string) ($m['body']['content'] ?? '');
+        $isHtml   = ($m['body']['contentType'] ?? '') === 'html';
+        $html     = $isHtml ? $content : '';
+        $body     = $isHtml
+            ? trim(html_entity_decode(strip_tags($content), ENT_QUOTES | ENT_HTML5, 'UTF-8'))
+            : trim($content);
 
         return new EmailMessage(
             id:       $summary->id,
@@ -87,7 +89,8 @@ final class OutlookProvider implements EmailProvider
             snippet:  $summary->snippet,
             date:     $summary->date,
             unread:   $summary->unread,
-            bodyText: trim($body),
+            bodyText: $body,
+            bodyHtml: $html,
         );
     }
 
