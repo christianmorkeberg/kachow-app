@@ -51,8 +51,11 @@ final class Receipts
         $data['mime']     = isset($fields['mime']) ? (string) $fields['mime'] : null;
 
         // Line items (from a photo read) are stored as JSON; null when none.
-        if (isset($fields['line_items']) && is_array($fields['line_items']) && $fields['line_items'] !== []) {
-            $data['line_items'] = json_encode(array_values($fields['line_items']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (array_key_exists('line_items', $fields)) {
+            $enc = self::encodeLineItems($fields['line_items']);
+            if ($enc !== null) {
+                $data['line_items'] = $enc;
+            }
         }
 
         $cols = array_keys($data);
@@ -83,6 +86,11 @@ final class Receipts
     public function update(int $userId, int $id, array $fields): bool
     {
         $data = $this->clean($fields);
+        // A present line_items key means "set the list" — an empty/removed list stores
+        // NULL (clears it). Absent key leaves the stored items untouched.
+        if (array_key_exists('line_items', $fields)) {
+            $data['line_items'] = self::encodeLineItems($fields['line_items']);
+        }
         if ($data === []) {
             return $this->get($userId, $id) !== null;
         }
@@ -148,6 +156,38 @@ final class Receipts
             'line_items' => self::decodeLineItems($r['line_items'] ?? null),
             'categories' => self::CATEGORIES,
         ];
+    }
+
+    /**
+     * Sanitises line items (from the AI read OR client edits) into bounded JSON for
+     * storage, or null when there's nothing to keep. Drops rows with no description;
+     * caps count and string length so client input can't bloat the row.
+     */
+    private static function encodeLineItems(mixed $items): ?string
+    {
+        if (!is_array($items)) {
+            return null;
+        }
+        $clean = [];
+        foreach ($items as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            $desc = trim((string) ($it['description'] ?? ''));
+            if ($desc === '') {
+                continue;
+            }
+            $clean[] = [
+                'description' => mb_substr($desc, 0, 120),
+                'qty'         => isset($it['qty']) && is_numeric($it['qty']) ? (float) $it['qty'] : null,
+                'amount'      => isset($it['amount']) && is_numeric($it['amount']) ? round((float) $it['amount'], 2) : null,
+            ];
+            if (count($clean) >= 60) {
+                break;
+            }
+        }
+
+        return $clean === [] ? null : json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
