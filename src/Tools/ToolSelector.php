@@ -183,7 +183,7 @@ final class ToolSelector
         ],
         // "work" alone is avoided (it's inside "workout"); use specific phrases.
         'worktime' => [
-            'clock in', 'clock out', 'clocked', 'clock-in', 'clock-out', 'work hours', 'hours worked',
+            ' clock', 'clock in', 'clock out', 'clocked', 'clock-in', 'clock-out', 'work hours', 'hours worked',
             'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
@@ -234,7 +234,7 @@ final class ToolSelector
             'frugtbarhed', 'mensen', 'min menstruation', 'min periode', 'ægløsn',
             // mood/energy day logging (ID 4)
             'mood', 'my energy', 'energy level', 'energy is', 'how i feel', 'feel today', 'exhausted',
-            'drained', 'humør', 'humor', 'energi', 'jeg er drænet', 'jeg føler',
+            'drained', 'humør', 'humor', 'energi', 'drænet', 'jeg føler',
         ],
         'settings' => [
             'setting', 'settings', 'preference', 'configure', 'which calendar', 'work calendar',
@@ -260,24 +260,18 @@ final class ToolSelector
      */
     public static function select(array $declarations, string $message, string $recentContext = ''): array
     {
-        $text = ' ' . mb_strtolower($message . ' ' . $recentContext) . ' ';
+        $groups = self::matchGroups($message, $recentContext);
 
-        $allowed = [];
-        foreach (self::KEYWORDS as $group => $keywords) {
-            foreach ($keywords as $keyword) {
-                if (str_contains($text, $keyword)) {
-                    foreach (self::GROUPS[$group] as $name) {
-                        $allowed[$name] = true;
-                    }
-                    break;
-                }
-            }
-        }
-
-        if ($allowed === []) {
+        if ($groups === []) {
             return $declarations; // ambiguous → send everything (safe)
         }
 
+        $allowed = [];
+        foreach ($groups as $group) {
+            foreach (self::GROUPS[$group] as $name) {
+                $allowed[$name] = true;
+            }
+        }
         // Keep proactive-memory capture available even on narrowed turns.
         foreach (self::ALWAYS as $name) {
             $allowed[$name] = true;
@@ -290,5 +284,36 @@ final class ToolSelector
 
         // Safety net: if filtering somehow left nothing, send all.
         return $subset === [] ? $declarations : $subset;
+    }
+
+    /**
+     * The domain groups whose keywords match the message (+ recent context). Empty
+     * means nothing matched — the caller then falls back to all tools. Kept separate
+     * from select() so routing can be unit-tested (bin/routing-test.php) and logged
+     * per turn for observability.
+     *
+     * @return array<int, string> matched group names (in GROUPS order)
+     */
+    public static function matchGroups(string $message, string $recentContext = ''): array
+    {
+        $text = ' ' . mb_strtolower($message . ' ' . $recentContext) . ' ';
+
+        $groups = [];
+        foreach (self::KEYWORDS as $group => $keywords) {
+            foreach ($keywords as $keyword) {
+                if (str_contains($text, $keyword)) {
+                    $groups[] = $group;
+                    break;
+                }
+            }
+        }
+
+        return $groups;
+    }
+
+    /** @return array<int, string> all group names (for tests / tooling). */
+    public static function groupNames(): array
+    {
+        return array_keys(self::GROUPS);
     }
 }

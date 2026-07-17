@@ -203,11 +203,13 @@ final class AssistantLoop
         // Send only the tools relevant to this message (falls back to all if unsure).
         // Include a little prior context so keyword-less follow-ups ("and tomorrow?")
         // keep the previous turn's domain tools available.
-        $declarations = ToolSelector::select(
-            $this->tools->declarations(),
-            $userMessage,
-            $this->recentUserContext($contents)
-        );
+        $recent = $this->recentUserContext($contents);
+        // Observability: log which groups matched (or the all-tools fallback) so
+        // mis-routes are visible in production, not just guessed at.
+        $groups = ToolSelector::matchGroups($userMessage, $recent);
+        error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
+            . mb_substr($userMessage, 0, 80));
+        $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent);
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location);
 
         // The model is chosen on the first call (round 0, before any tool calls or
