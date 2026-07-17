@@ -20,7 +20,7 @@ use Throwable;
 final class AssistantLoop
 {
     /** Guard against a model that keeps calling tools without concluding. */
-    private const MAX_TOOL_ROUNDS = 5;
+    private const MAX_TOOL_ROUNDS = 8;
 
     private const DEFAULT_SYSTEM_INSTRUCTION =
         'You are a concise, helpful personal assistant. Answer briefly and clearly. '
