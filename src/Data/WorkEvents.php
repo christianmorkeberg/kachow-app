@@ -25,6 +25,9 @@ final class WorkEvents
     /** A repeat of the same punch within this many minutes is treated as a bounce. */
     public const DEDUP_MINUTES = 5;
 
+    /** Selectable bucketings for the work-hours bar chart. */
+    public const CHART_MODES = ['week', '4w', '12w', 'year'];
+
     /** An open session older than this (no clock-out) is a forgotten punch, not "ongoing". */
     private const STALE_OPEN_HOURS = 16;
 
@@ -359,6 +362,169 @@ final class WorkEvents
             'places'        => $places,
             'card'          => $card,
         ];
+    }
+
+    /**
+     * Buckets worked minutes over a longer span for the bar chart: daily bars for the
+     * current week, weekly bars for 4w/12w, or monthly bars for a year. A session's
+     * minutes are split across whichever buckets it overlaps (so a shift crossing a
+     * boundary is counted correctly); forgotten clock-outs are skipped, a live session
+     * counts up to now. Returns the renderable card payload directly.
+     *
+     * @return array<string, mixed>
+     */
+    public function breakdown(int $userId, string $mode = 'week'): array
+    {
+        $mode = in_array($mode, self::CHART_MODES, true) ? $mode : 'week';
+        $tz   = new DateTimeZone(self::LOCAL_TZ);
+        $utc  = new DateTimeZone('UTC');
+
+        [$buckets, $title, $rangeLabel, $bucketWord] = $this->chartBuckets($mode, $tz);
+
+        $spanStart = $buckets[0]['start']->setTimezone($utc);
+        $spanEnd   = $buckets[count($buckets) - 1]['end']->setTimezone($utc);
+        $queryFrom = $spanStart->modify('-18 hours');
+
+        $events   = $this->eventsBetween($userId, $queryFrom->format('Y-m-d H:i:s'), $spanEnd->format('Y-m-d H:i:s'));
+        $sessions = $this->pairByLocation($events);
+        $nowUtc   = new DateTimeImmutable('now', $utc);
+
+        // Precompute each bucket's UTC window once.
+        foreach ($buckets as $i => $b) {
+            $buckets[$i]['minutes'] = 0;
+            $buckets[$i]['ongoing'] = false;
+            $buckets[$i]['from_ts'] = $b['start']->setTimezone($utc)->getTimestamp();
+            $buckets[$i]['to_ts']   = $b['end']->setTimezone($utc)->getTimestamp();
+        }
+
+        $perLoc       = [];
+        $totalMinutes = 0;
+
+        foreach ($sessions as $s) {
+            $in  = new DateTimeImmutable($s['in'], $utc);
+            $out = $s['out'] !== null ? new DateTimeImmutable($s['out'], $utc) : null;
+
+            $end       = $out;
+            $isOngoing = false;
+            if ($out === null) {
+                if (($nowUtc->getTimestamp() - $in->getTimestamp()) <= self::STALE_OPEN_HOURS * 3600) {
+                    $end       = $nowUtc;
+                    $isOngoing = true;
+                } else {
+                    continue; // forgotten clock-out — don't count
+                }
+            }
+
+            $inTs  = $in->getTimestamp();
+            $endTs = $end->getTimestamp();
+            foreach ($buckets as $i => $b) {
+                $ovStart = max($inTs, $b['from_ts']);
+                $ovEnd   = min($endTs, $b['to_ts']);
+                if ($ovEnd <= $ovStart) {
+                    continue;
+                }
+                $mins = (int) round(($ovEnd - $ovStart) / 60);
+                if ($mins <= 0) {
+                    continue;
+                }
+                $buckets[$i]['minutes'] += $mins;
+                $totalMinutes           += $mins;
+                if ($isOngoing && $endTs > $b['from_ts'] && $endTs <= $b['to_ts']) {
+                    $buckets[$i]['ongoing'] = true;
+                }
+                $k          = $this->locKey($s['location']);
+                $perLoc[$k] ??= ['place' => $s['location'], 'minutes' => 0];
+                $perLoc[$k]['minutes'] += $mins;
+            }
+        }
+
+        $bars = array_map(static fn (array $b): array => [
+            'label'   => $b['label'],
+            'sub'     => $b['sub'],
+            'minutes' => $b['minutes'],
+            'total'   => self::fmtDuration($b['minutes']),
+            'ongoing' => $b['ongoing'],
+        ], $buckets);
+
+        $places = [];
+        foreach ($perLoc as $row) {
+            if ($row['minutes'] > 0) {
+                $places[] = ['place' => $row['place'], 'total' => self::fmtDuration($row['minutes']), 'minutes' => $row['minutes']];
+            }
+        }
+        usort($places, static fn (array $a, array $b): int => $b['minutes'] <=> $a['minutes']);
+        $labelled   = array_filter($places, static fn (array $p): bool => trim((string) $p['place']) !== '');
+        $multiPlace = count($labelled) > 1;
+
+        $active  = count(array_filter($buckets, static fn (array $b): bool => $b['minutes'] > 0));
+        $avgMin  = $active > 0 ? (int) round($totalMinutes / $active) : 0;
+
+        return [
+            'kind'          => 'work_chart',
+            'mode'          => $mode,
+            'modes'         => [
+                ['key' => 'week', 'label' => 'Week'],
+                ['key' => '4w',   'label' => '4 wks'],
+                ['key' => '12w',  'label' => '12 wks'],
+                ['key' => 'year', 'label' => 'Year'],
+            ],
+            'title'         => $title,
+            'range'         => $rangeLabel,
+            'unit'          => 'h',
+            'bucket_word'   => $bucketWord,
+            'bars'          => $bars,
+            'total'         => self::fmtDuration($totalMinutes),
+            'total_minutes' => $totalMinutes,
+            'avg'           => self::fmtDuration($avgMin),
+            'places'        => $multiPlace
+                ? array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total']], $places)
+                : [],
+            'has_data'      => $totalMinutes > 0,
+        ];
+    }
+
+    /**
+     * Builds the ordered list of chart buckets (each with local start/end + labels)
+     * plus the card title, range label and the word for one bucket ("day"/"week"/"month").
+     *
+     * @return array{0: array<int, array{start:DateTimeImmutable, end:DateTimeImmutable, label:string, sub:string}>, 1:string, 2:string, 3:string}
+     */
+    private function chartBuckets(string $mode, DateTimeZone $tz): array
+    {
+        $now     = new DateTimeImmutable('now', $tz);
+        $buckets = [];
+
+        if ($mode === 'week') {
+            $dow = (int) $now->format('N');
+            $mon = $now->setTime(0, 0)->modify('-' . ($dow - 1) . ' days');
+            for ($i = 0; $i < 7; $i++) {
+                $start     = $mon->modify("+{$i} days");
+                $buckets[] = ['start' => $start, 'end' => $start->modify('+1 day'), 'label' => $start->format('D'), 'sub' => $start->format('j M')];
+            }
+            $range = $mon->format('j M') . ' – ' . $mon->modify('+6 days')->format('j M');
+            return [$buckets, 'This week', $range, 'day'];
+        }
+
+        if ($mode === '4w' || $mode === '12w') {
+            $n       = $mode === '4w' ? 4 : 12;
+            $dow     = (int) $now->format('N');
+            $thisMon = $now->setTime(0, 0)->modify('-' . ($dow - 1) . ' days');
+            for ($i = $n - 1; $i >= 0; $i--) {
+                $start     = $thisMon->modify("-{$i} weeks");
+                $buckets[] = ['start' => $start, 'end' => $start->modify('+7 days'), 'label' => 'W' . $start->format('W'), 'sub' => $start->format('j M')];
+            }
+            $range = $buckets[0]['start']->format('j M') . ' – ' . $buckets[$n - 1]['end']->modify('-1 day')->format('j M');
+            return [$buckets, "Last {$n} weeks", $range, 'week'];
+        }
+
+        // year — 12 calendar months ending with the current one.
+        $first = $now->modify('first day of this month')->setTime(0, 0);
+        for ($i = 11; $i >= 0; $i--) {
+            $start     = $first->modify("-{$i} months");
+            $buckets[] = ['start' => $start, 'end' => $start->modify('+1 month'), 'label' => $start->format('M'), 'sub' => $start->format('Y')];
+        }
+        $range = $buckets[0]['start']->format('M Y') . ' – ' . $buckets[11]['start']->format('M Y');
+        return [$buckets, 'Last 12 months', $range, 'month'];
     }
 
     /**

@@ -71,7 +71,7 @@ final class ToolSelector
             'get_current_weather', 'get_weather_forecast',
         ],
         'worktime' => [
-            'get_work_hours', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
+            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
         ],
         'worklog' => [
             'log_work_time', 'get_work_log', 'export_work_log',
@@ -193,6 +193,9 @@ final class ToolSelector
             'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
+            // hours over a period / bar chart
+            'hours per', 'per day', 'per week', 'per month', 'each day', 'each week', 'each month',
+            'this month', 'last month', 'per måned', 'per uge', 'denne måned', 'sidste måned', 'timer om',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
         ],

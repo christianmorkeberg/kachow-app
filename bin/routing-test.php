@@ -116,6 +116,9 @@ $cases = [
     ['msg' => 'punch in now', 'expect' => 'worktime'],
     ['msg' => 'how many hours have I worked today?', 'expect' => 'worktime'],
     ['msg' => 'hvor mange timer har jeg arbejdet?', 'expect' => 'worktime'],
+    ['msg' => 'show my work hours per day this week', 'expect' => 'worktime'],
+    ['msg' => 'how many hours did I work each month?', 'expect' => 'worktime'],
+    ['msg' => 'vis mine arbejdstimer per uge', 'expect' => 'worktime'],
 
     // ---- weather ----
     ['msg' => "what's the weather tomorrow?", 'expect' => 'weather'],
