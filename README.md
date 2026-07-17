@@ -28,12 +28,17 @@ classes.
   hurts model accuracy, so a deterministic `ToolSelector` narrows ~80 tools across 18
   domains down to the handful relevant to each message (bilingual keyword routing),
   falling back to everything only when genuinely ambiguous. Routing is guarded by a
-  **self-test** (`bin/routing-test.php`, 90+ fixtures) so a missed Danish phrase is
+  **self-test** (`bin/routing-test.php`, 100+ fixtures) so a missed Danish phrase is
   caught before deploy, not in production.
 - **“Card in chat” mechanism.** Any tool can return a `_render` payload; the loop
   captures it, strips it from the model’s context (so the model summarises rather than
   re-lists), and the web layer draws it as an interactive widget - a tickable workout
   plan, an editable receipt, an animated weather card, a menstrual-cycle ring, etc.
+- **Hand-rolled data-viz, no chart library.** The interactive charts - a workout-progression
+  line chart (est-1RM / top-set / volume, tested maxes vs Epley estimates), a work-hours bar
+  chart (per day / week / month), the cycle ring - are drawn as inline SVG in vanilla JS,
+  tap-to-inspect on mobile and `prefers-reduced-motion` aware. Each chart is a `Data` method
+  that shapes points server-side + a small render function, reused across cards.
 - **Vision + structured extraction.** Receipt photos go to Gemini in JSON mode and come
   back as typed expense fields (with line items, multi-currency and duplicate
   detection) that the user confirms before anything is booked.
@@ -47,12 +52,15 @@ classes.
 
 ## Features
 
-- **Fitness** - workout logging + dynamic training plans rendered as tickable checklists.
+- **Fitness** - workout logging, dynamic training plans as tickable checklists, and a
+  progression chart per exercise (with per-user name canonicalisation so “squat/squats/backsquat”
+  or “deadlift/dødløft” don’t fragment your history).
 - **Lists** - shared shopping / to-do lists with real checkboxes and loose name-matching.
 - **Calendar** - Google Calendar agenda cards, availability answers, event creation.
 - **Weather** - DMI forecasts as animated symbol cards.
 - **Expenses** - receipt photo → editable expense card, line items, CSV export for the accountant.
-- **Work** - geofenced clock-in/out hours + a free-text “what I did” work log per job.
+- **Work** - geofenced clock-in/out hours, a bar chart of hours over a period (day/week/month),
+  and a free-text “what I did” work log per job.
 - **Cycle** - menstrual-cycle tracking (inner-seasons visualisation), predictions, mood/energy logging, opt-in partner sharing.
 - **Email** - Gmail / Outlook / IMAP: read, search, draft, confirm-to-send, safe HTML rendering.
 - **Music** - vinyl collection with Discogs enrichment and taste-based recommendations.
