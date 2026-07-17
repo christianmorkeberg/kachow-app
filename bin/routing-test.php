@@ -80,6 +80,8 @@ $cases = [
     ['msg' => 'how has my deadlift trended over time?', 'expect' => 'workouts'],
     ['msg' => 'bliver jeg stærkere i bænkpres?', 'expect' => 'workouts'],
     ['msg' => 'vis min fremgang i squat', 'expect' => 'workouts'],
+    ['msg' => 'squat and backsquat are the same exercise', 'expect' => 'workouts'],
+    ['msg' => 'standardise deadlift and dødløft to one name', 'expect' => 'workouts'],
     ['msg' => 'I work as a programmer', 'absent' => 'workouts'],
 
     // ---- calendar ----

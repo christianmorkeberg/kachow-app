@@ -9,6 +9,7 @@ use App\Data\Calendar;
 use App\Data\Connections;
 use App\Data\CycleTracker;
 use App\Data\DevIdeas;
+use App\Data\ExerciseAliases;
 use App\Data\Invites;
 use App\Data\Memories;
 use App\Data\Receipts;
@@ -72,9 +73,11 @@ final class ToolRegistry
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
-        $registry->register(new LogWorkout($workouts));
-        $registry->register(new GetWorkoutHistory($workouts));
-        $registry->register(new GetWorkoutProgress($workouts));
+        $exerciseAliases = new ExerciseAliases();
+        $registry->register(new LogWorkout($workouts, $exerciseAliases));
+        $registry->register(new GetWorkoutHistory($workouts, $exerciseAliases));
+        $registry->register(new GetWorkoutProgress($workouts, $exerciseAliases));
+        $registry->register(new MergeExercises($workouts, $exerciseAliases));
         $registry->register(new UpdateWorkout($workouts));
         $registry->register(new DeleteWorkout($workouts));
         $registry->register(new CreateWorkoutPlan($workoutPlans));
