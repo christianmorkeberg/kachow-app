@@ -139,6 +139,7 @@ final class ToolRegistry
         $registry->register(new LogPeriod($cycle));
         $registry->register(new GetCycleStatus($cycle));
         $registry->register(new RemovePeriod($cycle));
+        $registry->register(new LogCycleDay($cycle));
         $registry->register(new GetConnectedWorkouts($connections, $workouts));
         $registry->register(new GetConnectedWishlist($connections, $wishlist));
         $registry->register(new GetConnectedCalendar($connections, $calendar));

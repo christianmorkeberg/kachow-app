@@ -85,7 +85,7 @@ final class ToolSelector
             'get_emails', 'read_email', 'draft_email', 'send_email', 'list_email_accounts',
         ],
         'cycle' => [
-            'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle',
+            'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle', 'log_cycle_day',
         ],
         'settings' => [
             'get_settings', 'update_setting',
@@ -232,6 +232,9 @@ final class ToolSelector
             // Danish (menstruation/-scyklus, periode, cyklus, ægløsning, frugtbar, mensen)
             'menstruation', 'menstruationscyklus', 'periode', 'cyklus', 'ægløsning', 'frugtbar',
             'frugtbarhed', 'mensen', 'min menstruation', 'min periode', 'ægløsn',
+            // mood/energy day logging (ID 4)
+            'mood', 'my energy', 'energy level', 'energy is', 'how i feel', 'feel today', 'exhausted',
+            'drained', 'humør', 'humor', 'energi', 'jeg er drænet', 'jeg føler',
         ],
         'settings' => [
             'setting', 'settings', 'preference', 'configure', 'which calendar', 'work calendar',

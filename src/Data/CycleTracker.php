@@ -43,6 +43,14 @@ final class CycleTracker
 
     public const FLOWS = ['light', 'medium', 'heavy'];
 
+    /** Inner-seasons framing of the cycle phases (label + emoji). */
+    public const SEASONS = [
+        'winter' => ['label' => 'Winter', 'emoji' => '❄️'],
+        'spring' => ['label' => 'Spring', 'emoji' => '🌱'],
+        'summer' => ['label' => 'Summer', 'emoji' => '☀️'],
+        'autumn' => ['label' => 'Autumn', 'emoji' => '🍂'],
+    ];
+
     private PDO $db;
 
     public function __construct(?PDO $db = null)
@@ -250,13 +258,32 @@ final class CycleTracker
             ];
         }
 
-        return [
+        $base = [
             'kind'      => 'cycle',
             'read_only' => $owner !== null,
             'owner'     => $owner !== null ? ['name' => $owner['name'] ?? null] : null,
             'flows'     => self::FLOWS,
             'recent'    => $recent,
-        ] + $status;
+        ];
+
+        if (empty($status['has_data'])) {
+            return $base + $status;
+        }
+
+        // Seasons framing, the fertile-window toggle, and today's mood/energy + trend.
+        $season = self::seasonFor((string) $status['phase']);
+        $today  = $this->today()->format('Y-m-d');
+        $log    = $this->dayLog($userId, $today);
+
+        return $base + $status + [
+            'season'        => $season,
+            'season_label'  => self::SEASONS[$season]['label'],
+            'season_emoji'  => self::SEASONS[$season]['emoji'],
+            'show_fertile'  => $this->showFertile($userId),
+            'mood_today'    => $log['mood'],
+            'energy_today'  => $log['energy'],
+            'trend'         => $this->dayTrend($userId, 14),
+        ];
     }
 
     // ---- phase logic -------------------------------------------------------
@@ -295,6 +322,104 @@ final class CycleTracker
             'luteal'     => 'Luteal',
             default      => 'Cycle',
         };
+    }
+
+    /** Maps a clinical phase to its inner season. */
+    public static function seasonFor(string $phase): string
+    {
+        return match ($phase) {
+            'menstrual'           => 'winter',
+            'follicular'          => 'spring',
+            'fertile', 'ovulation' => 'summer',
+            'luteal'              => 'autumn',
+            default               => 'spring',
+        };
+    }
+
+    // ---- mood / energy day logs -------------------------------------------
+
+    /** Logs mood and/or energy (1–5) for a day. Nulls leave that field unchanged. */
+    public function logDay(int $userId, string $date, ?int $mood, ?int $energy, ?string $note = null): void
+    {
+        $day    = $this->normalizeDate($date) ?? $this->today()->format('Y-m-d');
+        $mood   = $this->clampLevel($mood);
+        $energy = $this->clampLevel($energy);
+        $note   = ($note !== null && trim($note) !== '') ? mb_substr(trim($note), 0, 255) : null;
+
+        $stmt = $this->db->prepare(
+            'INSERT INTO cycle_day_logs (user_id, log_date, mood, energy, note)
+             VALUES (:u, :d, :m, :e, :n)
+             ON DUPLICATE KEY UPDATE
+                mood   = COALESCE(VALUES(mood), mood),
+                energy = COALESCE(VALUES(energy), energy),
+                note   = COALESCE(VALUES(note), note)'
+        );
+        $stmt->execute([':u' => $userId, ':d' => $day, ':m' => $mood, ':e' => $energy, ':n' => $note]);
+    }
+
+    /** @return array{mood:?int, energy:?int, note:?string} */
+    public function dayLog(int $userId, string $date): array
+    {
+        $day  = $this->normalizeDate($date) ?? $this->today()->format('Y-m-d');
+        $stmt = $this->db->prepare('SELECT mood, energy, note FROM cycle_day_logs WHERE user_id = :u AND log_date = :d');
+        $stmt->execute([':u' => $userId, ':d' => $day]);
+        $r = $stmt->fetch();
+
+        return [
+            'mood'   => ($r && $r['mood'] !== null) ? (int) $r['mood'] : null,
+            'energy' => ($r && $r['energy'] !== null) ? (int) $r['energy'] : null,
+            'note'   => ($r && $r['note'] !== null) ? (string) $r['note'] : null,
+        ];
+    }
+
+    /**
+     * Mood/energy for the last $days days, oldest→newest, one entry per calendar day
+     * (null mood/energy when nothing was logged that day).
+     *
+     * @return array<int, array{date:string, mood:?int, energy:?int}>
+     */
+    public function dayTrend(int $userId, int $days = 14): array
+    {
+        $days  = max(1, min(60, $days));
+        $tz    = new DateTimeZone(self::LOCAL_TZ);
+        $today = $this->today();
+        $start = $today->modify('-' . ($days - 1) . ' days');
+
+        $stmt = $this->db->prepare(
+            'SELECT log_date, mood, energy FROM cycle_day_logs
+             WHERE user_id = :u AND log_date BETWEEN :s AND :t'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $start->format('Y-m-d'), ':t' => $today->format('Y-m-d')]);
+        $byDate = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $byDate[(string) $r['log_date']] = [
+                'mood'   => $r['mood'] !== null ? (int) $r['mood'] : null,
+                'energy' => $r['energy'] !== null ? (int) $r['energy'] : null,
+            ];
+        }
+
+        $out = [];
+        for ($i = 0; $i < $days; $i++) {
+            $d   = $start->modify('+' . $i . ' days')->format('Y-m-d');
+            $rec = $byDate[$d] ?? ['mood' => null, 'energy' => null];
+            $out[] = ['date' => $d, 'mood' => $rec['mood'], 'energy' => $rec['energy']];
+        }
+
+        return $out;
+    }
+
+    private function clampLevel(?int $v): ?int
+    {
+        if ($v === null) {
+            return null;
+        }
+
+        return max(1, min(5, $v));
+    }
+
+    private function showFertile(int $userId): bool
+    {
+        return UserSettings::isTruthy((new UserSettings($this->db))->get($userId, 'cycle_show_fertile'));
     }
 
     // ---- helpers -----------------------------------------------------------

@@ -29,7 +29,18 @@ final class UserSettings
             'label'       => 'Work calendar',
             'description' => 'Name of the Google calendar whose events drive work-log tracking and the afternoon "what did you get done?" nudge.',
         ],
+        'cycle_show_fertile' => [
+            'default'     => 'off',
+            'label'       => 'Show fertile window',
+            'description' => 'Whether the cycle card shows the estimated fertile window ("on"/"off"). Off = show only phase and next period.',
+        ],
     ];
+
+    /** Interprets a stored setting value as a boolean (on/yes/true/1, incl. Danish ja). */
+    public static function isTruthy(?string $value): bool
+    {
+        return in_array(strtolower(trim((string) $value)), ['on', 'yes', 'true', '1', 'ja'], true);
+    }
 
     private PDO $db;
 
