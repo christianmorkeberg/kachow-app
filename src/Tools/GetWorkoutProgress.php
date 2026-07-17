@@ -110,7 +110,8 @@ final class GetWorkoutProgress implements Tool
             'best'       => $card['summary']['best'],
             'change'     => $card['summary']['delta'],
             'change_pct' => $card['summary']['pct'],
-            'note'       => 'est_1rm is an Epley estimate, not a tested max.',
+            'note'       => 'For est_1rm, points from a 1-rep set are tested maxes; multi-rep points '
+                . 'are Epley estimates. The card marks tested maxes with a diamond.',
             '_render'    => $card,
         ];
     }
@@ -183,7 +184,7 @@ final class GetWorkoutProgress implements Tool
 
         $points = [];
         foreach ($byDay as $day => $bucket) {
-            [$value, $detail] = self::metricFor($metric, $bucket['sets']);
+            [$value, $detail, $real] = self::metricFor($metric, $bucket['sets']);
             if ($value === null) {
                 continue;
             }
@@ -191,6 +192,7 @@ final class GetWorkoutProgress implements Tool
                 'date'   => $day,
                 'value'  => $value,
                 'detail' => $detail,
+                'real'   => $real, // est_1rm only: true if the point is a tested (1-rep) max
             ];
         }
 
@@ -220,9 +222,12 @@ final class GetWorkoutProgress implements Tool
 
     /**
      * Computes a day's value + a short human detail for the chosen metric from its sets.
+     * The third element is the "real" flag: for est_1rm it's true when the best value
+     * comes from an actual 1-rep set (a tested max, not an Epley estimate); always false
+     * for the other metrics.
      *
      * @param array<int, array{weight: float, reps: int|null}> $sets
-     * @return array{0: float|null, 1: string}
+     * @return array{0: float|null, 1: string, 2: bool}
      */
     private static function metricFor(string $metric, array $sets): array
     {
@@ -233,7 +238,7 @@ final class GetWorkoutProgress implements Tool
                     $vol += $s['weight'] * $s['reps'];
                 }
             }
-            return $vol > 0 ? [round($vol, 1), self::kg($vol) . ' total'] : [null, ''];
+            return $vol > 0 ? [round($vol, 1), self::kg($vol) . ' total', false] : [null, '', false];
         }
 
         if ($metric === 'top_weight') {
@@ -241,10 +246,11 @@ final class GetWorkoutProgress implements Tool
             foreach ($sets as $s) {
                 $top = $top === null ? $s['weight'] : max($top, $s['weight']);
             }
-            return $top === null ? [null, ''] : [round($top, 1), self::kg($top)];
+            return $top === null ? [null, '', false] : [round($top, 1), self::kg($top), false];
         }
 
-        // est_1rm — best Epley estimate across the day's sets (needs reps).
+        // est_1rm — best across the day's sets (needs reps). A 1-rep set IS the 1RM
+        // (use the weight as-is); multi-rep sets are Epley-estimated.
         $best       = null;
         $bestWeight = 0.0;
         $bestReps   = 0;
@@ -252,7 +258,7 @@ final class GetWorkoutProgress implements Tool
             if ($s['reps'] === null || $s['reps'] < 1) {
                 continue;
             }
-            $est = $s['weight'] * (1 + $s['reps'] / 30);
+            $est = $s['reps'] === 1 ? $s['weight'] : $s['weight'] * (1 + $s['reps'] / 30);
             if ($best === null || $est > $best) {
                 $best       = $est;
                 $bestWeight = $s['weight'];
@@ -260,8 +266,8 @@ final class GetWorkoutProgress implements Tool
             }
         }
         return $best === null
-            ? [null, '']
-            : [round($best, 1), self::kg($bestWeight) . ' × ' . $bestReps];
+            ? [null, '', false]
+            : [round($best, 1), self::kg($bestWeight) . ' × ' . $bestReps, $bestReps === 1];
     }
 
     private static function kg(float $n): string
