@@ -23,8 +23,8 @@ final class GetWorkLog implements Tool
 
     public function description(): string
     {
-        return 'Shows the user\'s work log for a period — what they did and hours per job (DTU/DSB). '
-            . 'Use for "what did I do at DTU this week", "my work log last month". Renders a card, so '
+        return 'Shows the user\'s work log for a period — what they did and hours per job (workplace). '
+            . 'Use for "what did I do at work this week", "my work log last month". Renders a card, so '
             . 'give a short summary (e.g. total hours per job) rather than listing every entry.';
     }
 
@@ -40,7 +40,7 @@ final class GetWorkLog implements Tool
                 ],
                 'from' => ['type' => 'string', 'description' => 'Start date YYYY-MM-DD (overrides period).'],
                 'to'   => ['type' => 'string', 'description' => 'End date YYYY-MM-DD (overrides period).'],
-                'job'  => ['type' => 'string', 'description' => 'Limit to one job (e.g. DTU, DSB).'],
+                'job'  => ['type' => 'string', 'description' => 'Limit to one job (the workplace name).'],
             ],
             'required' => [],
         ];

@@ -25,7 +25,7 @@ final class ExportWorkLog implements Tool
     {
         return 'Creates a CSV download of the user\'s work log for a period (columns: date, job, hours, '
             . 'description). Returns a link — present it as a clickable download link. Use for "export my '
-            . 'work log", "download what I did at DSB this month".';
+            . 'work log", "download what I did at work this month".';
     }
 
     public function parameters(): array
@@ -40,7 +40,7 @@ final class ExportWorkLog implements Tool
                 ],
                 'from' => ['type' => 'string', 'description' => 'Start date YYYY-MM-DD (overrides period).'],
                 'to'   => ['type' => 'string', 'description' => 'End date YYYY-MM-DD (overrides period).'],
-                'job'  => ['type' => 'string', 'description' => 'Limit to one job (e.g. DTU, DSB).'],
+                'job'  => ['type' => 'string', 'description' => 'Limit to one job (the workplace name).'],
             ],
             'required' => [],
         ];

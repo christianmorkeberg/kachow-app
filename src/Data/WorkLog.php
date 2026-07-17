@@ -10,9 +10,10 @@ use DateTimeZone;
 use PDO;
 
 /**
- * Per-user work log: free-text "what I did" entries, tagged with the job (DTU/DSB,
- * taken from the "Arbejde" calendar) and optional hours the user states. Distinct
- * from work_events (clock in/out). All dates are local (Europe/Copenhagen) YYYY-MM-DD.
+ * Per-user work log: free-text "what I did" entries, tagged with the job (the first
+ * word of the event in the user's work calendar — name is per-user, default "Arbejde")
+ * and optional hours the user states. Distinct from work_events (clock in/out). All
+ * dates are local (Europe/Copenhagen) YYYY-MM-DD.
  */
 final class WorkLog
 {

@@ -10,8 +10,8 @@ use App\Data\WorkLog;
 
 /**
  * Tool: record what the user did at a job on a given day (free text), with
- * optional hours. The job (DTU/DSB) is taken from the user's "Arbejde" calendar
- * for that day when not stated; if that's ambiguous, the tool asks.
+ * optional hours. The job is taken from the user's work calendar (first word of
+ * that day's event) when not stated; if that's ambiguous, the tool asks.
  */
 final class LogWorkTime implements Tool
 {
@@ -30,10 +30,10 @@ final class LogWorkTime implements Tool
     public function description(): string
     {
         return 'Records what the user did at work on a day (free-text), for their work log. Use when '
-            . 'they describe what they worked on — e.g. "at DTU today I prepped the lecture", or when '
-            . 'answering the afternoon "what did you get done?" nudge. job is DTU/DSB etc.; if omitted it '
-            . 'is inferred from that day\'s "Arbejde" calendar event. hours is OPTIONAL — do NOT ask for '
-            . 'it; only include hours if the user states them. Defaults the day to today.';
+            . 'they describe what they worked on — e.g. "at work today I prepped the lecture", or when '
+            . 'answering the afternoon "what did you get done?" nudge. job is the workplace name; if '
+            . 'omitted it is inferred from that day\'s work-calendar event. hours is OPTIONAL — do NOT ask '
+            . 'for it; only include hours if the user states them. Defaults the day to today.';
     }
 
     public function parameters(): array
@@ -42,7 +42,7 @@ final class LogWorkTime implements Tool
             'type'       => 'object',
             'properties' => [
                 'description' => ['type' => 'string', 'description' => 'What they did, in their own words.'],
-                'job'         => ['type' => 'string', 'description' => 'Which job (e.g. DTU, DSB). Omit to infer from the Arbejde calendar.'],
+                'job'         => ['type' => 'string', 'description' => 'Which job (the workplace name). Omit to infer from the work calendar.'],
                 'hours'       => ['type' => 'number', 'description' => 'Hours spent (optional).'],
                 'date'        => ['type' => 'string', 'description' => 'Local date YYYY-MM-DD. Defaults to today.'],
             ],
@@ -72,7 +72,7 @@ final class LogWorkTime implements Tool
                         . '). Which one is this for?'];
             } else {
                 return ['need_job' => true,
-                    'message' => 'I couldn\'t find a job for that day in your Arbejde calendar — which job was it (e.g. DTU or DSB)?'];
+                    'message' => 'I couldn\'t find a job for that day in your work calendar — which job was it?'];
             }
         }
 
