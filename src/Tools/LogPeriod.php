@@ -27,8 +27,8 @@ final class LogPeriod implements Tool
         return 'Logs that a menstrual period started (and optionally when it ended). Use for messages '
             . 'like "my period started today", "I got my period yesterday", Danish "min menstruation '
             . 'startede i dag", "jeg har fået min menstruation", "min periode begyndte". start_date '
-            . 'defaults to today if not given. flow is optional (light/medium/heavy). ALWAYS actually '
-            . 'call this tool — do not just say you noted it. Shows the cycle card.';
+            . 'defaults to today if not given. ALWAYS actually call this tool — do not just say you '
+            . 'noted it. Shows the cycle card.';
     }
 
     public function parameters(): array
@@ -38,7 +38,6 @@ final class LogPeriod implements Tool
             'properties' => [
                 'start_date' => ['type' => 'string', 'description' => 'When the period started, "YYYY-MM-DD". Defaults to today.'],
                 'end_date'   => ['type' => 'string', 'description' => 'When it ended, "YYYY-MM-DD" (optional).'],
-                'flow'       => ['type' => 'string', 'description' => 'Flow intensity: light, medium, or heavy (optional).', 'enum' => CycleTracker::FLOWS],
                 'note'       => ['type' => 'string', 'description' => 'Optional short note (symptoms etc.).'],
             ],
             'required' => [],
@@ -51,7 +50,7 @@ final class LogPeriod implements Tool
             $userId,
             isset($arguments['start_date']) ? (string) $arguments['start_date'] : '',
             isset($arguments['end_date']) ? (string) $arguments['end_date'] : null,
-            isset($arguments['flow']) ? (string) $arguments['flow'] : null,
+            null,
             isset($arguments['note']) ? (string) $arguments['note'] : null,
         );
 
@@ -74,6 +73,7 @@ final class LogPeriod implements Tool
         return [
             'cycle_day'   => $card['cycle_day'],
             'phase'       => $card['phase_label'],
+            'season'      => $card['season_label'] ?? null,
             'next_period' => $card['next_period'],
             'days_until'  => $card['days_until'],
             'fertile'     => $card['in_fertile'],

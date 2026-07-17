@@ -253,7 +253,6 @@ final class CycleTracker
                 'id'     => (int) $r['id'],
                 'start'  => (string) $r['start_date'],
                 'end'    => $r['end_date'] !== null ? (string) $r['end_date'] : null,
-                'flow'   => $r['flow'] !== null ? (string) $r['flow'] : null,
                 'length' => $len,
             ];
         }
@@ -262,7 +261,6 @@ final class CycleTracker
             'kind'      => 'cycle',
             'read_only' => $owner !== null,
             'owner'     => $owner !== null ? ['name' => $owner['name'] ?? null] : null,
-            'flows'     => self::FLOWS,
             'recent'    => $recent,
         ];
 

@@ -28,7 +28,9 @@ final class GetCycleStatus implements Tool
             . 'and the estimated fertile window. Use for "when is my next period?", "what day of my cycle '
             . 'am I on?", "am I fertile now?", Danish "hvornår kommer min næste menstruation?", "hvilken '
             . 'dag i cyklussen er jeg på?". Predictions are ESTIMATES for planning, not contraception. '
-            . 'Shows the cycle card.';
+            . 'The app frames phases as inner seasons (Winter=menstrual, Spring=follicular, Summer='
+            . 'ovulation, Autumn=luteal) — you may name the season, but write it plainly and confidently; '
+            . 'never add placeholder characters like "??". Shows the cycle card.';
     }
 
     public function parameters(): array
@@ -55,6 +57,7 @@ final class GetCycleStatus implements Tool
         return [
             'cycle_day'    => $card['cycle_day'],
             'phase'        => $card['phase_label'],
+            'season'       => $card['season_label'] ?? null,
             'cycle_length' => $card['cycle_length'],
             'next_period'  => $card['next_period'],
             'days_until'   => $card['days_until'],
