@@ -133,6 +133,28 @@ final class Workouts
     }
 
     /**
+     * Returns the user's distinct exercise names, most-recently-trained first.
+     * Used to populate the exercise picker on the progression card.
+     *
+     * @return string[]
+     */
+    public function distinctExercises(int $userId, ?int $limit = null): array
+    {
+        $sql = 'SELECT exercise FROM workouts
+                WHERE user_id = :user_id
+                GROUP BY exercise
+                ORDER BY MAX(logged_at) DESC';
+        if ($limit !== null) {
+            $sql .= ' LIMIT ' . max(0, $limit);
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':user_id' => $userId]);
+
+        return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /**
      * Updates only the given fields of one of the user's sets. Allowed fields:
      * exercise, weight, reps, notes, logged_at. Returns true if the set exists
      * (and belongs to the user), false otherwise.
