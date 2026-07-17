@@ -105,12 +105,12 @@ final class ToolSelector
             'leg press', 'chest press', 'bicep', 'tricep', 'reps', ' rep ', ' lift ', 'lifted',
             'lifting', 'weightlift', 'personal record', ' pr ', ' 1rm', 'training',
             // planning
-            'workout plan', 'training plan', 'my plan', 'program', 'routine', 'session',
+            'workout plan', 'training plan', 'my plan', 'workout program', 'training program', 'routine', 'session',
             'schedule my', "what's left", 'remaining', 'done with', 'checklist', 'tick off',
             // Danish
             'træn', 'motion', 'løft', 'øvelse', 'bænkpres', 'dødløft', 'markløft',
             'gentagelser', 'kropsvægt', 'fitness',
-            'træningsplan', 'program', 'rutine', 'skema', 'færdig med', 'mangler jeg', 'i dag skal',
+            'træningsplan', 'træningsprogram', 'rutine', 'skema', 'færdig med', 'mangler jeg', 'i dag skal',
         ],
         // Personal wishlist is explicit-only now — the everyday "list"/"buy"/"shopping"
         // words route to the shared shopping list instead.
@@ -130,7 +130,7 @@ final class ToolSelector
             'på listen', ' liste', 'streg', 'huskeliste', 'gøremål', 'opgaveliste', 'tjekliste', 'to-do liste',
         ],
         'calendar' => [
-            'calendar', 'event', 'schedule', 'appointment', 'meeting', 'busy', ' free ', 'availab',
+            'calendar', 'event', 'schedule', 'appointment', 'meeting', ' meet', 'busy', ' free ', 'availab',
             'remind', 'agenda', 'plans', 'today', 'tomorrow', 'tonight', 'this week', 'next week',
             'weekend', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
             // Danish
@@ -164,7 +164,7 @@ final class ToolSelector
         'admin' => [
             'invite', 'new user', 'add user', 'create account', 'sign up', 'signup',
             // Danish
-            'inviter', 'invitation', 'ny bruger', 'opret konto', 'tilmeld',
+            'inviter', 'invitation', 'ny bruger', 'opret', 'tilmeld',
         ],
         'vinyls' => [
             'vinyl', 'vinyls', ' lp ', ' album', 'turntable', 'pressing', 'discogs', 'listened',
