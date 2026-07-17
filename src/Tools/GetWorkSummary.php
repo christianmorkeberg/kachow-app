@@ -28,12 +28,14 @@ final class GetWorkSummary implements Tool
 
     public function description(): string
     {
-        return 'Shows a bar chart of worked hours over a period: daily bars for this week, weekly bars '
-            . 'for the last 4 or 12 weeks, or monthly bars for the last year. Use for the trend / '
-            . 'distribution of hours ("hours per day this week", "how much did I work each month", "are '
-            . 'my hours increasing", Danish "arbejdstimer per uge/måned"). The card carries the bars, so '
-            . 'summarise (total, average per ' . 'day/week/month, busiest period) rather than reading '
-            . 'every bar. For a single total plus the sessions, use get_work_hours.';
+        return 'Shows a bar chart of worked hours over a period: daily bars for this week (period '
+            . '"week"), weekly bars for the last 4 or 12 weeks, or monthly bars for the last year. This '
+            . 'is the DEFAULT for any whole-week or multi-day hours question, including "how have I '
+            . 'worked this week", "how were my hours this week", "hours per day this week", "how much did '
+            . 'I work each month", "are my hours increasing", Danish "hvordan har jeg arbejdet i denne '
+            . 'uge", "arbejdstimer per uge/måned". The card carries the bars, so summarise (total, '
+            . 'average per day/week/month, busiest period) rather than reading every bar. Only for a '
+            . 'single day, clock-status, or the individual session times use get_work_hours instead.';
     }
 
     public function parameters(): array
