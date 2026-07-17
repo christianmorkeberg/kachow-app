@@ -23,14 +23,16 @@ final class GetWorkHours implements Tool
 
     public function description(): string
     {
-        return 'Reports how much time the user has spent at work, from their clock in/out events '
-            . '(logged automatically when they arrive at / leave work, or added manually). Use for '
-            . '"how long have I worked today / this week", "when did I arrive", "am I still clocked in". '
-            . 'The user may have more than one workplace; pass "place" to limit to one, or omit it for '
-            . 'all (the result then breaks time down per workplace). The app shows the result as a '
-            . 'card, so summarise briefly rather than listing every session. If it reports needs_fix, '
-            . 'tell the user they have a session with no clock-out and ask when they left so it can be '
-            . 'corrected with log_work_event.';
+        return 'Reports time spent at work from clock in/out events, for a SINGLE day or right-now '
+            . 'status, WITH the individual clock in/out sessions. Use for "how long have I worked today", '
+            . '"when did I arrive", "am I still clocked in", the sessions on a specific date, or this '
+            . "week's sessions with their times. For an overview of hours ACROSS days — totals per "
+            . 'day/week/month, a whole week/month, or "how have I worked this week" — prefer '
+            . 'get_work_summary, which draws a bar chart. The user may have more than one workplace; pass '
+            . '"place" to limit to one, or omit for all (breaks time down per workplace). Summarise '
+            . 'briefly rather than listing every session. If it reports needs_fix, tell the user they '
+            . 'have a session with no clock-out and ask when they left so it can be corrected with '
+            . 'log_work_event.';
     }
 
     public function parameters(): array
