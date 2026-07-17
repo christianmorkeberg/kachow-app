@@ -27,6 +27,9 @@ final class QuickActions
         'Log a workout…',
     ];
 
+    /** Ignore an AI-generated set older than this (so a broken cron degrades gracefully). */
+    private const CACHE_MAX_AGE_DAYS = 4;
+
     private PDO $db;
 
     public function __construct(?PDO $db = null)
@@ -41,6 +44,12 @@ final class QuickActions
      */
     public function suggestions(int $userId, int $max = 6): array
     {
+        // Prefer the daily AI-generated set (personalised + in the user's language).
+        $cached = $this->cached($userId);
+        if ($cached !== []) {
+            return array_slice($cached, 0, $max);
+        }
+
         $out  = [];
         $seen = [];
         $take = static function (string $text) use (&$out, &$seen, $max): void {
@@ -94,6 +103,91 @@ final class QuickActions
             $text = trim((string) $row['content']);
             if ($text !== '') {
                 $out[] = $text;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The AI-generated set for a user, or [] if none / too stale to trust.
+     *
+     * @return array<int, string>
+     */
+    public function cached(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT suggestions FROM quick_action_cache
+             WHERE user_id = :u AND generated_at >= (NOW() - INTERVAL ' . self::CACHE_MAX_AGE_DAYS . ' DAY)'
+        );
+        $stmt->execute([':u' => $userId]);
+        $json = $stmt->fetchColumn();
+        if ($json === false) {
+            return [];
+        }
+        $decoded = json_decode((string) $json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($decoded as $s) {
+            $s = trim((string) $s);
+            if ($s !== '') {
+                $out[] = $s;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Stores (upserts) a user's AI-generated suggestion set. */
+    public function store(int $userId, array $suggestions): void
+    {
+        $clean = [];
+        foreach ($suggestions as $s) {
+            $s = trim((string) $s);
+            if ($s !== '' && mb_strlen($s) <= 80) {
+                $clean[] = mb_substr($s, 0, 80);
+            }
+            if (count($clean) >= 8) {
+                break;
+            }
+        }
+        $json = json_encode(array_values($clean), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $stmt = $this->db->prepare(
+            'INSERT INTO quick_action_cache (user_id, suggestions) VALUES (:u, :s)
+             ON DUPLICATE KEY UPDATE suggestions = VALUES(suggestions), generated_at = CURRENT_TIMESTAMP'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $json]);
+    }
+
+    /**
+     * The user's recent distinct prompts (newest first) — context for generating
+     * fresh starters. Bounded length so a stray essay doesn't dominate.
+     *
+     * @return array<int, string>
+     */
+    public function recentPrompts(int $userId, int $limit = 40): array
+    {
+        $limit = max(1, min(100, $limit));
+        $stmt  = $this->db->prepare(
+            "SELECT m.content, MAX(m.id) AS mid
+             FROM messages m JOIN conversations c ON c.id = m.conversation_id
+             WHERE c.user_id = :u AND m.role = 'user'
+               AND CHAR_LENGTH(TRIM(m.content)) BETWEEN 3 AND 120
+             GROUP BY LOWER(TRIM(m.content))
+             ORDER BY mid DESC
+             LIMIT " . $limit
+        );
+        $stmt->execute([':u' => $userId]);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $t = trim((string) $row['content']);
+            if ($t !== '') {
+                $out[] = $t;
             }
         }
 

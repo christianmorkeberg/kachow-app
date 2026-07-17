@@ -33,6 +33,14 @@ final class Users
         $this->db = $db ?? Database::get();
     }
 
+    /** @return array<int, int> every user id (for cron jobs that process all users). */
+    public function allIds(): array
+    {
+        $rows = $this->db->query('SELECT id FROM users ORDER BY id')->fetchAll();
+
+        return array_map(static fn (array $r): int => (int) $r['id'], $rows);
+    }
+
     /**
      * Returns the user row for the given id, or null if not found.
      *
