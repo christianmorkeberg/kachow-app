@@ -104,6 +104,9 @@ final class ToolSelector
             'pull-up', 'pullup', 'push-up', 'pushup', 'rowing', 'overhead press', 'shoulder press',
             'leg press', 'chest press', 'bicep', 'tricep', 'reps', ' rep ', ' lift ', 'lifted',
             'lifting', 'weightlift', 'personal record', ' pr ', ' 1rm', 'training',
+            // progression / getting stronger
+            'progress', 'progression', 'stronger', 'getting strong', 'over time', 'trend',
+            'fremgang', 'stærkere', 'udvikling',
             // planning
             'workout plan', 'training plan', 'my plan', 'workout program', 'training program', 'routine', 'session',
             'schedule my', "what's left", 'remaining', 'done with', 'checklist', 'tick off',

@@ -74,6 +74,7 @@ final class ToolRegistry
         $registry = new self();
         $registry->register(new LogWorkout($workouts));
         $registry->register(new GetWorkoutHistory($workouts));
+        $registry->register(new GetWorkoutProgress($workouts));
         $registry->register(new UpdateWorkout($workouts));
         $registry->register(new DeleteWorkout($workouts));
         $registry->register(new CreateWorkoutPlan($workoutPlans));
