@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\ExerciseAliases;
 use App\Data\Workouts;
 
 /**
@@ -11,8 +12,10 @@ use App\Data\Workouts;
  */
 final class GetWorkoutHistory implements Tool
 {
-    public function __construct(private Workouts $workouts)
-    {
+    public function __construct(
+        private Workouts $workouts,
+        private ExerciseAliases $aliases,
+    ) {
     }
 
     public function name(): string
@@ -56,7 +59,7 @@ final class GetWorkoutHistory implements Tool
     public function execute(array $arguments, int $userId): array
     {
         $exercise = isset($arguments['exercise']) && $arguments['exercise'] !== ''
-            ? (string) $arguments['exercise'] : null;
+            ? $this->aliases->resolve($userId, (string) $arguments['exercise']) : null;
         $from  = isset($arguments['from']) && $arguments['from'] !== '' ? (string) $arguments['from'] : null;
         $to    = isset($arguments['to']) && $arguments['to'] !== '' ? (string) $arguments['to'] : null;
         $limit = isset($arguments['limit']) && $arguments['limit'] !== '' ? (int) $arguments['limit'] : null;

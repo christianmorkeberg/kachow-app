@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\ExerciseAliases;
 use App\Data\Workouts;
 
 /**
@@ -32,8 +33,10 @@ final class GetWorkoutProgress implements Tool
     public const DEFAULT_METRIC = 'est_1rm';
     public const DEFAULT_WEEKS  = 12;
 
-    public function __construct(private Workouts $workouts)
-    {
+    public function __construct(
+        private Workouts $workouts,
+        private ExerciseAliases $aliases,
+    ) {
     }
 
     public function name(): string
@@ -83,7 +86,7 @@ final class GetWorkoutProgress implements Tool
         $weeks  = isset($arguments['weeks']) && $arguments['weeks'] !== ''
             ? (int) $arguments['weeks'] : self::DEFAULT_WEEKS;
 
-        $card = self::buildCard($this->workouts, $userId, $exercise, $metric, $weeks);
+        $card = self::buildCard($this->workouts, $userId, $exercise, $metric, $weeks, $this->aliases);
 
         if (!$card['has_data']) {
             return [
@@ -123,10 +126,16 @@ final class GetWorkoutProgress implements Tool
         int $userId,
         ?string $exercise,
         string $metric,
-        int $weeks
+        int $weeks,
+        ?ExerciseAliases $aliases = null
     ): array {
         $metric = isset(self::METRICS[$metric]) ? $metric : self::DEFAULT_METRIC;
         $weeks  = in_array($weeks, self::RANGES, true) ? $weeks : self::DEFAULT_WEEKS;
+
+        // Canonicalise an explicitly requested exercise so a variant finds its rows.
+        if ($aliases !== null && $exercise !== null && $exercise !== '') {
+            $exercise = $aliases->resolve($userId, $exercise);
+        }
 
         $exercises = $workouts->distinctExercises($userId, 60);
         // Default to the most recently trained exercise; keep an explicit request even

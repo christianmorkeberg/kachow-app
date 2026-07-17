@@ -29,7 +29,8 @@ final class ToolSelector
     /** group => tool names */
     private const GROUPS = [
         'workouts' => [
-            'log_workout', 'get_workout_history', 'update_workout', 'delete_workout',
+            'log_workout', 'get_workout_history', 'get_workout_progress', 'merge_exercises',
+            'update_workout', 'delete_workout',
             'get_connected_workouts',
             'create_workout_plan', 'get_workout_plan', 'get_week_plan', 'check_off_exercise',
             'uncheck_exercise', 'add_plan_exercise', 'remove_plan_exercise', 'delete_workout_plan',
@@ -107,6 +108,8 @@ final class ToolSelector
             // progression / getting stronger
             'progress', 'progression', 'stronger', 'getting strong', 'over time', 'trend',
             'fremgang', 'stærkere', 'udvikling',
+            // merging exercise name variants
+            'same exercise', 'same lift', 'standardi', 'samme øvelse',
             // planning
             'workout plan', 'training plan', 'my plan', 'workout program', 'training program', 'routine', 'session',
             'schedule my', "what's left", 'remaining', 'done with', 'checklist', 'tick off',

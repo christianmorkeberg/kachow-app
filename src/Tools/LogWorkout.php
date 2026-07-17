@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\ExerciseAliases;
 use App\Data\Workouts;
 
 /**
- * Tool: log completed workout sets. Thin wrapper over Data\Workouts::logSets.
+ * Tool: log completed workout sets. Thin wrapper over Data\Workouts::logSets, with
+ * exercise-name canonicalisation so variants of the same lift don't fragment history.
  */
 final class LogWorkout implements Tool
 {
-    public function __construct(private Workouts $workouts)
-    {
+    public function __construct(
+        private Workouts $workouts,
+        private ExerciseAliases $aliases,
+    ) {
     }
 
     public function name(): string
@@ -80,6 +84,9 @@ final class LogWorkout implements Tool
         if ($exercise === '' || !is_array($rawSets) || $rawSets === []) {
             return ['error' => 'Provide an exercise name and at least one set.'];
         }
+
+        // Canonicalise the name so a registered variant lands on the user's chosen name.
+        $exercise = $this->aliases->resolve($userId, $exercise);
 
         $sets = [];
         foreach ($rawSets as $set) {

@@ -216,6 +216,38 @@ final class Workouts
     }
 
     /**
+     * Re-labels every set whose exercise name matches one of $fromNames (compared
+     * case-insensitively) to $canonical, scoped to the user. Used when merging
+     * name variants of the same lift. Returns the number of rows changed.
+     *
+     * @param array<int, string> $fromNames
+     */
+    public function renameExercises(int $userId, array $fromNames, string $canonical): int
+    {
+        $canonical = trim($canonical);
+        $lowered   = [];
+        foreach ($fromNames as $name) {
+            $n = mb_strtolower(trim((string) $name));
+            if ($n !== '') {
+                $lowered[$n] = true;
+            }
+        }
+        if ($canonical === '' || $lowered === []) {
+            return 0;
+        }
+
+        $keys         = array_keys($lowered);
+        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+        $stmt = $this->db->prepare(
+            "UPDATE workouts SET exercise = ?
+             WHERE user_id = ? AND LOWER(exercise) IN ({$placeholders})"
+        );
+        $stmt->execute(array_merge([$canonical, $userId], $keys));
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * Deletes all sets of a given exercise for the user, optionally limited to a
      * [from, to] date window (inclusive). Returns the number of rows removed.
      * $exercise is required — this never deletes across all exercises at once.
