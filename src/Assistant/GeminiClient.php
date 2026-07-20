@@ -165,18 +165,35 @@ final class GeminiClient
     }
 
     /**
-     * Concatenates all text parts from a response.
+     * Concatenates the reply text parts, skipping "thought" parts (which are only
+     * present when thinkingConfig.includeThoughts is on — those go to extractThoughts).
      */
     public static function extractText(array $response): string
     {
         $text = '';
         foreach (self::firstCandidateParts($response) as $part) {
-            if (isset($part['text'])) {
+            if (isset($part['text']) && empty($part['thought'])) {
                 $text .= (string) $part['text'];
             }
         }
 
         return $text;
+    }
+
+    /**
+     * Concatenates any thought-summary parts (present only when includeThoughts is on).
+     * Used to capture the model's reasoning into per-turn diagnostics.
+     */
+    public static function extractThoughts(array $response): string
+    {
+        $text = '';
+        foreach (self::firstCandidateParts($response) as $part) {
+            if (isset($part['text']) && !empty($part['thought'])) {
+                $text .= (string) $part['text'];
+            }
+        }
+
+        return trim($text);
     }
 
     /**

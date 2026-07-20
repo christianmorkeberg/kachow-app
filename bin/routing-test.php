@@ -136,6 +136,13 @@ $cases = [
     ['msg' => 'brug min kalender Vagter til arbejde', 'expect' => 'settings'],
     ['msg' => 'what are my settings?', 'expect' => 'settings'],
 
+    // ---- feedback (developer/admin) ----
+    ['msg' => 'any feedback reports?', 'expect' => 'feedback'],
+    ['msg' => 'what did users report', 'expect' => 'feedback'],
+    ['msg' => 'turn off thought logging', 'expect' => 'feedback'],
+    ['msg' => 'mark report 3 as done', 'expect' => 'feedback'],
+    ['msg' => 'hvad har brugerne rapporteret?', 'expect' => 'feedback'],
+
     // ---- connections ----
     ['msg' => 'connect me with Alex', 'expect' => 'connections'],
     ['msg' => 'forbind mig med Alex', 'expect' => 'connections'],
