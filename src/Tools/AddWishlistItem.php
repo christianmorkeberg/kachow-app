@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Wishlist;
+use App\Support\TextMatch;
 
 /**
  * Tool: add a wishlist item. Thin wrapper over Data\Wishlist::add.
@@ -67,6 +68,21 @@ final class AddWishlistItem implements Tool
             return ['error' => 'An item name is required.'];
         }
 
+        // Block same-language duplicates; surface the rest so the model can catch a
+        // reworded / other-language equivalent before duplicating.
+        $existing = $this->wishlist->all($userId);
+        foreach ($existing as $e) {
+            if (TextMatch::similar($item, (string) $e['item'])) {
+                return [
+                    'added'     => false,
+                    'duplicate' => true,
+                    'matched'   => ['id' => (int) $e['id'], 'item' => (string) $e['item']],
+                    'message'   => 'That is already on the wishlist (as "' . $e['item'] . '") — tell the '
+                        . 'user instead of adding a duplicate.',
+                ];
+            }
+        }
+
         $id = $this->wishlist->add(
             $userId,
             $item,
@@ -78,9 +94,13 @@ final class AddWishlistItem implements Tool
         );
 
         return [
-            'added' => true,
-            'id'    => $id,
-            'item'  => $item,
+            'added'          => true,
+            'id'             => $id,
+            'item'           => $item,
+            'existing_items' => array_map(static fn (array $e): string => (string) $e['item'], $existing),
+            'dedupe_hint'    => 'If `item` matches any of existing_items reworded or in another language, '
+                . 'it is a duplicate — call the wishlist remove/delete tool with id=' . $id . ' and tell '
+                . 'the user it is already there.',
         ];
     }
 }

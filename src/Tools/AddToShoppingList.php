@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\Connections;
 use App\Data\ShoppingLists;
+use App\Support\TextMatch;
 
 /**
  * Tool: add one or more items to a shared shopping list. Unnamed → the default
@@ -67,15 +68,35 @@ final class AddToShoppingList implements Tool
             return $list;
         }
 
+        // What's already on the list (before we add), so we can skip duplicates and let
+        // the model catch cross-language / reworded ones ("milk" vs "mælk").
+        $before   = $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']);
+        $existing = array_map(static fn (array $i): string => (string) $i['label'], $before['items'] ?? []);
+        $seen     = array_map([TextMatch::class, 'normalize'], $existing);
+
+        $added = [];
+        $skipped = [];
         foreach ($items as $item) {
+            $norm = TextMatch::normalize($item);
+            if (in_array($norm, $seen, true)) {
+                $skipped[] = $item; // already on the list (same-language)
+                continue;
+            }
             $this->lists->addItem((int) $list['id'], $item, $userId);
+            $added[] = $item;
+            $seen[]  = $norm;
         }
 
         return [
-            'added'        => $items,
-            'list'         => $list['name'],
-            'list_created' => $list['created'] ?? false,
-            '_render'      => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
+            'added'           => $added,
+            'already_present' => $skipped,
+            'existing_items'  => $existing,
+            'list'            => $list['name'],
+            'list_created'    => $list['created'] ?? false,
+            'dedupe_hint'     => 'Items in already_present were skipped (already on the list). Also check '
+                . 'existing_items for the same thing reworded or in another language (e.g. "milk"/"mælk") '
+                . 'and tell the user rather than adding a duplicate. If nothing was actually added, say so.',
+            '_render'         => $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']),
         ];
     }
 }
