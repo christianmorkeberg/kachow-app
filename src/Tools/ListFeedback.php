@@ -29,8 +29,11 @@ final class ListFeedback implements Tool
     {
         return 'Developer/admin only: lists feedback reports users flagged from the chat ("report to '
             . 'developer" / "send to developer"). Use for "any feedback reports?", "what did users '
-            . 'report", "show new bug reports". Each report includes who sent it, their note, the '
-            . 'reported message and its diagnostics. Default shows new (unresolved) reports.';
+            . 'report", "show new bug reports", "more info on report N". Each report includes who sent '
+            . 'it, their note, the reported message, the SURROUNDING conversation (the messages leading '
+            . 'up to it, including tool results), the routing, tool calls, model, and the model\'s '
+            . 'thoughts if captured — so you can answer follow-up questions like "what messages were '
+            . 'sent" directly from this. Default shows new (unresolved) reports.';
     }
 
     public function parameters(): array
@@ -61,8 +64,25 @@ final class ListFeedback implements Tool
 
         $out = [];
         foreach ($rows as $r) {
-            $snap = json_decode((string) $r['snapshot'], true);
-            $snap = is_array($snap) ? $snap : [];
+            $snap     = json_decode((string) $r['snapshot'], true);
+            $snap     = is_array($snap) ? $snap : [];
+            $reported = is_array($snap['reported'] ?? null) ? $snap['reported'] : [];
+            $diag     = is_array($reported['diagnostics'] ?? null) ? $reported['diagnostics'] : [];
+
+            // The surrounding conversation the reporter effectively shared (a window of
+            // messages ending at the reported one), so the developer sees what led to it.
+            $context = [];
+            foreach (($snap['context'] ?? []) as $m) {
+                if (!is_array($m)) {
+                    continue;
+                }
+                $context[] = [
+                    'role'      => $m['role'] ?? null,
+                    'tool'      => $m['tool_name'] ?? null,
+                    'text'      => isset($m['content']) ? mb_substr((string) $m['content'], 0, 1000) : null,
+                ];
+            }
+
             $out[] = [
                 'id'              => (int) $r['id'],
                 'when'            => (string) $r['created_at'],
@@ -70,20 +90,27 @@ final class ListFeedback implements Tool
                 'from'            => (string) ($r['reporter_name'] ?: $r['reporter_email']),
                 'note'            => $r['note'] !== null ? (string) $r['note'] : null,
                 'conversation_id' => $r['conversation_id'] !== null ? (int) $r['conversation_id'] : null,
-                'reported_role'   => $snap['reported']['role'] ?? null,
-                'reported_text'   => isset($snap['reported']['content'])
-                    ? mb_substr((string) $snap['reported']['content'], 0, 600) : null,
-                'routing'         => $snap['reported']['diagnostics']['routing'] ?? null,
-                'tool_calls'      => $snap['reported']['diagnostics']['calls'] ?? null,
+                'reported_role'   => $reported['role'] ?? null,
+                'reported_text'   => isset($reported['content'])
+                    ? mb_substr((string) $reported['content'], 0, 2000) : null,
+                'card_kind'       => $reported['card_kind'] ?? null,
+                'routing'         => $diag['routing'] ?? null,
+                'model'           => $diag['model'] ?? null,
+                'tool_calls'      => $diag['calls'] ?? null,
+                'thoughts'        => $diag['thoughts'] ?? null,
+                'conversation'    => $context,
             ];
         }
 
         return [
-            'status'  => $status,
-            'count'   => count($out),
+            'status'    => $status,
+            'count'     => count($out),
             'new_total' => $this->reports->countByStatus('new'),
-            'reports' => $out,
-            'hint'    => 'Summarise these for the developer. Use resolve_feedback to mark one done.',
+            'reports'   => $out,
+            'hint'      => 'Each report includes the reported message, the surrounding conversation '
+                . '(the "conversation" array — the messages leading up to it), the model\'s routing, '
+                . 'tool calls and (if captured) its thoughts. Answer the developer\'s questions from '
+                . 'these fields. Use resolve_feedback to mark one done.',
         ];
     }
 }
