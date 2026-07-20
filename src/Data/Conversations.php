@@ -61,15 +61,16 @@ final class Conversations
         string $role,
         string $content,
         ?string $toolName = null,
-        ?string $cardJson = null
+        ?string $cardJson = null,
+        ?string $diagnosticsJson = null
     ): int {
         if (!in_array($role, self::ROLES, true)) {
             throw new InvalidArgumentException("Invalid message role: {$role}");
         }
 
         $stmt = $this->db->prepare(
-            'INSERT INTO messages (conversation_id, role, content, tool_name, card)
-             VALUES (:conversation_id, :role, :content, :tool_name, :card)'
+            'INSERT INTO messages (conversation_id, role, content, tool_name, card, diagnostics)
+             VALUES (:conversation_id, :role, :content, :tool_name, :card, :diagnostics)'
         );
         $stmt->execute([
             ':conversation_id' => $conversationId,
@@ -77,9 +78,41 @@ final class Conversations
             ':content'         => $content,
             ':tool_name'       => $toolName,
             ':card'            => $cardJson,
+            ':diagnostics'     => $diagnosticsJson,
         ]);
 
         return (int) $this->db->lastInsertId();
+    }
+
+    /**
+     * A single message joined to its owning user — for authorising a "report this
+     * message" action (the message's conversation must belong to the acting user).
+     *
+     * @return array{user_id:int, conversation_id:int, role:string, content:string, tool_name:?string, card:?string, diagnostics:?string, created_at:string}|null
+     */
+    public function messageContext(int $messageId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT c.user_id, m.conversation_id, m.role, m.content, m.tool_name, m.card, m.diagnostics, m.created_at
+             FROM messages m JOIN conversations c ON c.id = m.conversation_id
+             WHERE m.id = :id'
+        );
+        $stmt->execute([':id' => $messageId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'user_id'         => (int) $row['user_id'],
+            'conversation_id' => (int) $row['conversation_id'],
+            'role'            => (string) $row['role'],
+            'content'         => (string) $row['content'],
+            'tool_name'       => $row['tool_name'] !== null ? (string) $row['tool_name'] : null,
+            'card'            => $row['card'] !== null ? (string) $row['card'] : null,
+            'diagnostics'     => $row['diagnostics'] !== null ? (string) $row['diagnostics'] : null,
+            'created_at'      => (string) $row['created_at'],
+        ];
     }
 
     /**
@@ -248,7 +281,7 @@ final class Conversations
      */
     public function messages(int $conversationId, ?int $limit = null): array
     {
-        $sql = 'SELECT id, role, content, tool_name, card, created_at
+        $sql = 'SELECT id, role, content, tool_name, card, diagnostics, created_at
                 FROM messages
                 WHERE conversation_id = :conversation_id
                 ORDER BY id ASC';

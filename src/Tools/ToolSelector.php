@@ -88,6 +88,9 @@ final class ToolSelector
         'cycle' => [
             'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle', 'log_cycle_day',
         ],
+        'feedback' => [
+            'list_feedback', 'resolve_feedback', 'set_diagnostics',
+        ],
         'settings' => [
             'get_settings', 'update_setting',
         ],
@@ -251,6 +254,14 @@ final class ToolSelector
             // Danish
             'indstilling', 'indstillinger', 'konfigurer', 'foretrukne', 'hvilken kalender',
             'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
+        ],
+        // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
+        'feedback' => [
+            'feedback report', 'feedback reports', 'user reports', 'bug report', 'bug reports',
+            'reported', 'any feedback', 'what did users report', 'diagnostics', 'thought logging',
+            'capture thoughts', 'mark report',
+            // Danish
+            'feedback', 'fejlrapport', 'brugerrapport', 'rapporter', 'hvad har brugerne rapporteret',
         ],
     ];
 

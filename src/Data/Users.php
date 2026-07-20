@@ -111,6 +111,41 @@ final class Users
         ]);
     }
 
+    /** The user's role ('admin' or 'user'), or null if the user doesn't exist. */
+    public function role(int $userId): ?string
+    {
+        $stmt = $this->db->prepare('SELECT role FROM users WHERE id = :id');
+        $stmt->execute([':id' => $userId]);
+        $role = $stmt->fetchColumn();
+
+        return $role === false ? null : (string) $role;
+    }
+
+    /** Whether the user is an admin (the developer). */
+    public function isAdmin(int $userId): bool
+    {
+        return $this->role($userId) === 'admin';
+    }
+
+    /**
+     * Admin users' name + email, for notifying the developer(s) of feedback.
+     *
+     * @return array<int, array{name:?string, email:string}>
+     */
+    public function adminContacts(): array
+    {
+        $rows = $this->db->query("SELECT name, email FROM users WHERE role = 'admin'")->fetchAll();
+        $out  = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'name'  => $r['name'] !== null ? (string) $r['name'] : null,
+                'email' => (string) $r['email'],
+            ];
+        }
+
+        return $out;
+    }
+
     /**
      * Returns the decrypted Google refresh token for the user, or null if the
      * user has never connected their calendar.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Assistant;
 
+use App\Data\AppFlags;
 use App\Data\Conversations;
 use App\Data\Memories;
 use App\Data\UserInstructions;
@@ -135,6 +136,15 @@ final class AssistantLoop
     /** Quick-reply chips suggested by the assistant this turn (e.g. ["Yes","No"]). */
     private ?array $lastSuggestions = null;
 
+    /** Diagnostics captured this turn (routing, tool calls, model, thoughts). */
+    private ?array $lastDiagnostics = null;
+
+    /** DB id of the user message persisted this turn (for "report this message"). */
+    private ?int $lastUserMessageId = null;
+
+    /** DB id of the assistant reply persisted this turn. */
+    private ?int $lastAssistantMessageId = null;
+
     public function __construct(
         private GeminiClient $gemini,
         private ToolRegistry $tools,
@@ -159,6 +169,24 @@ final class AssistantLoop
     public function lastSuggestions(): ?array
     {
         return $this->lastSuggestions;
+    }
+
+    /** Diagnostics from the last handle() call (routing, tool calls, model, thoughts). */
+    public function lastDiagnostics(): ?array
+    {
+        return $this->lastDiagnostics;
+    }
+
+    /** DB id of the assistant reply persisted in the last handle() call, or null. */
+    public function lastAssistantMessageId(): ?int
+    {
+        return $this->lastAssistantMessageId;
+    }
+
+    /** DB id of the user message persisted in the last handle() call, or null. */
+    public function lastUserMessageId(): ?int
+    {
+        return $this->lastUserMessageId;
     }
 
     /**
@@ -195,9 +223,10 @@ final class AssistantLoop
      */
     public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null): string
     {
-        $this->conversations->addMessage($conversationId, 'user', $userMessage);
+        $this->lastUserMessageId = $this->conversations->addMessage($conversationId, 'user', $userMessage);
         $this->lastRender = null;
         $this->lastSuggestions = null;
+        $this->lastAssistantMessageId = null;
 
         $contents     = $this->buildContents($conversationId);
         // Send only the tools relevant to this message (falls back to all if unsure).
@@ -212,6 +241,21 @@ final class AssistantLoop
         $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent);
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location);
 
+        // Always-on diagnostics for this turn (surfaced in developer mode + reports).
+        // Thought-summary capture is extra (token cost), so it's behind a runtime flag.
+        $thoughtsOn = (new AppFlags())->isOn('diag_thoughts', false);
+        $genConfig  = $thoughtsOn ? ['thinkingConfig' => ['includeThoughts' => true]] : null;
+        $diag = [
+            'routing'    => $groups === [] ? ['ALL (fallback)'] : $groups,
+            'tools_sent' => count($declarations),
+            'model'      => null,
+            'calls'      => [],
+        ];
+        if ($thoughtsOn) {
+            $diag['thoughts'] = [];
+        }
+        $this->lastDiagnostics = $diag;
+
         // The model is chosen on the first call (round 0, before any tool calls or
         // thoughtSignatures exist — so switching is safe) and reused for the rest of
         // the turn to keep thinking-model signatures consistent.
@@ -220,15 +264,42 @@ final class AssistantLoop
 
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
             try {
-                if ($chosenModel === null) {
-                    [$response, $chosenModel] = $this->generateWithFallback($models, $contents, $declarations, $system);
-                } else {
-                    $response = $this->gemini->generate($contents, $declarations, $system, $chosenModel);
+                try {
+                    if ($chosenModel === null) {
+                        [$response, $chosenModel] = $this->generateWithFallback($models, $contents, $declarations, $system, $genConfig);
+                        $this->lastDiagnostics['model'] = $chosenModel;
+                    } else {
+                        $response = $this->gemini->generate($contents, $declarations, $system, $chosenModel, $genConfig);
+                    }
+                } catch (\RuntimeException $e) {
+                    // A model that rejects the thinking config must not break the turn
+                    // (that would also deadlock the off-switch). Retry once without it
+                    // and stop capturing thoughts for this turn.
+                    if ($genConfig === null) {
+                        throw $e;
+                    }
+                    error_log('diagnostics: thoughts disabled for this turn (' . $e->getMessage() . ')');
+                    $genConfig  = null;
+                    $thoughtsOn = false;
+                    unset($this->lastDiagnostics['thoughts']);
+                    if ($chosenModel === null) {
+                        [$response, $chosenModel] = $this->generateWithFallback($models, $contents, $declarations, $system, null);
+                        $this->lastDiagnostics['model'] = $chosenModel;
+                    } else {
+                        $response = $this->gemini->generate($contents, $declarations, $system, $chosenModel, null);
+                    }
                 }
             } catch (RateLimitException $e) {
                 $reply = "I'm being rate-limited by the model right now — please try again in a few seconds.";
-                $this->conversations->addMessage($conversationId, 'assistant', $reply);
+                $this->lastAssistantMessageId = $this->conversations->addMessage($conversationId, 'assistant', $reply);
                 return $reply;
+            }
+
+            if ($thoughtsOn) {
+                $thought = GeminiClient::extractThoughts($response);
+                if ($thought !== '') {
+                    $this->lastDiagnostics['thoughts'][] = mb_substr($thought, 0, 4000);
+                }
             }
 
             $calls = GeminiClient::extractFunctionCalls($response);
@@ -239,7 +310,14 @@ final class AssistantLoop
                 [$reply, $this->lastSuggestions] = $this->extractSuggestions($reply);
                 // Persist any card this turn produced with the reply, so reopening the
                 // conversation can re-render the interactive widget (not just text).
-                $this->conversations->addMessage($conversationId, 'assistant', $reply, null, $this->lastRenderJson());
+                $this->lastAssistantMessageId = $this->conversations->addMessage(
+                    $conversationId,
+                    'assistant',
+                    $reply,
+                    null,
+                    $this->lastRenderJson(),
+                    $this->diagnosticsJson()
+                );
                 return $reply;
             }
 
@@ -266,6 +344,16 @@ final class AssistantLoop
                     unset($result['_render']);
                 }
 
+                // Record the call in this turn's diagnostics (args truncated).
+                $argsJson = json_encode($call['args'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $this->lastDiagnostics['calls'][] = [
+                    'round' => $round + 1,
+                    'name'  => $call['name'],
+                    'args'  => mb_substr((string) $argsJson, 0, 400),
+                    'ok'    => !(is_array($result) && isset($result['error'])),
+                    'error' => (is_array($result) && isset($result['error'])) ? (string) $result['error'] : null,
+                ];
+
                 $this->conversations->addMessage(
                     $conversationId,
                     'tool',
@@ -287,9 +375,24 @@ final class AssistantLoop
         }
 
         $fallback = "Sorry — I couldn't complete that in a reasonable number of steps.";
-        $this->conversations->addMessage($conversationId, 'assistant', $fallback);
+        $this->lastAssistantMessageId = $this->conversations->addMessage(
+            $conversationId,
+            'assistant',
+            $fallback,
+            null,
+            null,
+            $this->diagnosticsJson()
+        );
 
         return $fallback;
+    }
+
+    /** This turn's diagnostics as JSON for persistence, or null if none. */
+    private function diagnosticsJson(): ?string
+    {
+        return $this->lastDiagnostics !== null
+            ? (string) json_encode($this->lastDiagnostics, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : null;
     }
 
     /**
@@ -304,12 +407,12 @@ final class AssistantLoop
      *
      * @throws RateLimitException when every model in the chain is rate-limited.
      */
-    private function generateWithFallback(array $models, array $contents, array $declarations, ?string $system): array
+    private function generateWithFallback(array $models, array $contents, array $declarations, ?string $system, ?array $genConfig = null): array
     {
         $last = null;
         foreach ($models as $model) {
             try {
-                return [$this->gemini->generate($contents, $declarations, $system, $model), $model];
+                return [$this->gemini->generate($contents, $declarations, $system, $model, $genConfig), $model];
             } catch (RateLimitException $e) {
                 $last = $e;
             }

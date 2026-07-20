@@ -7,9 +7,11 @@ namespace App\Tools;
 use App\Data\ApiTokens;
 use App\Data\Calendar;
 use App\Data\Connections;
+use App\Data\AppFlags;
 use App\Data\CycleTracker;
 use App\Data\DevIdeas;
 use App\Data\ExerciseAliases;
+use App\Data\FeedbackReports;
 use App\Data\Invites;
 use App\Data\Memories;
 use App\Data\Receipts;
@@ -158,6 +160,10 @@ final class ToolRegistry
         $registry->register(new RemoveVinyl($vinyls));
         $registry->register(new RecommendVinyl($vinyls));
         $registry->register(new AssessVinyl($vinyls, $discogs));
+        $feedback = new FeedbackReports();
+        $registry->register(new ListFeedback($users, $feedback));
+        $registry->register(new ResolveFeedback($users, $feedback));
+        $registry->register(new SetDiagnostics($users, new AppFlags()));
 
         return $registry;
     }
