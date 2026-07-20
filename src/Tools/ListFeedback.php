@@ -113,24 +113,25 @@ final class ListFeedback implements Tool
             'reports'   => $out,
         ];
 
-        // The card carries the full detail (thread, diagnostics, resolve button); give
-        // the model only a compact summary so it writes a short intro, not a re-list.
-        $brief = array_map(static fn (array $r): array => [
-            'id'     => $r['id'],
-            'from'   => $r['from'],
-            'status' => $r['status'],
-            'note'   => $r['note'],
-        ], $out);
+        // The card carries the full detail (thread, diagnostics, resolve button). Give
+        // the model only a pre-formatted one-line summary — NOT structured data — so it
+        // can't accidentally echo raw JSON into the chat.
+        $lines = [];
+        foreach ($out as $r) {
+            $lines[] = '#' . $r['id'] . ' from ' . $r['from'] . ' (' . $r['status'] . ')'
+                . ($r['note'] ? ': “' . $r['note'] . '”' : '');
+        }
+        $summary = $lines === [] ? 'No reports.' : implode('; ', $lines);
 
         return [
-            'status'    => $status,
             'count'     => count($out),
             'new_total' => $card['new_total'],
-            'reports'   => $brief,
+            'summary'   => $summary,
             '_render'   => $card,
-            'hint'      => 'A card now shows each report with its full conversation thread, diagnostics '
-                . 'and a resolve button. Give a SHORT intro (e.g. how many new reports, who from); do '
-                . 'NOT re-list the messages or details as text — the card shows them.',
+            'hint'      => 'A card is now shown with each report in full (conversation thread, '
+                . 'diagnostics, resolve button). Write ONE short sentence using `summary` (e.g. how '
+                . 'many new reports and who from). Do NOT output JSON, and do NOT re-list the details '
+                . '— the card shows them.',
         ];
     }
 }
