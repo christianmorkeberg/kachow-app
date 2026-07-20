@@ -82,6 +82,10 @@ final class ListFeedback implements Tool
                     'text'      => isset($m['content']) ? mb_substr((string) $m['content'], 0, 1000) : null,
                 ];
             }
+            // The window ends at the reported message, so mark the last item as such.
+            if ($context !== []) {
+                $context[count($context) - 1]['reported'] = true;
+            }
 
             $out[] = [
                 'id'              => (int) $r['id'],
@@ -102,15 +106,31 @@ final class ListFeedback implements Tool
             ];
         }
 
+        $card = [
+            'kind'      => 'feedback',
+            'status'    => $status,
+            'new_total' => $this->reports->countByStatus('new'),
+            'reports'   => $out,
+        ];
+
+        // The card carries the full detail (thread, diagnostics, resolve button); give
+        // the model only a compact summary so it writes a short intro, not a re-list.
+        $brief = array_map(static fn (array $r): array => [
+            'id'     => $r['id'],
+            'from'   => $r['from'],
+            'status' => $r['status'],
+            'note'   => $r['note'],
+        ], $out);
+
         return [
             'status'    => $status,
             'count'     => count($out),
-            'new_total' => $this->reports->countByStatus('new'),
-            'reports'   => $out,
-            'hint'      => 'Each report includes the reported message, the surrounding conversation '
-                . '(the "conversation" array — the messages leading up to it), the model\'s routing, '
-                . 'tool calls and (if captured) its thoughts. Answer the developer\'s questions from '
-                . 'these fields. Use resolve_feedback to mark one done.',
+            'new_total' => $card['new_total'],
+            'reports'   => $brief,
+            '_render'   => $card,
+            'hint'      => 'A card now shows each report with its full conversation thread, diagnostics '
+                . 'and a resolve button. Give a SHORT intro (e.g. how many new reports, who from); do '
+                . 'NOT re-list the messages or details as text — the card shows them.',
         ];
     }
 }
