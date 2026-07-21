@@ -143,6 +143,14 @@ $cases = [
     ['msg' => 'mark report 3 as done', 'expect' => 'feedback'],
     ['msg' => 'hvad har brugerne rapporteret?', 'expect' => 'feedback'],
 
+    // ---- reminders ----
+    ['msg' => 'remind me to call mum at 18:00', 'expect' => 'reminders'],
+    ['msg' => 'set a reminder for tomorrow at 9', 'expect' => 'reminders'],
+    ['msg' => 'what reminders do I have?', 'expect' => 'reminders'],
+    ['msg' => 'cancel my reminder', 'expect' => 'reminders'],
+    ['msg' => 'mind mig om at flytte vasketøjet om 2 timer', 'expect' => 'reminders'],
+    ['msg' => 'husk mig på at ringe i morgen', 'expect' => 'reminders'],
+
     // ---- connections ----
     ['msg' => 'connect me with Alex', 'expect' => 'connections'],
     ['msg' => 'forbind mig med Alex', 'expect' => 'connections'],
