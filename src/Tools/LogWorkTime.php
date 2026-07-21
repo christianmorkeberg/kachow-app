@@ -80,12 +80,27 @@ final class LogWorkTime implements Tool
 
         [$from, $to, $label] = WorkLog::resolveRange('this_week', null, null);
 
+        // Recent entries for THIS job (the ~4 weeks before today) so the assistant can
+        // ask a follow-up that builds on prior threads instead of starting cold.
+        $histFrom = date('Y-m-d', strtotime($date . ' -28 days'));
+        $histTo   = date('Y-m-d', strtotime($date . ' -1 day'));
+        $recent   = array_slice($this->log->listForUser($userId, $histFrom, $histTo, $job), 0, 6);
+        $recentEntries = array_map(static fn (array $r): array => [
+            'date'        => $r['date'],
+            'description' => mb_substr($r['description'], 0, 200),
+        ], $recent);
+
         return [
-            'logged'  => true,
-            'job'     => $job,
-            'date'    => $date,
-            'hours'   => $hours,
-            '_render' => $this->log->card($userId, $from, $to, 'Work log · this week'),
+            'logged'         => true,
+            'job'            => $job,
+            'date'           => $date,
+            'hours'          => $hours,
+            'recent_entries' => $recentEntries,
+            'followup_hint'  => 'You MAY ask ONE short, natural follow-up about the work itself, grounded '
+                . 'in recent_entries when something connects (e.g. whether an ongoing task from a previous '
+                . 'day got finished). Keep it to a single light question, skip it if nothing stands out, '
+                . 'and never ask about hours.',
+            '_render'        => $this->log->card($userId, $from, $to, 'Work log · this week'),
         ];
     }
 
