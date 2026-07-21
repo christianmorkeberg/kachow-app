@@ -91,6 +91,9 @@ final class ToolSelector
         'feedback' => [
             'list_feedback', 'resolve_feedback', 'set_diagnostics',
         ],
+        'reminders' => [
+            'set_reminder', 'list_reminders', 'cancel_reminder',
+        ],
         'settings' => [
             'get_settings', 'update_setting',
         ],
@@ -254,6 +257,13 @@ final class ToolSelector
             // Danish
             'indstilling', 'indstillinger', 'konfigurer', 'foretrukne', 'hvilken kalender',
             'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
+        ],
+        // One-off push reminders ("remind me to … at …").
+        'reminders' => [
+            'remind me', 'reminder', 'remind', 'set a reminder', 'don\'t let me forget', 'dont let me forget',
+            'ping me', 'nudge me', 'wake me',
+            // Danish
+            'mind mig', 'påmind', 'paamind', 'påmindelse', 'glem ikke at minde', 'husk mig på', 'husk mig pa',
         ],
         // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
         'feedback' => [

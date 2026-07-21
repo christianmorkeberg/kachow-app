@@ -18,6 +18,7 @@ final class NotificationTypes
     public const WEEKLY_SUMMARY = 'weekly_summary';
     public const WORK_LOG_NUDGE = 'work_log_nudge';
     public const CYCLE_UPCOMING = 'cycle_upcoming';
+    public const REMINDER       = 'reminder';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -42,6 +43,11 @@ final class NotificationTypes
             'label'       => 'Period reminder',
             'description' => 'A reminder to log your period when it\'s expected but you haven\'t registered it yet.',
             'default'     => false,
+        ],
+        self::REMINDER => [
+            'label'       => 'Reminders',
+            'description' => 'One-off reminders you ask me to set ("remind me to … at …").',
+            'default'     => true,
         ],
     ];
 
