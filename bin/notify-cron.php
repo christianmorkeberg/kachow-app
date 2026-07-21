@@ -3,9 +3,10 @@
 declare(strict_types=1);
 
 /**
- * Scheduled notification runner — run hourly by cron:
+ * Scheduled notification runner — run every 30 min by cron (so the 16:30 work-log
+ * nudge can fire; all jobs are idempotent so running twice an hour is safe):
  *
- *     0 * * * * php /home/kachowdk/assistant-app/bin/notify-cron.php >/dev/null 2>&1
+ *     0,30 * * * * php /home/kachowdk/assistant-app/bin/notify-cron.php >/dev/null 2>&1
  *
  * It decides what to do using Europe/Copenhagen local time (so one hourly entry
  * works regardless of the server's timezone or DST):
@@ -126,12 +127,13 @@ try {
 
 // ---------- Work-log nudge (mid-afternoon on work days) ----------
 // On a day the user has an "Arbejde" calendar event, if they haven't logged what
-// they did yet, nudge them. Fires from LOG_NUDGE_HOUR onward (hourly cron ⇒ ~15:00),
-// once per day per user via the notification ledger.
-const LOG_NUDGE_HOUR = 15;
+// they did yet, nudge them. Fires from 16:30 local onward (needs a cron run at :30 —
+// see the crontab note at the top), once per day per user via the notification ledger.
+const LOG_NUDGE_FROM_MIN = 16 * 60 + 30; // 16:30 local
 try {
-    $hour = (int) $nowLocal->format('G');
-    if ($hour >= LOG_NUDGE_HOUR && $hour < 20) {
+    $hour    = (int) $nowLocal->format('G');
+    $minsNow = $hour * 60 + (int) $nowLocal->format('i');
+    if ($minsNow >= LOG_NUDGE_FROM_MIN && $hour < 20) {
         $today    = $nowLocal->format('Y-m-d');
         $calendar = new Calendar(GoogleOAuth::fromEnv(new Users()));
         $worklog  = new WorkLog();
