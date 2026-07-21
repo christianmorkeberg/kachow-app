@@ -54,6 +54,10 @@ final class Notifier
             return 0;
         }
 
+        // Default the tap target to the type's card deep link, so tapping opens a fresh
+        // chat showing the relevant card. An explicit $url still wins.
+        $url ??= NotificationTypes::deepLink($type);
+
         $payload = json_encode(
             ['title' => $title, 'body' => $body, 'url' => $url ?? '/', 'type' => $type],
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES

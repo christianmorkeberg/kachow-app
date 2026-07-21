@@ -86,8 +86,7 @@ try {
             NotificationTypes::CHECKOUT_NUDGE,
             'Still clocked in',
             "You've been clocked in{$where} since {$inLocal->format('H:i')} ("
-                . fmtDur($durMin) . '). Did you forget to clock out?',
-            '/'
+                . fmtDur($durMin) . '). Did you forget to clock out?'
         );
     }
 } catch (\Throwable $e) {
@@ -118,7 +117,7 @@ try {
             }
             $body .= '.';
 
-            $notifier->notify($uid, NotificationTypes::WEEKLY_SUMMARY, 'Last week at work', $body, '/');
+            $notifier->notify($uid, NotificationTypes::WEEKLY_SUMMARY, 'Last week at work', $body);
         }
     }
 } catch (\Throwable $e) {
@@ -172,8 +171,7 @@ try {
                 $uid,
                 NotificationTypes::WORK_LOG_NUDGE,
                 'What did you get done?',
-                "You're {$where} today — tap to log what you worked on.",
-                '/'
+                "You're {$where} today — tap to log what you worked on."
             );
         }
     }
@@ -208,7 +206,7 @@ try {
                 ? 'Your period is expected today — tap to log it when it starts.'
                 : 'Your period was expected ' . $late . ' day' . ($late === 1 ? '' : 's')
                     . ' ago — tap to log it if it has started.';
-            $notifier->notify($uid, NotificationTypes::CYCLE_UPCOMING, 'Period check-in', $body, '/');
+            $notifier->notify($uid, NotificationTypes::CYCLE_UPCOMING, 'Period check-in', $body);
         }
     }
 } catch (\Throwable $e) {
