@@ -45,9 +45,29 @@ final class NotificationTypes
         ],
     ];
 
+    /**
+     * Which card to open when the user taps this notification. Maps a type to a card
+     * key understood by api/card.php. Null → no card (just opens the app).
+     */
+    private const CARD_FOR = [
+        self::CHECKOUT_NUDGE => 'work_hours', // today's hours (still clocked in?)
+        self::WEEKLY_SUMMARY => 'work_week',  // last week's hours
+        self::WORK_LOG_NUDGE => 'work_log',   // this week's work log
+        self::CYCLE_UPCOMING => 'cycle',      // cycle status
+    ];
+
     public static function exists(string $key): bool
     {
         return isset(self::CATALOGUE[$key]);
+    }
+
+    /**
+     * Deep link to open when the notification is tapped: a fresh chat showing the
+     * matching card (handled client-side via the `?card=` param). Null if none.
+     */
+    public static function deepLink(string $type): ?string
+    {
+        return isset(self::CARD_FOR[$type]) ? '/?card=' . self::CARD_FOR[$type] : null;
     }
 
     public static function defaultEnabled(string $key): bool
