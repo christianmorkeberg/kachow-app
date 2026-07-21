@@ -51,8 +51,9 @@ final class GetWorkoutProgress implements Tool
             . 'heaviest set, volume = weight×reps summed). Use for "am I getting stronger on bench?", '
             . '"show my squat progress", "how has my deadlift trended?", Danish "bliver jeg stærkere i '
             . 'bænkpres?", "vis min fremgang i squat". Omit exercise to chart the most recently trained '
-            . 'one. The card lets the user switch exercise, metric and time range. Report the trend from '
-            . 'the summary plainly (e.g. "up 7.5 kg over 12 weeks").';
+            . 'one. The card lets the user switch exercise, metric and time range. Describe the peak '
+            . '(best) and the general trend; do NOT compute a latest-vs-first change or a percentage '
+            . '(sessions vary in intensity, so a lighter recent session is not a regression).';
     }
 
     public function parameters(): array
@@ -99,20 +100,22 @@ final class GetWorkoutProgress implements Tool
         }
 
         // Only a compact summary goes to the model; the card carries the full series.
+        // Deliberately NO latest-vs-first "change"/percentage — the user logs many
+        // sessions at varying intensity, so that difference is misleading.
         return [
-            'exercise'   => $card['exercise'],
-            'metric'     => self::METRICS[$card['metric']],
-            'weeks'      => $card['weeks'],
-            'unit'       => $card['unit'],
-            'sessions'   => $card['summary']['sessions'],
-            'first'      => $card['summary']['first'],
-            'latest'     => $card['summary']['last'],
-            'best'       => $card['summary']['best'],
-            'change'     => $card['summary']['delta'],
-            'change_pct' => $card['summary']['pct'],
-            'note'       => 'For est_1rm, points from a 1-rep set are tested maxes; multi-rep points '
-                . 'are Epley estimates. The card marks tested maxes with a diamond.',
-            '_render'    => $card,
+            'exercise' => $card['exercise'],
+            'metric'   => self::METRICS[$card['metric']],
+            'weeks'    => $card['weeks'],
+            'unit'     => $card['unit'],
+            'sessions' => $card['summary']['sessions'],
+            'best'     => $card['summary']['best'],
+            'latest'   => $card['summary']['last'],
+            'note'     => 'Do NOT frame the latest-vs-first difference as progress, and do NOT give a '
+                . 'percentage change — the user logs many sessions at varying intensity, so a lighter '
+                . 'recent session does not mean they got weaker. Talk about the peak (best) and the '
+                . 'overall trend the chart shows. For est_1rm, 1-rep points are tested maxes (diamonds); '
+                . 'multi-rep points are Epley estimates.',
+            '_render'  => $card,
         ];
     }
 
