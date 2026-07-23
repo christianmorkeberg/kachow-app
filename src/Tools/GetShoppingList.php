@@ -52,15 +52,23 @@ final class GetShoppingList implements Tool
             return $list;
         }
 
-        // Summary to the model (the interactive card carries the item details, so the
-        // model must not re-list them as text). cardForList also auto-purges stale
-        // checked items, so derive the counts from it for consistency.
+        // cardForList also auto-purges stale checked items, so derive from it.
         $card = $this->lists->cardForList((int) $access['connection_id'], (int) $list['id'], (string) $list['name']);
 
+        // Give the model the item NAMES (not just counts) so it can actually reason
+        // about the list — e.g. suggest recipes — but the card is the display, so tell
+        // it not to just re-list them as text.
         return [
             'list'      => $list['name'],
             'count'     => count($card['items']),
             'remaining' => count(array_filter($card['items'], static fn (array $i): bool => !$i['done'])),
+            'items'     => array_map(
+                static fn (array $i): array => ['name' => $i['label'], 'done' => $i['done']],
+                $card['items']
+            ),
+            'note'      => 'The card already displays these items to the user. Use the names to answer '
+                . 'their question (e.g. recipe ideas, what\'s missing), but do NOT just re-list the items '
+                . 'as text — the card shows them.',
             '_render'   => $card,
         ];
     }

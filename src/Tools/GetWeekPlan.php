@@ -46,6 +46,13 @@ final class GetWeekPlan implements Tool
         return [
             'days_planned' => count($card['days']),
             'remaining'    => $card['remaining'],
+            'days'         => array_map(static fn (array $d): array => [
+                'weekday'   => $d['weekday'] ?? null,
+                'date'      => $d['date'] ?? null,
+                'exercises' => array_map(static fn (array $i): string => (string) $i['label'], $d['items'] ?? []),
+            ], $card['days']),
+            'note'         => 'The card shows the week plan to the user — use it to answer their question '
+                . 'but do NOT re-list every exercise as text.',
             '_render'      => $card,
         ];
     }

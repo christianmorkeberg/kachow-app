@@ -44,14 +44,20 @@ final class GetWorkoutPlan implements Tool
         $card = $this->plans->cardForDate($userId, $date);
         $day  = $card['days'][0];
 
-        // Only a summary goes to the model (the interactive card carries the details,
-        // so the model must not re-list exercises as text).
+        // Give the model the exercise names (so it can actually answer questions about
+        // the plan), but the card is the display — tell it not to just re-list them.
         return [
-            'date'      => $date,
-            'has_plan'  => $day['plan_id'] !== null,
+            'date'       => $date,
+            'has_plan'   => $day['plan_id'] !== null,
             'item_count' => count($day['items']),
-            'remaining' => count(array_filter($day['items'], static fn (array $i): bool => !$i['done'])),
-            '_render'   => $card,
+            'remaining'  => count(array_filter($day['items'], static fn (array $i): bool => !$i['done'])),
+            'exercises'  => array_map(
+                static fn (array $i): array => ['name' => $i['label'], 'done' => $i['done']],
+                $day['items']
+            ),
+            'note'       => 'The card shows this plan to the user — use the exercise names to answer '
+                . 'their question but do NOT just re-list them as text.',
+            '_render'    => $card,
         ];
     }
 }
