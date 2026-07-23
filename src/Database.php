@@ -29,7 +29,10 @@ final class Database
     public static function get(): PDO
     {
         if (self::$instance === null) {
+            // Time the (once-per-request) connection so DB connect overhead is visible.
+            $t0             = microtime(true);
             self::$instance = self::connect();
+            error_log(sprintf('timing db-connect: %dms', (int) round((microtime(true) - $t0) * 1000)));
         }
 
         return self::$instance;
