@@ -244,6 +244,7 @@ final class AssistantLoop
      */
     public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null): string
     {
+        $tStart = microtime(true);
         $this->lastUserMessageId = $this->conversations->addMessage($conversationId, 'user', $userMessage);
         $this->lastRender = null;
         $this->lastSuggestions = null;
@@ -261,6 +262,13 @@ final class AssistantLoop
             . mb_substr($userMessage, 0, 80));
         $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent);
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location);
+
+        // Performance instrumentation for this turn.
+        $reqKb       = (int) round((strlen($system) + strlen((string) json_encode($declarations))
+            + strlen((string) json_encode($contents))) / 1024);
+        $geminiMs    = 0.0;
+        $geminiCalls = 0;
+        $toolMs      = 0.0;
 
         // Always-on diagnostics for this turn (surfaced in developer mode + reports).
         // Thought-summary capture is extra (token cost), so it's behind a runtime flag.
@@ -284,6 +292,7 @@ final class AssistantLoop
         $chosenModel = null;
 
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
+            $g0 = microtime(true);
             try {
                 try {
                     if ($chosenModel === null) {
@@ -315,6 +324,8 @@ final class AssistantLoop
                 $this->lastAssistantMessageId = $this->conversations->addMessage($conversationId, 'assistant', $reply);
                 return $reply;
             }
+            $geminiMs += (microtime(true) - $g0) * 1000;
+            $geminiCalls++;
 
             if ($thoughtsOn) {
                 $thought = GeminiClient::extractThoughts($response);
@@ -329,6 +340,7 @@ final class AssistantLoop
                 $reply = GeminiClient::extractText($response);
                 // Pull out any quick-reply chips the assistant suggested.
                 [$reply, $this->lastSuggestions] = $this->extractSuggestions($reply);
+                $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
                 // Persist any card this turn produced with the reply, so reopening the
                 // conversation can re-render the interactive widget (not just text).
                 $this->lastAssistantMessageId = $this->conversations->addMessage(
@@ -349,11 +361,14 @@ final class AssistantLoop
             // Execute each call, persist it, and gather the responses to send back.
             $responseParts = [];
             foreach ($calls as $call) {
+                $td0 = microtime(true);
                 try {
                     $result = $this->tools->dispatch($call['name'], $call['args'], $userId);
                 } catch (Throwable $e) {
                     $result = ['error' => $e->getMessage()];
                 }
+                $callMs  = (microtime(true) - $td0) * 1000;
+                $toolMs += $callMs;
 
                 // A tool can attach a renderable card for the UI (last one wins). Strip it
                 // from the result so the model doesn't re-list the plan as text — the widget
@@ -371,6 +386,7 @@ final class AssistantLoop
                     'round' => $round + 1,
                     'name'  => $call['name'],
                     'args'  => mb_substr((string) $argsJson, 0, 400),
+                    'ms'    => (int) round($callMs),
                     'ok'    => !(is_array($result) && isset($result['error'])),
                     'error' => (is_array($result) && isset($result['error'])) ? (string) $result['error'] : null,
                 ];
@@ -395,6 +411,7 @@ final class AssistantLoop
             $contents[] = ['role' => 'user', 'parts' => $responseParts];
         }
 
+        $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
         $fallback = "Sorry — I couldn't complete that in a reasonable number of steps.";
         $this->lastAssistantMessageId = $this->conversations->addMessage(
             $conversationId,
@@ -406,6 +423,33 @@ final class AssistantLoop
         );
 
         return $fallback;
+    }
+
+    /**
+     * Records this turn's timing breakdown into diagnostics + the error log, so we can
+     * see where the time goes: Gemini HTTP (and how many round-trips), tool execution
+     * (external APIs), and everything else (buildContents, DB, our code). The last
+     * Gemini call's network split (conn/tls/think) shows distance-to-Google vs model.
+     */
+    private function recordTiming(float $tStart, float $geminiMs, int $geminiCalls, float $toolMs, int $reqKb): void
+    {
+        $totalMs = (microtime(true) - $tStart) * 1000;
+        $timing  = [
+            'total_ms'     => (int) round($totalMs),
+            'gemini_ms'    => (int) round($geminiMs),
+            'gemini_calls' => $geminiCalls,
+            'tools_ms'     => (int) round($toolMs),
+            'app_ms'       => (int) round(max(0, $totalMs - $geminiMs - $toolMs)),
+            'req_kb'       => $reqKb,
+            'net_last'     => GeminiClient::lastCallTiming(), // conn/tls/think of the last call
+        ];
+        if (is_array($this->lastDiagnostics)) {
+            $this->lastDiagnostics['timing'] = $timing;
+        }
+        error_log(sprintf(
+            'timing turn: total=%dms gemini=%dms(%d calls) tools=%dms app=%dms req=%dkb',
+            $timing['total_ms'], $timing['gemini_ms'], $geminiCalls, $timing['tools_ms'], $timing['app_ms'], $reqKb
+        ));
     }
 
     /** This turn's diagnostics as JSON for persistence, or null if none. */

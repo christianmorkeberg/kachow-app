@@ -256,8 +256,35 @@ final class GeminiClient
             throw new RuntimeException('Gemini request failed: ' . $error);
         }
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        // Timing breakdown so we can see WHERE Gemini calls spend time:
+        //   conn = DNS+TCP, tls = TLS handshake  → network distance to Google
+        //   think = time after the request is sent until the first byte → Gemini itself
+        // A fresh handle each call means every round re-pays conn+tls (no keep-alive).
+        $ms      = static fn (int $k): int => (int) round(((float) curl_getinfo($ch, $k)) * 1000);
+        $conn    = $ms(CURLINFO_CONNECT_TIME);
+        $appconn = $ms(CURLINFO_APPCONNECT_TIME);      // 0 if the connection was reused
+        $ttfb    = $ms(CURLINFO_STARTTRANSFER_TIME);
+        $total   = $ms(CURLINFO_TOTAL_TIME);
+        $tls     = $appconn > 0 ? max(0, $appconn - $conn) : 0;
+        $think   = max(0, $ttfb - ($appconn > 0 ? $appconn : $conn));
+        self::$lastCurlMs = ['conn' => $conn, 'tls' => $tls, 'think' => $think, 'total' => $total];
+        error_log(sprintf(
+            'timing gemini: conn=%dms tls=%dms think=%dms total=%dms http=%d',
+            $conn, $tls, $think, $total, $status
+        ));
+
         curl_close($ch);
 
         return [$status, (string) $body];
+    }
+
+    /** @var array{conn:int, tls:int, think:int, total:int}|null Timing of the last cURL call. */
+    private static ?array $lastCurlMs = null;
+
+    /** Timing (ms) of the most recent Gemini HTTP call, or null (e.g. injected transport). */
+    public static function lastCallTiming(): ?array
+    {
+        return self::$lastCurlMs;
     }
 }
