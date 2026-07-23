@@ -26,6 +26,18 @@ final class ToolSelector
      */
     private const ALWAYS = ['remember_about_me'];
 
+    /**
+     * Groups sent when NOTHING matched (a keyword-less / ambiguous turn). Bounding the
+     * fallback to the everyday domains keeps that request small instead of shipping all
+     * ~90 tools (a big, slow payload). The rarer/admin domains (wishlist, vinyls,
+     * connections, admin, devideas, settings, feedback) all have distinctive keywords,
+     * so a genuine request for them matches its group and never relies on the fallback.
+     */
+    private const CORE_FALLBACK = [
+        'workouts', 'shopping', 'calendar', 'weather', 'worktime', 'worklog',
+        'receipts', 'email', 'cycle', 'reminders', 'memory', 'instructions', 'profile',
+    ];
+
     /** group => tool names */
     private const GROUPS = [
         'workouts' => [
@@ -293,7 +305,10 @@ final class ToolSelector
         $groups = self::matchGroups($message, $recentContext);
 
         if ($groups === []) {
-            return $declarations; // ambiguous → send everything (safe)
+            // Ambiguous → the bounded everyday set instead of all ~90 tools (smaller,
+            // faster payload). The final safety net below still sends all if this
+            // somehow filters to nothing.
+            $groups = self::CORE_FALLBACK;
         }
 
         $allowed = [];
