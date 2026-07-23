@@ -33,6 +33,11 @@ final class GeminiClient
         // Low temperature keeps a factual, tool-grounded assistant from improvising
         // numbers/data. Override via GEMINI_TEMPERATURE if ever needed.
         private float $temperature = 0.2,
+        // Caps the model's internal "thinking" tokens. These are mostly lookup/tool
+        // tasks that don't need deep reasoning, and thinking dominates the response
+        // latency, so a low budget is much faster. null = leave the model default;
+        // 0 = thinking off; N>0 = token cap; -1 = dynamic. Set via GEMINI_THINKING_BUDGET.
+        private ?int $thinkingBudget = null,
     ) {
         $this->models = self::normalizeModels($models);
         $this->transport = $transport ?? [$this, 'curlTransport'];
@@ -52,7 +57,11 @@ final class GeminiClient
             ? (float) $_ENV['GEMINI_TEMPERATURE']
             : 0.2;
 
-        return new self($key, $models, $transport, $temperature);
+        $budget = isset($_ENV['GEMINI_THINKING_BUDGET']) && $_ENV['GEMINI_THINKING_BUDGET'] !== ''
+            ? (int) $_ENV['GEMINI_THINKING_BUDGET']
+            : null;
+
+        return new self($key, $models, $transport, $temperature, $budget);
     }
 
     /**
@@ -83,9 +92,19 @@ final class GeminiClient
     ): array {
         $model ??= $this->models[0];
 
+        $genConfig = array_merge(['temperature' => $this->temperature], $generationConfig ?? []);
+        // Apply the configured thinking budget, preserving any thinkingConfig keys
+        // (e.g. includeThoughts) the caller already set.
+        if ($this->thinkingBudget !== null) {
+            $genConfig['thinkingConfig'] = array_merge(
+                $genConfig['thinkingConfig'] ?? [],
+                ['thinkingBudget' => $this->thinkingBudget]
+            );
+        }
+
         $payload = [
             'contents'         => $contents,
-            'generationConfig' => array_merge(['temperature' => $this->temperature], $generationConfig ?? []),
+            'generationConfig' => $genConfig,
         ];
 
         if ($systemInstruction !== null && $systemInstruction !== '') {
