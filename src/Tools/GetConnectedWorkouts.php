@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\Connections;
 use App\Data\Workouts;
+use App\Support\OneRepMax;
 
 /**
  * Tool: read a connected person's workout history — only if they share workouts
@@ -30,7 +31,12 @@ final class GetConnectedWorkouts implements Tool
         return 'Gets the workout history of a person you are connected with, but only if they share '
             . 'their workouts with you. Identify them by email or name (see list_connections). Supports '
             . 'the same filters as your own history (exercise, date range, limit). Use for questions '
-            . 'like "how much did Alex squat last week?".';
+            . 'like "how much did Alex squat last week?". NOTE the other person may name exercises in '
+            . 'another language (e.g. Danish "Bænkpres" for bench press) — omit the exercise filter and '
+            . 'read it from the `records`. The result includes `records` per exercise: `heaviest`, '
+            . '`tested_1rm` (best actual 1-rep max, or null), and `est_1rm` (best Epley estimate). USE '
+            . 'these computed records for 1RM / PR / percentage answers — never re-derive from the raw '
+            . 'sets — and attribute them to THIS person only, never mixing with your own numbers.';
     }
 
     public function parameters(): array
@@ -62,6 +68,11 @@ final class GetConnectedWorkouts implements Tool
 
         $sets = $this->workouts->getHistory($access['owner_id'], $exercise, $from, $to, $limit);
 
-        return ['person' => $access['person'], 'count' => count($sets), 'sets' => $sets];
+        return [
+            'person'  => $access['person'],
+            'count'   => count($sets),
+            'records' => OneRepMax::records($sets),
+            'sets'    => $sets,
+        ];
     }
 }
