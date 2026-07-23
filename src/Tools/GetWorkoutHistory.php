@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\ExerciseAliases;
 use App\Data\Workouts;
+use App\Support\OneRepMax;
 
 /**
  * Tool: retrieve workout history. Thin wrapper over Data\Workouts::getHistory.
@@ -27,7 +28,12 @@ final class GetWorkoutHistory implements Tool
     {
         return "Retrieves the user's logged workout sets, newest first, optionally filtered by "
             . 'exercise and/or a date range. Use when the user asks about past performance, progress, '
-            . 'personal records, or what they lifted. Each row is a single set.';
+            . 'personal records, or what they lifted. Each row is a single set. The result also includes '
+            . '`records` (computed per exercise): `heaviest` (top set), `tested_1rm` (their best ACTUAL '
+            . '1-rep max, or null if never tested at 1 rep), and `est_1rm` (best Epley estimate with its '
+            . 'source set). For 1RM / PR / percentage questions, USE these computed records verbatim — do '
+            . 'NOT re-derive maxes or 1RMs from the raw sets yourself. "Real 1RM" = tested_1rm; '
+            . '"estimated 1RM" = est_1rm.';
     }
 
     public function parameters(): array
@@ -67,8 +73,9 @@ final class GetWorkoutHistory implements Tool
         $sets = $this->workouts->getHistory($userId, $exercise, $from, $to, $limit);
 
         return [
-            'count' => count($sets),
-            'sets'  => $sets,
+            'count'   => count($sets),
+            'records' => OneRepMax::records($sets),
+            'sets'    => $sets,
         ];
     }
 }

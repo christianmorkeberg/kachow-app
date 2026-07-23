@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Database;
+use App\Support\TextMatch;
 use PDO;
 
 /**
@@ -181,18 +182,38 @@ final class Connections
         }
 
         $entries = $this->listForUser($userId);
+
+        // 1) Exact email, then the email local-part (before @) — "astrid" ↔ astrid@…
         foreach ($entries as $entry) {
-            if (strtolower((string) $entry['person']['email']) === $needle) {
+            $email = strtolower((string) $entry['person']['email']);
+            if ($email === $needle || strtok($email, '@') === $needle) {
                 return $entry;
             }
         }
+        // 2) Exact (normalised) name.
+        $n = TextMatch::normalize($person);
         foreach ($entries as $entry) {
-            if (strtolower((string) ($entry['person']['name'] ?? '')) === $needle) {
+            if ($n !== '' && TextMatch::normalize((string) ($entry['person']['name'] ?? '')) === $n) {
                 return $entry;
+            }
+        }
+        // 3) Loose match (name token, prefix either way, or fuzzy) — but ONLY if it
+        //    resolves to exactly one connection, so a nickname like "Astrid" finds
+        //    "Astriffer" without ever guessing the wrong person.
+        $loose = [];
+        foreach ($entries as $i => $entry) {
+            $name = TextMatch::normalize((string) ($entry['person']['name'] ?? ''));
+            if ($name === '' || $n === '') {
+                continue;
+            }
+            $tokenHit  = in_array($n, explode(' ', $name), true);
+            $prefixHit = mb_strlen($n) >= 3 && (str_starts_with($name, $n) || str_starts_with($n, $name));
+            if ($tokenHit || $prefixHit || TextMatch::similar($person, (string) ($entry['person']['name'] ?? ''), 60.0)) {
+                $loose[$i] = $entry;
             }
         }
 
-        return null;
+        return count($loose) === 1 ? reset($loose) : null;
     }
 
     /**
