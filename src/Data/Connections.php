@@ -18,8 +18,13 @@ use PDO;
  */
 final class Connections
 {
-    /** Apps that can be shared over a connection. */
-    public const APPS = ['workouts', 'wishlist', 'calendar', 'cycle'];
+    /**
+     * Scopes that can be shared over a connection. Most are READ scopes ("they can
+     * see my X"); `workouts_log` is a WRITE grant ("they may log workouts FOR me") —
+     * deliberately separate from the `workouts` read scope so viewing and writing are
+     * two distinct, explicit opt-ins.
+     */
+    public const APPS = ['workouts', 'workouts_log', 'wishlist', 'calendar', 'cycle'];
 
     private PDO $db;
 

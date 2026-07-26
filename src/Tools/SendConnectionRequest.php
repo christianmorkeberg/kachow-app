@@ -30,7 +30,8 @@ final class SendConnectionRequest implements Tool
         return 'Sends a connection request to another existing user by their email (and emails them a '
             . 'notification to sign in and accept), so you can share data with each other (e.g. workout '
             . 'stats). Specify what YOU want to share via "share" (any of: workouts, wishlist, calendar, '
-            . 'cycle — "cycle" shares your menstrual cycle status, only if explicitly asked). '
+            . 'cycle, workouts_log — "cycle" shares your menstrual cycle status, only if explicitly asked; '
+            . '"workouts_log" lets them log workouts for you, a write grant, only if asked). '
             . 'They must accept and choose what they share back. If the person has no account yet, use '
             . 'create_invite first (admin only). Defaults to sharing workouts if "share" is omitted.';
     }
@@ -47,7 +48,7 @@ final class SendConnectionRequest implements Tool
                 'share' => [
                     'type'        => 'array',
                     'description' => 'What you want to share with them: any of "workouts", "wishlist", '
-                        . '"calendar", "cycle".',
+                        . '"calendar", "cycle", "workouts_log" (lets them log workouts for you).',
                     'items'       => ['type' => 'string'],
                 ],
             ],

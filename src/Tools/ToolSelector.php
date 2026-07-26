@@ -43,7 +43,7 @@ final class ToolSelector
         'workouts' => [
             'log_workout', 'get_workout_history', 'get_workout_progress', 'merge_exercises',
             'update_workout', 'delete_workout',
-            'get_connected_workouts', 'get_connected_workout_progress',
+            'get_connected_workouts', 'get_connected_workout_progress', 'log_connected_workout',
             'create_workout_plan', 'get_workout_plan', 'get_week_plan', 'check_off_exercise',
             'uncheck_exercise', 'add_plan_exercise', 'remove_plan_exercise', 'delete_workout_plan',
         ],

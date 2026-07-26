@@ -17,10 +17,18 @@ use App\Data\Connections;
 final class ConnectionAccess
 {
     /**
+     * @param string|null $denyMessage Custom error when the scope isn't granted
+     *                                  (e.g. for a write grant, where "they don't
+     *                                  share their workouts_log with you" reads badly).
      * @return array{owner_id: int, person: array<string, mixed>}|array{error: string}
      */
-    public static function resolve(Connections $connections, int $viewerId, string $person, string $app): array
-    {
+    public static function resolve(
+        Connections $connections,
+        int $viewerId,
+        string $person,
+        string $app,
+        ?string $denyMessage = null
+    ): array {
         $person = trim($person);
         if ($person === '') {
             return ['error' => 'Specify who (email or name).'];
@@ -36,7 +44,7 @@ final class ConnectionAccess
 
         $ownerId = (int) $entry['person']['id'];
         if (!in_array($app, $connections->sharedScopes($ownerId, $viewerId), true)) {
-            return ['error' => 'They do not share their ' . $app . ' with you.'];
+            return ['error' => $denyMessage ?? ('They do not share their ' . $app . ' with you.')];
         }
 
         return ['owner_id' => $ownerId, 'person' => $entry['person']];
