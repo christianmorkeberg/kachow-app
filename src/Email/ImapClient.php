@@ -97,6 +97,12 @@ final class ImapClient
         return $this->firstLiteral($raw);
     }
 
+    /** Mark a message (by UID) as read by setting the \Seen flag. */
+    public function storeSeen(int $uid): void
+    {
+        $this->command('UID STORE ' . $uid . ' +FLAGS (\\Seen)');
+    }
+
     /**
      * List mailboxes with their attribute flags (e.g. \Drafts special-use).
      *

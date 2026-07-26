@@ -111,6 +111,13 @@ final class EmailService
         return $provider->get($messageId);
     }
 
+    /** Mark a message read/seen. Best-effort; never critical to the caller. */
+    public function markRead(int $userId, ?int $accountId, string $messageId): void
+    {
+        [$account, $provider] = $this->resolve($userId, $accountId);
+        $provider->markRead($messageId);
+    }
+
     /** @return array{account_id:int, account_email:string, draft_id:string} */
     public function createDraft(int $userId, ?int $accountId, EmailDraft $draft): array
     {

@@ -94,6 +94,16 @@ final class OutlookProvider implements EmailProvider
         );
     }
 
+    public function markRead(string $messageId): void
+    {
+        MsGraph::request(
+            $this->accessToken,
+            'PATCH',
+            '/me/messages/' . rawurlencode($messageId),
+            ['isRead' => true],
+        );
+    }
+
     public function createDraft(EmailDraft $draft): string
     {
         $created = MsGraph::request($this->accessToken, 'POST', '/me/messages', $this->messageBody($draft));

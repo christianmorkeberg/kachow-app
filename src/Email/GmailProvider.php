@@ -9,6 +9,7 @@ use Google\Client as GoogleClient;
 use Google\Service\Gmail;
 use Google\Service\Gmail\Draft as GmailDraft;
 use Google\Service\Gmail\Message as GmailMessage;
+use Google\Service\Gmail\ModifyMessageRequest;
 use RuntimeException;
 
 /**
@@ -17,9 +18,10 @@ use RuntimeException;
  * access token per instance. Reuses the same google/apiclient library already
  * used for Calendar.
  *
- * Scopes requested at connect time are readonly + compose (drafts). Sending is
- * gated upstream by EmailService's lock — this class will happily send if asked,
- * so it must only be reached through the service.
+ * Scopes requested at connect time are modify + compose (drafts) — modify so an
+ * opened message can be marked read. Sending is gated upstream by EmailService's
+ * lock — this class will happily send if asked, so it must only be reached through
+ * the service.
  */
 final class GmailProvider implements EmailProvider
 {
@@ -91,6 +93,13 @@ final class GmailProvider implements EmailProvider
             bodyText: $body,
             bodyHtml: $html,
         );
+    }
+
+    public function markRead(string $messageId): void
+    {
+        // Removing the UNREAD label is Gmail's "mark as read".
+        $req = new ModifyMessageRequest(['removeLabelIds' => ['UNREAD']]);
+        $this->service->users_messages->modify('me', $messageId, $req);
     }
 
     public function createDraft(EmailDraft $draft): string

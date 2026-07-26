@@ -14,8 +14,10 @@ use RuntimeException;
  * the calendar flow in GoogleOAuth, and stored per-account in email_accounts,
  * not on the user row).
  *
- * Scopes: gmail.readonly + gmail.compose (drafts). NOT gmail.send — sending is
- * kept out of the grant for now; drafting is the ceiling. Reuses the same
+ * Scopes: gmail.modify + gmail.compose (drafts). modify (a superset of readonly)
+ * is needed to mark messages read when the user opens them; it still can't
+ * permanently delete. NOT gmail.send — sending is kept out of the grant; drafting
+ * is the ceiling. Reuses the same
  * redirect URI as calendar (/api/google-callback.php), which google-callback.php
  * routes by intent, so no new redirect URI needs registering in the console.
  */
@@ -71,7 +73,7 @@ final class GmailConnect
             throw new RuntimeException('No refresh token returned. Re-authorize with prompt=consent.');
         }
 
-        // Identify the granted mailbox via the Gmail profile (readonly scope covers it).
+        // Identify the granted mailbox via the Gmail profile (modify scope covers it).
         $profile = (new Gmail($client))->users->getProfile('me');
         $email   = (string) $profile->getEmailAddress();
         if ($email === '') {
@@ -89,8 +91,8 @@ final class GmailConnect
         $client->setClientId($this->clientId);
         $client->setClientSecret($this->clientSecret);
         $client->setRedirectUri($this->redirectUri);
-        // Read + draft. Deliberately no gmail.send while sending is locked.
-        $client->setScopes([Gmail::GMAIL_READONLY, Gmail::GMAIL_COMPOSE]);
+        // Read/modify (to mark opened mail read) + draft. Deliberately no gmail.send.
+        $client->setScopes([Gmail::GMAIL_MODIFY, Gmail::GMAIL_COMPOSE]);
         $client->setAccessType('offline');
         $client->setPrompt('consent');
         $client->setIncludeGrantedScopes(true);

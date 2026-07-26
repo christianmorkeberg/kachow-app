@@ -26,6 +26,13 @@ interface EmailProvider
     /** A single message with its plain-text body, or null if not found. */
     public function get(string $messageId): ?EmailMessage;
 
+    /**
+     * Mark a message as read/seen in the mailbox. Best-effort — implementations
+     * throw on hard failure so the caller can log it, but callers treat it as
+     * non-critical (a failed mark must never break opening the mail).
+     */
+    public function markRead(string $messageId): void;
+
     /** Save a draft in the mailbox's Drafts folder; returns the provider draft id. */
     public function createDraft(EmailDraft $draft): string;
 

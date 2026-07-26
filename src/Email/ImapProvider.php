@@ -111,6 +111,16 @@ final class ImapProvider implements EmailProvider
         );
     }
 
+    public function markRead(string $messageId): void
+    {
+        $uid = (int) $messageId;
+        if ($uid <= 0) {
+            return;
+        }
+        $this->client->select('INBOX');
+        $this->client->storeSeen($uid);
+    }
+
     public function createDraft(EmailDraft $draft): string
     {
         $raw  = $this->rawFor($draft);
