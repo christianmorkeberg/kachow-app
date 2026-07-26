@@ -76,6 +76,8 @@ $cases = [
     ['msg' => 'how much did Alex squat last week?', 'expect' => 'workouts'],
     ['msg' => 'jeg løftede 100 kg i dødløft', 'expect' => 'workouts'],
     ['msg' => 'show my bench progression', 'expect' => 'workouts'],
+    ['msg' => "show Alex's bench progression", 'expect' => 'workouts'],
+    ['msg' => 'vis Alex fremgang i bænkpres', 'expect' => 'workouts'],
     ['msg' => 'am I getting stronger on squats?', 'expect' => 'workouts'],
     ['msg' => 'how has my deadlift trended over time?', 'expect' => 'workouts'],
     ['msg' => 'bliver jeg stærkere i bænkpres?', 'expect' => 'workouts'],
