@@ -104,6 +104,28 @@ final class OutlookProvider implements EmailProvider
         );
     }
 
+    public function markAllRead(int $limit = 100): int
+    {
+        $path = '/me/mailFolders/inbox/messages?$filter=' . rawurlencode('isRead eq false')
+            . '&$select=id&$top=' . max(1, min($limit, 100));
+        $res   = MsGraph::request($this->accessToken, 'GET', $path);
+        $count = 0;
+        foreach ($res['value'] ?? [] as $m) {
+            $id = (string) ($m['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+            try {
+                $this->markRead($id);
+                $count++;
+            } catch (\Throwable $e) {
+                error_log('OutlookProvider markAllRead: ' . $e->getMessage());
+            }
+        }
+
+        return $count;
+    }
+
     public function createDraft(EmailDraft $draft): string
     {
         $created = MsGraph::request($this->accessToken, 'POST', '/me/messages', $this->messageBody($draft));

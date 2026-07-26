@@ -33,6 +33,12 @@ interface EmailProvider
      */
     public function markRead(string $messageId): void;
 
+    /**
+     * Mark all currently-unread inbox messages as read (up to $limit, newest
+     * first). Returns how many were marked.
+     */
+    public function markAllRead(int $limit = 100): int;
+
     /** Save a draft in the mailbox's Drafts folder; returns the provider draft id. */
     public function createDraft(EmailDraft $draft): string;
 

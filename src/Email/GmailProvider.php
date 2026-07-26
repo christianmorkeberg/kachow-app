@@ -7,6 +7,7 @@ namespace App\Email;
 use DateTimeImmutable;
 use Google\Client as GoogleClient;
 use Google\Service\Gmail;
+use Google\Service\Gmail\BatchModifyMessagesRequest;
 use Google\Service\Gmail\Draft as GmailDraft;
 use Google\Service\Gmail\Message as GmailMessage;
 use Google\Service\Gmail\ModifyMessageRequest;
@@ -100,6 +101,27 @@ final class GmailProvider implements EmailProvider
         // Removing the UNREAD label is Gmail's "mark as read".
         $req = new ModifyMessageRequest(['removeLabelIds' => ['UNREAD']]);
         $this->service->users_messages->modify('me', $messageId, $req);
+    }
+
+    public function markAllRead(int $limit = 100): int
+    {
+        $ids = [];
+        $list = $this->service->users_messages->listUsersMessages('me', [
+            'maxResults' => max(1, min($limit, 200)),
+            'labelIds'   => 'INBOX',
+            'q'          => 'is:unread',
+        ]);
+        foreach ($list->getMessages() ?? [] as $ref) {
+            $ids[] = (string) $ref->getId();
+        }
+        if ($ids === []) {
+            return 0;
+        }
+        // One batch call strips UNREAD from all of them.
+        $req = new BatchModifyMessagesRequest(['ids' => $ids, 'removeLabelIds' => ['UNREAD']]);
+        $this->service->users_messages->batchModify('me', $req);
+
+        return count($ids);
     }
 
     public function createDraft(EmailDraft $draft): string

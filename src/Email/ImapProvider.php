@@ -121,6 +121,19 @@ final class ImapProvider implements EmailProvider
         $this->client->storeSeen($uid);
     }
 
+    public function markAllRead(int $limit = 100): int
+    {
+        $this->client->select('INBOX');
+        $uids = $this->client->searchUids('UNSEEN');
+        if ($uids === []) {
+            return 0;
+        }
+        $uids = array_slice($uids, -max(1, $limit)); // most recent N unread
+        $this->client->storeSeenMany($uids);
+
+        return count($uids);
+    }
+
     public function createDraft(EmailDraft $draft): string
     {
         $raw  = $this->rawFor($draft);

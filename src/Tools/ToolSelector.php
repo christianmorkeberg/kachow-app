@@ -95,7 +95,7 @@ final class ToolSelector
             'add_expense', 'update_receipt', 'delete_receipt', 'get_expenses', 'export_expenses_csv',
         ],
         'email' => [
-            'get_emails', 'read_email', 'draft_email', 'send_email', 'list_email_accounts',
+            'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
         ],
         'cycle' => [
             'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle', 'log_cycle_day',
@@ -247,8 +247,10 @@ final class ToolSelector
         'email' => [
             'email', 'e-mail', ' mail', 'inbox', 'gmail', 'outlook', 'hotmail', 'unread',
             'reply to', 'draft', 'compose', 'my messages', 'new mail', 'check my mail',
+            'mark as read', 'mark read', 'mark them all as read',
             // Danish (indbakke=inbox, ulæst=unread, skriv til=write to, svar på=reply to)
             'indbakke', 'ulæst', 'skriv en mail', 'skriv til', 'svar på mail', 'post fra', 'e-post',
+            'markér som læst', 'marker som læst', 'markér alle som læst',
         ],
         // Menstrual cycle tracking. " cycle" is space-padded so it doesn't match inside
         // bicycle/recycle/motorcycle; "period" is common enough in context to include.

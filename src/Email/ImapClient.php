@@ -104,6 +104,20 @@ final class ImapClient
     }
 
     /**
+     * Mark many messages read in one command (UID set is comma-separated).
+     *
+     * @param array<int, int> $uids
+     */
+    public function storeSeenMany(array $uids): void
+    {
+        $uids = array_values(array_filter(array_map('intval', $uids), static fn (int $u): bool => $u > 0));
+        if ($uids === []) {
+            return;
+        }
+        $this->command('UID STORE ' . implode(',', $uids) . ' +FLAGS (\\Seen)');
+    }
+
+    /**
      * List mailboxes with their attribute flags (e.g. \Drafts special-use).
      *
      * @return array<int, array{flags:string, name:string}>

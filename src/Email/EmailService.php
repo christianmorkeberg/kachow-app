@@ -118,6 +118,39 @@ final class EmailService
         $provider->markRead($messageId);
     }
 
+    /**
+     * Mark specific messages read. Returns how many succeeded (per-id best-effort).
+     *
+     * @param array<int, string> $messageIds
+     */
+    public function markReadMany(int $userId, ?int $accountId, array $messageIds): int
+    {
+        [$account, $provider] = $this->resolve($userId, $accountId);
+        $count = 0;
+        foreach ($messageIds as $id) {
+            $id = trim((string) $id);
+            if ($id === '') {
+                continue;
+            }
+            try {
+                $provider->markRead($id);
+                $count++;
+            } catch (\Throwable $e) {
+                error_log('markReadMany: ' . $e->getMessage());
+            }
+        }
+
+        return $count;
+    }
+
+    /** Mark all unread inbox messages read. Returns how many were marked. */
+    public function markAllRead(int $userId, ?int $accountId, int $limit = 100): int
+    {
+        [$account, $provider] = $this->resolve($userId, $accountId);
+
+        return $provider->markAllRead($limit);
+    }
+
     /** @return array{account_id:int, account_email:string, draft_id:string} */
     public function createDraft(int $userId, ?int $accountId, EmailDraft $draft): array
     {

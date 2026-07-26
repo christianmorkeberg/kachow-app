@@ -146,6 +146,7 @@ final class ToolRegistry
         $registry->register(new ExportExpensesCsv($receipts));
         $registry->register(new GetEmails($email));
         $registry->register(new ReadEmail($email));
+        $registry->register(new MarkEmailsRead($email));
         $registry->register(new DraftEmail($email));
         $registry->register(new SendEmail($email));
         $registry->register(new ListEmailAccounts($email));
