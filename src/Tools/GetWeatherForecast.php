@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
-use App\Weather\Dmi;
+use App\Weather\WeatherService;
 
 /**
- * Tool: weather FORECAST for the coming hours/days from DMI's HARMONIE model.
- * Complements get_current_weather (which is observations right now).
+ * Tool: weather FORECAST for the coming hours/days. Prefers DMI's HARMONIE model,
+ * falling back to Open-Meteo when DMI is busy or the location is outside its reach.
+ * Complements get_current_weather (which is conditions right now).
  */
 final class GetWeatherForecast implements Tool
 {
-    public function __construct(private Dmi $dmi)
+    public function __construct(private WeatherService $weather)
     {
     }
 
@@ -23,12 +24,13 @@ final class GetWeatherForecast implements Tool
 
     public function description(): string
     {
-        return 'Gets the weather FORECAST for the next ~2.5 days from DMI (temperature, rain, wind, '
-            . 'cloud cover) — as a few upcoming hourly steps plus a per-day summary. Use for anything '
-            . 'about the future: later today, tonight, tomorrow, the weekend. For conditions right now, '
-            . 'use get_current_weather instead. Provide latitude and longitude — the user\'s device '
-            . 'location if given, otherwise the place they mention. Covers Denmark and nearby. Times '
-            . 'are local (Denmark).';
+        return 'Gets the weather FORECAST for the next few days (temperature, rain, wind, cloud '
+            . 'cover) — as a few upcoming hourly steps plus a per-day summary. Uses DMI and '
+            . 'automatically falls back to Open-Meteo when DMI is busy or the location is elsewhere, '
+            . 'so it works worldwide. Use for anything about the future: later today, tonight, '
+            . 'tomorrow, the weekend. For conditions right now, use get_current_weather instead. '
+            . 'Provide latitude and longitude — the user\'s device location if given, otherwise the '
+            . 'place they mention. Times are local.';
     }
 
     public function parameters(): array
@@ -54,20 +56,21 @@ final class GetWeatherForecast implements Tool
         $lat = (float) $arguments['latitude'];
         $lon = (float) $arguments['longitude'];
 
-        $fc = $this->dmi->forecast($lat, $lon);
+        $fc = $this->weather->forecast($lat, $lon);
         if ($fc === []) {
-            return ['error' => 'No forecast is available for that location (DMI covers Denmark and nearby).'];
+            return ['error' => 'No forecast is available for that location right now. Please try again shortly.'];
         }
 
         // Prefer a place the model named; otherwise (e.g. device location) label it
         // with the nearest weather station so the card doesn't read "that location".
         $place = trim((string) ($arguments['place'] ?? ''));
         if ($place === '') {
-            $place = $this->nearestPlace($lat, $lon);
+            $place = $this->weather->nearestPlaceLabel($lat, $lon);
         }
 
         return [
             'place'   => $place !== '' ? $place : 'your location',
+            'source'  => $fc['source'] ?? null,
             'issued'  => $fc['issued'],
             'hourly'  => $fc['hourly'],
             'daily'   => $fc['daily'],
@@ -81,17 +84,5 @@ final class GetWeatherForecast implements Tool
                 'days'    => $fc['daily'],
             ],
         ];
-    }
-
-    /** Nearest station name for a nice card label, or '' if unavailable. */
-    private function nearestPlace(float $lat, float $lon): string
-    {
-        try {
-            $stations = $this->dmi->nearbyStations($lat, $lon, 1);
-
-            return $stations !== [] ? (string) $stations[0]['name'] : '';
-        } catch (\Throwable $e) {
-            return ''; // never let labelling break the forecast
-        }
     }
 }

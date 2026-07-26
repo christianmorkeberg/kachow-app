@@ -4,21 +4,20 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
-use App\Weather\Dmi;
+use App\Weather\WeatherService;
 
 /**
- * Tool: current weather from DMI (Danish Meteorological Institute) observations,
- * for the nearest Synop station to a lat/lon.
+ * Tool: current weather for a lat/lon. Prefers DMI (Danish Meteorological
+ * Institute) observations from the nearest station; falls back to Open-Meteo when
+ * DMI is busy or the location is outside Denmark — so it works worldwide.
  *
  * The model supplies latitude/longitude — either from the user's device location
  * (injected into the system prompt) or from a place the user names. This gives
- * observed conditions right now, not a forecast.
+ * conditions right now, not a forecast.
  */
 final class GetCurrentWeather implements Tool
 {
-    private const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-
-    public function __construct(private Dmi $dmi)
+    public function __construct(private WeatherService $weather)
     {
     }
 
@@ -29,11 +28,11 @@ final class GetCurrentWeather implements Tool
 
     public function description(): string
     {
-        return 'Gets the current (observed) weather in Denmark from DMI: temperature, wind, '
-            . 'humidity, rain in the last hour, and pressure, from the nearest weather station. '
-            . 'Provide latitude and longitude — use the user\'s device location if it is given to '
-            . 'you, otherwise the coordinates of the place they mention. This is live observations, '
-            . 'not a forecast, and covers Denmark only.';
+        return 'Gets the current weather: temperature, wind, humidity, recent rain, and pressure. '
+            . 'Uses DMI weather-station observations in Denmark and automatically falls back to '
+            . 'Open-Meteo elsewhere or when DMI is busy, so it works worldwide. Provide latitude and '
+            . 'longitude — use the user\'s device location if it is given to you, otherwise the '
+            . 'coordinates of the place they mention. This is current conditions, not a forecast.';
     }
 
     public function parameters(): array
@@ -58,67 +57,48 @@ final class GetCurrentWeather implements Tool
         $lat = (float) $arguments['latitude'];
         $lon = (float) $arguments['longitude'];
 
-        $stations = $this->dmi->nearbyStations($lat, $lon);
-        if ($stations === []) {
-            return ['error' => 'No Danish weather station found near there. DMI covers Denmark only.'];
+        $cur = $this->weather->current($lat, $lon);
+        if ($cur === null) {
+            return ['error' => 'I couldn\'t get the weather for that location right now. Please try again shortly.'];
         }
 
-        // Try nearest-first until a station actually has recent readings.
-        $station = null;
-        $obs     = [];
-        foreach ($stations as $candidate) {
-            $obs = $this->dmi->latestObservations($candidate['id']);
-            if ($obs !== []) {
-                $station = $candidate;
-                break;
-            }
-        }
-        if ($station === null) {
-            return ['error' => 'No recent readings from any weather station near there right now.'];
+        $place = trim((string) ($arguments['place'] ?? ''));
+        if ($place === '') {
+            $place = ($cur['place'] ?? '') !== '' ? (string) $cur['place'] : 'your location';
         }
 
-        $val = static fn (string $p) => isset($obs[$p]) ? $obs[$p]['value'] : null;
-
-        $result = [
-            'place'             => (string) ($arguments['place'] ?? '') ?: $station['name'],
-            'station'           => $station['name'],
-            'distance_km'       => $station['distance_km'],
-            'observed'          => $obs['temp_dry']['observed'] ?? reset($obs)['observed'] ?? null,
-            'temperature_c'     => $val('temp_dry'),
-            'temp_max_1h_c'     => $val('temp_max_past1h'),
-            'temp_min_1h_c'     => $val('temp_min_past1h'),
-            'precip_past1h_mm'  => $val('precip_past1h'),
-            'humidity_pct'      => $val('humidity'),
-            'wind_ms'           => $val('wind_speed'),
-            'wind_from'         => $val('wind_dir') !== null ? self::compass((float) $val('wind_dir')) : null,
-            'pressure_hpa'      => $val('pressure_at_sea'),
-        ];
+        // Drop keys we couldn't measure so the model doesn't report nulls.
+        $result = array_filter([
+            'place'            => $place,
+            'source'           => $cur['source'] ?? null,
+            'station'          => $cur['station'] ?? null,
+            'distance_km'      => $cur['distance_km'] ?? null,
+            'observed'         => $cur['observed'] ?? null,
+            'temperature_c'    => $cur['temp_c'] ?? null,
+            'precip_past1h_mm' => $cur['precip_mm'] ?? null,
+            'humidity_pct'     => $cur['humidity_pct'] ?? null,
+            'wind_ms'          => $cur['wind_ms'] ?? null,
+            'wind_from'        => $cur['wind_from'] ?? null,
+            'pressure_hpa'     => $cur['pressure_hpa'] ?? null,
+        ], static fn ($v): bool => $v !== null && $v !== '');
 
         // Interactive weather card for the chat (the model gets the numbers too, but
         // should summarise rather than recite them — the card shows the detail).
         $result['_render'] = [
             'kind'    => 'weather',
-            'title'   => $result['place'],
+            'title'   => $place,
             'current' => array_filter([
-                'temp_c'       => $val('temp_dry'),
-                'precip_mm'    => $val('precip_past1h'),
-                'humidity_pct' => $val('humidity'),
-                'wind_ms'      => $val('wind_speed'),
-                'wind_from'    => $result['wind_from'],
-                'station'      => $station['name'],
-                'observed'     => $result['observed'],
+                'temp_c'       => $cur['temp_c'] ?? null,
+                'precip_mm'    => $cur['precip_mm'] ?? null,
+                'humidity_pct' => $cur['humidity_pct'] ?? null,
+                'wind_ms'      => $cur['wind_ms'] ?? null,
+                'wind_from'    => $cur['wind_from'] ?? null,
+                'station'      => $cur['station'] ?? null,
+                'observed'     => $cur['observed'] ?? null,
             ], static fn ($v): bool => $v !== null && $v !== ''),
             'days'    => [],
         ];
 
-        // Drop keys we couldn't measure so the model doesn't report nulls.
-        return array_filter($result, static fn ($v): bool => $v !== null && $v !== '');
-    }
-
-    private static function compass(float $deg): string
-    {
-        $i = (int) round(($deg % 360) / 45) % 8;
-
-        return self::COMPASS[$i];
+        return $result;
     }
 }

@@ -32,6 +32,8 @@ use App\Mail\Mailer;
 use App\Music\Discogs;
 use App\Receipts\ReceiptStorage;
 use App\Weather\Dmi;
+use App\Weather\OpenMeteo;
+use App\Weather\WeatherService;
 use InvalidArgumentException;
 
 /**
@@ -122,8 +124,10 @@ final class ToolRegistry
         $registry->register(new RemoveFromShoppingList($connections, $shoppingLists));
         $registry->register(new ClearCheckedItems($connections, $shoppingLists));
         $registry->register(new DeleteShoppingList($connections, $shoppingLists));
-        $registry->register(new GetCurrentWeather($weather));
-        $registry->register(new GetWeatherForecast($weather));
+        // DMI with automatic Open-Meteo failover (rate limits / non-DK locations).
+        $weatherService = new WeatherService($weather, new OpenMeteo());
+        $registry->register(new GetCurrentWeather($weatherService));
+        $registry->register(new GetWeatherForecast($weatherService));
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new LogWorkEvent($workEvents));
