@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Auth\GoogleOAuth;
+use DateTimeImmutable;
 use Google\Service\Calendar as GoogleCalendar;
 use Google\Service\Calendar\Event as GoogleEvent;
 use Google\Service\Exception as GoogleServiceException;
@@ -156,17 +157,39 @@ final class Calendar
         ?string $description = null,
         ?string $location = null,
         string $timeZone = 'UTC',
-        string $calendarId = self::PRIMARY
+        string $calendarId = self::PRIMARY,
+        bool $allDay = false
     ): array {
         $service = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
 
-        $event = new GoogleEvent([
-            'summary'     => $summary,
-            'description' => $description,
-            'location'    => $location,
-            'start'       => ['dateTime' => $start, 'timeZone' => $timeZone],
-            'end'         => ['dateTime' => $end,   'timeZone' => $timeZone],
-        ]);
+        if ($allDay) {
+            // All-day events use date-only fields (no time, no timezone) so they never
+            // drift with the viewer's zone. `end.date` is EXCLUSIVE in Google's API, so
+            // we treat the given `end` as the LAST day (inclusive) and add one day — a
+            // single all-day event just has start == end.
+            $startDate    = substr(trim($start), 0, 10);
+            $endInclusive = substr(trim($end), 0, 10);
+            if ($endInclusive < $startDate) {
+                $endInclusive = $startDate;
+            }
+            $endExclusive = (new DateTimeImmutable($endInclusive))->modify('+1 day')->format('Y-m-d');
+
+            $event = new GoogleEvent([
+                'summary'     => $summary,
+                'description' => $description,
+                'location'    => $location,
+                'start'       => ['date' => $startDate],
+                'end'         => ['date' => $endExclusive],
+            ]);
+        } else {
+            $event = new GoogleEvent([
+                'summary'     => $summary,
+                'description' => $description,
+                'location'    => $location,
+                'start'       => ['dateTime' => $start, 'timeZone' => $timeZone],
+                'end'         => ['dateTime' => $end,   'timeZone' => $timeZone],
+            ]);
+        }
 
         $targetId = $calendarId !== '' ? $calendarId : self::PRIMARY;
         $created  = $service->events->insert($targetId, $event);
