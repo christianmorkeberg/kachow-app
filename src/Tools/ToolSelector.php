@@ -282,10 +282,14 @@ final class ToolSelector
         // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
         'feedback' => [
             'feedback report', 'feedback reports', 'user reports', 'bug report', 'bug reports',
-            'reported', 'any feedback', 'what did users report', 'diagnostics', 'thought logging',
-            'capture thoughts', 'mark report',
+            'error report', 'error reports', 'reported', 'any feedback', 'what did users report',
+            'diagnostics', 'thought logging', 'capture thoughts', 'mark report',
+            // "report(ed) to the developer" phrasings — distinct from dev ideas.
+            'to the developer', 'to developer', 'report anything', 'did anyone report',
+            'any reports', 'reports from users',
             // Danish
-            'feedback', 'fejlrapport', 'brugerrapport', 'rapporter', 'hvad har brugerne rapporteret',
+            'feedback', 'fejlrapport', 'fejlrapporter', 'brugerrapport', 'rapporter',
+            'hvad har brugerne rapporteret', 'til udvikleren', 'rapporteret noget',
         ],
     ];
 

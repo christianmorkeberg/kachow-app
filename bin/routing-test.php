@@ -144,6 +144,9 @@ $cases = [
 
     // ---- feedback (developer/admin) ----
     ['msg' => 'any feedback reports?', 'expect' => 'feedback'],
+    ['msg' => 'show me the error reports', 'expect' => 'feedback'],
+    ['msg' => 'did user report anything to the developer?', 'expect' => 'feedback'],
+    ['msg' => 'er der nye fejlrapporter?', 'expect' => 'feedback'],
     ['msg' => 'what did users report', 'expect' => 'feedback'],
     ['msg' => 'turn off thought logging', 'expect' => 'feedback'],
     ['msg' => 'mark report 3 as done', 'expect' => 'feedback'],
