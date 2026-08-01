@@ -46,6 +46,15 @@ final class Notifier
         return $this->deliver($userId, 'test', 'Kachow', 'Notifications are working ✅', '/');
     }
 
+    /**
+     * Sends a test push that DEEP-LINKS to a card, to verify tapping opens the card
+     * (not just the app). Ignores preferences. Defaults to last week's work summary.
+     */
+    public function sendTestCard(int $userId, string $cardKey = 'work_week'): int
+    {
+        return $this->deliver($userId, 'test', 'Kachow', 'Tap to open your card 👉', '/?card=' . $cardKey);
+    }
+
     /** Fans a payload out to every device, pruning any that have expired. */
     private function deliver(int $userId, string $type, string $title, string $body, ?string $url): int
     {
