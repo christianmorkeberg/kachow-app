@@ -244,9 +244,10 @@ final class AssistantLoop
     }
 
     /**
-     * @param array{lat: float, lon: float}|null $location optional device location (browser geolocation)
+     * @param array{lat: float, lon: float}|null                 $location optional device location (browser geolocation)
+     * @param array{mime: string, data: string}|null             $image    optional attached photo (base64), read multimodally this turn
      */
-    public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null): string
+    public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null, ?array $image = null): string
     {
         $tStart = microtime(true);
         $this->lastUserMessageId = $this->conversations->addMessage($conversationId, 'user', $userMessage);
@@ -254,18 +255,42 @@ final class AssistantLoop
         $this->lastSuggestions = null;
         $this->lastAssistantMessageId = null;
 
-        $contents     = $this->buildContents($conversationId);
+        $contents = $this->buildContents($conversationId);
+        $hasImage = $image !== null && isset($image['mime'], $image['data']) && $image['data'] !== '';
+        if ($hasImage) {
+            // Attach the uploaded photo to the current (last) user turn so the model
+            // reads it this turn. It's NOT persisted to history — only the text row is,
+            // like receipt photos — so it isn't replayed on later turns.
+            for ($i = count($contents) - 1; $i >= 0; $i--) {
+                if (($contents[$i]['role'] ?? '') === 'user') {
+                    $contents[$i]['parts'][] = ['inline_data' => [
+                        'mime_type' => (string) $image['mime'],
+                        'data'      => (string) $image['data'],
+                    ]];
+                    break;
+                }
+            }
+        }
+
         // Send only the tools relevant to this message (falls back to all if unsure).
         // Include a little prior context so keyword-less follow-ups ("and tomorrow?")
         // keep the previous turn's domain tools available.
         $recent = $this->recentUserContext($contents);
         // Observability: log which groups matched (or the all-tools fallback) so
         // mis-routes are visible in production, not just guessed at.
-        $groups = ToolSelector::matchGroups($userMessage, $recent);
+        if ($hasImage) {
+            // A photo can't be keyword-routed (the caption may be empty or unrelated to
+            // its content), so hand the model the full toolset — it decides what the
+            // image implies (event, list item, reminder, expense…).
+            $groups       = ['IMAGE (all tools)'];
+            $declarations = $this->tools->declarations();
+        } else {
+            $groups       = ToolSelector::matchGroups($userMessage, $recent);
+            $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent);
+        }
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
-        $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent);
-        $system       = $this->buildSystemInstruction($userId, $userMessage, $location);
+        $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage);
 
         // Performance instrumentation for this turn.
         $reqKb       = (int) round((strlen($system) + strlen((string) json_encode($declarations))
@@ -497,10 +522,25 @@ final class AssistantLoop
     /**
      * @param array{lat: float, lon: float}|null $location
      */
-    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null): string
+    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false): string
     {
         $system = $this->systemInstruction
             . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
+
+        if ($hasImage) {
+            $system .= "\n\nThe user has attached a PHOTO to this message. Read it carefully — it may be a "
+                . 'note, poster, sign, invitation, letter, screenshot, whiteboard, or handwritten text, and '
+                . 'is often in Danish — and then DO THE RIGHT THING with what it says, using your tools: if it '
+                . 'describes an event, appointment, deadline, or booking with a date/time, create it with '
+                . 'insert_calendar_event; if it lists things to buy or do, add them to the appropriate '
+                . 'shopping/named list; if it implies something to be reminded of at a time, use set_reminder; '
+                . 'if it is a business receipt or expense, record it with add_expense. Briefly tell the user in '
+                . 'THEIR language what you saw and what you did. If the correct action, or a needed detail (the '
+                . 'year, which list, an ambiguous time), is unclear, first say what you read and ask a short '
+                . 'question with a [[suggest: …]] marker BEFORE acting — do not guess. Never invent details '
+                . 'that are not in the image; if it is unreadable or has nothing actionable, say so plainly. '
+                . 'If the caption text contradicts the photo, follow the caption.';
+        }
 
         if ($location !== null && isset($location['lat'], $location['lon'])) {
             $system .= sprintf(
