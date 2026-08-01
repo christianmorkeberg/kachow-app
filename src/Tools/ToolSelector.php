@@ -201,8 +201,9 @@ final class ToolSelector
         'weather' => [
             'weather', 'forecast', 'temperature', ' rain', 'raining', 'sunny', ' wind ', 'windy',
             'how cold', 'how hot', 'umbrella', 'degrees outside',
-            // Danish
-            'vejr', 'vejrudsigt', 'udsigt', 'regn', 'temperatur', 'grader', 'blæs', 'koldt',
+            // Danish. Leading spaces on stems that hide inside common (often dev-context)
+            // words: " regn" not "afregning" (billing), " grader" not "opgradering" (upgrade).
+            'vejr', 'vejrudsigt', 'udsigt', ' regn', 'temperatur', ' grader', 'blæs', 'koldt',
             ' kold', 'varmt', ' sol ', 'solskin', 'sne', 'byger', 'paraply',
         ],
         // "work" alone is avoided (it's inside "workout"); use specific phrases.

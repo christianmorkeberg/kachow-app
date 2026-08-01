@@ -131,6 +131,11 @@ $cases = [
     ['msg' => 'do I need an umbrella today?', 'expect' => 'weather'],
     ['msg' => 'vejret i morgen?', 'expect' => 'weather'],
     ['msg' => 'hvor koldt bliver det i dag?', 'expect' => 'weather'],
+    ['msg' => 'regner det i dag?', 'expect' => 'weather'],
+    // Weather stems must not fire inside unrelated (dev-context) words: "regn" in
+    // "afregning" (billing), "grader" in "opgradere" (upgrade).
+    ['msg' => 'jeg har arbejdet på den nye forbrugsafregningsapp', 'absent' => 'weather'],
+    ['msg' => 'jeg skal opgradere appen i dag', 'absent' => 'weather'],
 
     // ---- vinyls ----
     ['msg' => 'what vinyl should I put on?', 'expect' => 'vinyls'],
