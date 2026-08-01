@@ -17,5 +17,9 @@ jobs:
           port: 33
           script: |
             cd /home/kachowdk/assistant-app
-            git pull origin master
+            # Mirror origin exactly (resilient to force-pushes / history rewrites —
+            # a plain `git pull` fails on divergence). .env & vendor are gitignored,
+            # so they're left untouched.
+            git fetch origin master
+            git reset --hard origin/master
             composer install --no-dev --optimize-autoloader
