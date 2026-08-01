@@ -140,6 +140,37 @@ final class Conversations
     }
 
     /**
+     * The user's most recently active conversation with how long ago (server clock)
+     * its last message was — so the app can decide whether to resume it on load or
+     * start a fresh chat after an idle gap. Null if the user has no messages yet.
+     *
+     * @return array{id:int, title:?string, age_seconds:int}|null
+     */
+    public function mostRecent(int $userId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT c.id, c.title, TIMESTAMPDIFF(SECOND, MAX(m.created_at), NOW()) AS age_seconds
+             FROM conversations c
+             JOIN messages m ON m.conversation_id = c.id
+             WHERE c.user_id = :u
+             GROUP BY c.id, c.title
+             ORDER BY MAX(m.created_at) DESC, MAX(m.id) DESC
+             LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'id'          => (int) $row['id'],
+            'title'       => $row['title'] !== null ? (string) $row['title'] : null,
+            'age_seconds' => max(0, (int) $row['age_seconds']),
+        ];
+    }
+
+    /**
      * Conversations of the user containing a message that matches $query.
      *
      * @return array<int, array{id:int, title:?string, preview:string, count:int, last_at:string}>

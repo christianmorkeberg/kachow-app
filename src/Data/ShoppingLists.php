@@ -254,6 +254,47 @@ final class ShoppingLists
     }
 
     /**
+     * Adds an item to a list from the interactive card, authorising that the list
+     * belongs to a connection the user is party to (mirrors toggleItem's auth). If
+     * the exact item already exists it's revived (un-checked) rather than duplicated.
+     * Returns {list_id, connection_id, name} for rebuilding the card, or null.
+     *
+     * @return array{list_id:int, connection_id:int, name:string}|null
+     */
+    public function addItemForUser(int $userId, int $listId, string $item): ?array
+    {
+        $item = trim($item);
+        if ($item === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT l.connection_id, l.name
+             FROM shared_lists l
+             JOIN user_connections c ON c.id = l.connection_id
+             WHERE l.id = :lid AND c.status = "accepted" AND (c.requester_id = :u1 OR c.addressee_id = :u2)
+             LIMIT 1'
+        );
+        $stmt->execute([':lid' => $listId, ':u1' => $userId, ':u2' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+
+        $existing = $this->matchItemIds($listId, $item);
+        if ($existing !== []) {
+            $in = implode(',', array_fill(0, count($existing), '?'));
+            $this->db->prepare(
+                "UPDATE shared_list_items SET checked = 0, checked_by = NULL, checked_at = NULL WHERE id IN ({$in})"
+            )->execute($existing);
+        } else {
+            $this->addItem($listId, $item, $userId);
+        }
+
+        return ['list_id' => $listId, 'connection_id' => (int) $row['connection_id'], 'name' => (string) $row['name']];
+    }
+
+    /**
      * Marks matching items checked/unchecked (by exact case-insensitive item text).
      * Returns how many items matched.
      */
