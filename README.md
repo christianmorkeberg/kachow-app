@@ -2,9 +2,9 @@
 
 Kachow is a self-hosted, bilingual (English + Danish) personal assistant built around
 Google Gemini tool-calling. You talk to it in plain language and it *does things* -
-logs a workout, reads a receipt photo, checks your calendar, drafts an email, tracks a
-cycle - rendering the result as an interactive card in the chat rather than a wall of
-text.
+logs a workout, reads a receipt photo, turns a photographed note into a calendar event,
+checks your calendar, drafts an email, tracks a cycle - rendering the result as an
+interactive card in the chat rather than a wall of text.
 
 This repository (`kachow-app`) is the **brain**: the domain logic, data layer, tool
 definitions and the Gemini loop. The web front-end / PWA lives in a companion repo,
@@ -42,9 +42,13 @@ classes.
   chart (per day / week / month), the cycle ring - are drawn as inline SVG in vanilla JS,
   tap-to-inspect on mobile and `prefers-reduced-motion` aware. Each chart is a `Data` method
   that shapes points server-side + a small render function, reused across cards.
-- **Vision + structured extraction.** Receipt photos go to Gemini in JSON mode and come
-  back as typed expense fields (with line items, multi-currency and duplicate
-  detection) that the user confirms before anything is booked.
+- **Vision, two ways.** Receipt photos take a *structured* path: Gemini in JSON mode
+  returns typed expense fields (line items, multi-currency, duplicate detection) the user
+  confirms before anything is booked. *Any other* photo - a note on the building’s board,
+  a poster, an invitation - takes an *open* path: it’s fed straight into the tool-calling
+  loop, so the model reads it and acts with the same tools as a typed request (a calendar
+  event, a list item, a reminder), asking first via a quick-reply chip when a detail is
+  ambiguous. Same infrastructure, no receipt-specific schema.
 - **Self-written IMAP + SMTP clients.** PHP 8.4 removed `ext-imap`, so the mail stack is
   pure-PHP (TLS sockets, literal-aware IMAP reader, dot-stuffing SMTP) behind a single
   `EmailProvider` interface - alongside Gmail (API) and Outlook (MS Graph) providers.
@@ -66,6 +70,9 @@ classes.
 - **Weather** - animated symbol cards, current + forecast, from DMI with an automatic
   **Open-Meteo fallback** (so rate-limits or non-Danish locations still resolve - it works worldwide).
 - **Expenses** - receipt photo → editable expense card, line items, CSV export for the accountant.
+- **Vision** - snap *any* photo and the assistant reads it and acts: a note, poster or
+  invitation becomes a calendar event, a shopping-list item or a reminder (receipts stay
+  the dedicated expense path).
 - **Work** - geofenced clock-in/out hours, a bar chart of hours over a period (day/week/month),
   and a free-text “what I did” work log per job.
 - **Cycle** - menstrual-cycle tracking (inner-seasons visualisation), predictions, mood/energy logging, opt-in partner sharing.
