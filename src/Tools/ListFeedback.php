@@ -115,23 +115,34 @@ final class ListFeedback implements Tool
 
         // The card carries the full detail (thread, diagnostics, resolve button). Give
         // the model only a pre-formatted one-line summary — NOT structured data — so it
-        // can't accidentally echo raw JSON into the chat.
+        // can't accidentally echo raw JSON into the chat. Include a snippet for note-less
+        // reports so the model never overlooks or under-counts them.
         $lines = [];
         foreach ($out as $r) {
-            $lines[] = '#' . $r['id'] . ' from ' . $r['from'] . ' (' . $r['status'] . ')'
-                . ($r['note'] ? ': “' . $r['note'] . '”' : '');
+            if ($r['note']) {
+                $desc = '“' . $r['note'] . '”';
+            } elseif ($r['reported_text']) {
+                $desc = 'on: “' . trim(mb_substr($r['reported_text'], 0, 80)) . '…”';
+            } else {
+                $desc = '(no note)';
+            }
+            $lines[] = '#' . $r['id'] . ' from ' . $r['from'] . ' (' . $r['status'] . ') ' . $desc;
         }
-        $summary = $lines === [] ? 'No reports.' : implode('; ', $lines);
+        $summary = $lines === []
+            ? 'No reports.'
+            : count($out) . ' report' . (count($out) === 1 ? '' : 's') . ': ' . implode('; ', $lines);
 
         return [
             'count'     => count($out),
             'new_total' => $card['new_total'],
             'summary'   => $summary,
             '_render'   => $card,
-            'hint'      => 'A card is now shown with each report in full (conversation thread, '
-                . 'diagnostics, resolve button). Write ONE short sentence using `summary` (e.g. how '
-                . 'many new reports and who from). Do NOT output JSON, and do NOT re-list the details '
-                . '— the card shows them.',
+            'hint'      => 'These are user-flagged "feedback reports" — "error report" / "bug report" / '
+                . '"feedback" all mean the SAME thing (there is only ONE kind of report). State the exact '
+                . 'number from `count`; if count > 0 never say there are none, and do NOT filter by whether '
+                . 'a report looks like an "error" vs "feedback". A card is shown with each report in full — '
+                . 'write ONE short sentence from `summary` (how many, who from); do NOT output JSON or '
+                . 're-list details.',
         ];
     }
 }
