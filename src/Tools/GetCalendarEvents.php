@@ -63,6 +63,9 @@ final class GetCalendarEvents implements Tool
         return [
             'count'   => count($events),
             'events'  => $events,
+            'note'    => 'The app already shows these events as an agenda card. Use them to answer the '
+                . 'user\'s question (e.g. "am I free Friday?") or give a brief summary — do NOT re-list '
+                . 'every event line by line as text.',
             '_render' => $this->calendar->buildCard($events, $this->titleForRange($from, $to)),
         ];
     }

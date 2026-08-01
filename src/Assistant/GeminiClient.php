@@ -127,7 +127,9 @@ final class GeminiClient
             $message = is_array($decoded) ? ($decoded['error']['message'] ?? null) : null;
             throw new RateLimitException(
                 'Gemini model "' . $model . '" is rate-limited (HTTP ' . $status . ')'
-                . ($message !== null ? ': ' . $message : '')
+                . ($message !== null ? ': ' . $message : ''),
+                $status,
+                $message
             );
         }
         if ($status < 200 || $status >= 300) {

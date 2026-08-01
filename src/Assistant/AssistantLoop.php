@@ -47,26 +47,16 @@ final class AssistantLoop
         . 'Treat "shopping", "groceries", and "the list" as the SHARED shopping list (shared with '
         . 'their connection) — use the shopping-list tools. Only use the personal wishlist when the '
         . 'user explicitly says "wishlist" or "gift"; never use it for groceries or everyday shopping. '
-        . 'When the user is about to train, says they are training, or asks what they are doing today '
-        . 'or this week, ALWAYS call get_workout_plan (or get_week_plan) that turn — do not answer '
-        . 'from memory. The app then renders the plan as an interactive checklist with tickboxes '
-        . 'automatically, so give only a brief one-line intro (e.g. "Here\'s today\'s plan:") and NEVER '
-        . 'write out the exercises, checkboxes, or "[ ]" marks yourself. '
-        . 'The same applies to ANY list — shopping, groceries, to-do, tasks, packing, or any named list: '
-        . 'they are ALL managed with the shopping-list tools (a "to-do list" is just a named list), and '
-        . 'the app always displays them as an interactive CHECKLIST with tickboxes. So whenever you show '
-        . 'or change a list, call the list tool and give only a brief intro — NEVER write the list items '
-        . 'yourself as bullets, numbers, dashes, or "[ ]": doing so shows plain text instead of the '
-        . 'checklist. Every list the user keeps must appear as the tickable checklist card, not prose. '
-        . 'Likewise, when you show the user their schedule with get_calendar_events, the app renders '
-        . 'the events as a calendar agenda card, so give a brief summary or answer their specific '
-        . 'question — do not re-list every event line by line as text. '
-        . 'Weather works the same way: the app shows a visual weather card, so give a short, natural '
-        . 'summary (or answer the specific question) rather than reciting every measurement. If a '
-        . 'weather tool reports that DMI is busy even after retrying, tell the user plainly and offer '
-        . 'to try again shortly. '
-        . 'Work hours work the same way too: get_work_hours renders a card, so give a brief summary '
-        . '(e.g. total and whether they are still clocked in) instead of listing every session. '
+        . 'Many tools render a visual CARD: a workout plan or week plan, ANY list (shopping, groceries, '
+        . 'to-do, tasks, packing — these are ALL the shopping-list tools\' interactive checklist; a '
+        . '"to-do list" is just a named list), the calendar agenda, weather, and work hours. When you '
+        . 'call one, the card IS the display — give only a brief one-line intro or answer their specific '
+        . 'question, and NEVER re-list the card\'s contents yourself (no exercise/item bullets, "[ ]" '
+        . 'marks, event-by-event agendas, or measurement dumps): re-typing them just duplicates the card '
+        . 'as plain prose. Still CALL the tool rather than answering a plan/list/schedule/weather/hours '
+        . 'question from memory (e.g. when the user is about to train or asks what they are doing today or '
+        . 'this week, call get_workout_plan / get_week_plan). If a tool reports a data source is busy or '
+        . 'unavailable even after retrying, say so plainly and offer to try again shortly. '
         . 'Separately, there is a WORK LOG for what they did at each job (each job is the first word of an '
         . 'event in the user\'s work calendar, which is configurable per user): when the user describes '
         . 'what they worked on, call log_work_time '
@@ -349,8 +339,33 @@ final class AssistantLoop
                     }
                 }
             } catch (RateLimitException $e) {
-                $reply = "I'm being rate-limited by the model right now — please try again in a few seconds.";
-                $this->lastAssistantMessageId = $this->conversations->addMessage($conversationId, 'assistant', $reply);
+                // Make the real cause diagnosable instead of hiding it behind a generic line:
+                // log Gemini's own message, stash it in this turn's diagnostics (dev mode +
+                // report bundles), and only promise a quick retry when it's a transient
+                // overload (503) — a 429 quota/billing wall resets on Google's schedule, not
+                // on a few seconds' wait or a top-up.
+                error_log('rate-limit: ' . $e->getMessage());
+                $reason = $e->apiMessage() ?? $e->getMessage();
+                if (is_array($this->lastDiagnostics)) {
+                    $this->lastDiagnostics['rate_limit'] = [
+                        'status' => $e->statusCode(),
+                        'reason' => mb_substr($reason, 0, 500),
+                    ];
+                }
+                $reply = $e->statusCode() === 503
+                    ? 'The model is briefly overloaded right now — please try again in a few seconds.'
+                    : "I've hit the model's usage limit right now. A short cool-down may help, but if it's "
+                        . "the daily quota it only resets on Google's schedule (topping up billing won't "
+                        . 'clear that). The details are logged.';
+                $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
+                $this->lastAssistantMessageId = $this->conversations->addMessage(
+                    $conversationId,
+                    'assistant',
+                    $reply,
+                    null,
+                    null,
+                    $this->diagnosticsJson()
+                );
                 return $reply;
             }
             $geminiMs += (microtime(true) - $g0) * 1000;
