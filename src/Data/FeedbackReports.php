@@ -77,6 +77,25 @@ final class FeedbackReports
         return $stmt->fetchAll();
     }
 
+    /**
+     * One report by id, with the reporter's name/email joined, or null.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function find(int $id): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT r.id, r.user_id, r.conversation_id, r.message_id, r.note, r.snapshot,
+                    r.status, r.created_at, u.name AS reporter_name, u.email AS reporter_email
+             FROM feedback_reports r JOIN users u ON u.id = r.user_id
+             WHERE r.id = :id LIMIT 1'
+        );
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
     /** Count of reports in a given status (default 'new'). */
     public function countByStatus(string $status = 'new'): int
     {
