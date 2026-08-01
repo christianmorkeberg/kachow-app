@@ -55,7 +55,10 @@ try {
     exit(0);
 }
 
-$condenser = new MemoryCondenser($gemini, new Memories());
+$memories  = new Memories();
+$condenser = new MemoryCondenser($gemini, $memories);
+
+$snippet = static fn (string $s): string => mb_substr(preg_replace('/\s+/u', ' ', trim($s)) ?? $s, 0, 90);
 
 foreach ((new Users())->allIds() as $uid) {
     try {
@@ -68,6 +71,24 @@ foreach ((new Users())->allIds() as $uid) {
             $r['count'],
             $dry ? ' [dry-run]' : ''
         ));
+        // In a dry-run, show WHAT it would do (with content) so the merges can be judged
+        // before the job is trusted to write. Safe here: an interactive terminal viewing
+        // your own data — unlike the applied path, which logs ids only.
+        if ($dry && $r['merges'] !== []) {
+            $byId = [];
+            foreach ($memories->all($uid) as $it) {
+                $byId[(int) $it['id']] = (string) $it['content'];
+            }
+            foreach ($r['merges'] as $m) {
+                fwrite(STDERR, '    KEEP #' . $m['keep'] . ': ' . $snippet($byId[$m['keep']] ?? '?') . "\n");
+                if ($m['rewrote'] && $m['text'] !== null) {
+                    fwrite(STDERR, '      → rewrite to: ' . $snippet($m['text']) . "\n");
+                }
+                foreach ($m['delete'] as $id) {
+                    fwrite(STDERR, '    DROP #' . $id . ': ' . $snippet($byId[$id] ?? '?') . "\n");
+                }
+            }
+        }
     } catch (\Throwable $e) {
         error_log('memory-cleanup user ' . $uid . ': ' . $e->getMessage());
     }

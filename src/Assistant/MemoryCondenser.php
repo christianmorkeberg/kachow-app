@@ -47,7 +47,7 @@ final class MemoryCondenser
      * Proposes (and, when $apply, performs) a condense pass for one user.
      *
      * @return array{count:int, deleted:int, updated:int, applied:bool, skipped?:string,
-     *               merges:array<int,array{keep:int,delete:array<int,int>,rewrote:bool}>}
+     *               merges:array<int,array{keep:int,delete:array<int,int>,rewrote:bool,text:?string}>}
      */
     public function condenseFor(int $userId, bool $apply = true): array
     {
@@ -157,7 +157,9 @@ final class MemoryCondenser
             }
 
             $processed[] = $keep;
-            $done[]      = ['keep' => $keep, 'delete' => $applied, 'rewrote' => $rewrote];
+            // Include the proposed new text so a dry-run can DISPLAY it for inspection.
+            // (The APPLIED audit log below stays ids-only — content must not hit log files.)
+            $done[]      = ['keep' => $keep, 'delete' => $applied, 'rewrote' => $rewrote, 'text' => $rewrote ? $text : null];
             // Audit trail: ids only — the content is encrypted at rest and must not leak to logs.
             error_log('memory-condense user ' . $userId . ($apply ? ' APPLIED' : ' DRY-RUN')
                 . ': kept #' . $keep . ($rewrote ? ' (rewritten)' : '') . ', removed #' . implode(',#', $applied));
