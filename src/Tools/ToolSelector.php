@@ -182,8 +182,14 @@ final class ToolSelector
         'connections' => [
             'connect', 'connection', 'buddy', 'partner', 'share my', 'share their', 'sharing',
             ' accept', 'request', 'disconnect', 'friend',
+            // Granting/permission phrasings — "give X permission to log for me", changing what
+            // a connection may do (→ update_connection_sharing). "permission"/"behalf" are
+            // distinctive; "give access"/"grant access" avoid the too-common bare "access".
+            'permission', 'give access', 'grant access', 'behalf', 'log for me', 'log workouts for',
             // Danish
             'forbind', 'del med', 'deler', 'anmodning', 'accepter', 'afbryd', 'kæreste', 'makker',
+            // "giv X lov til …", "tilladelse", "adgang til", "på mine/hans vegne", "logge for mig"
+            'lov til', 'tilladelse', 'giv adgang', 'adgang til', 'vegne', 'logge for mig', 'logge træning for',
         ],
         'admin' => [
             'invite', 'new user', 'add user', 'create account', 'sign up', 'signup',

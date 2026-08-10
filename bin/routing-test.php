@@ -169,6 +169,12 @@ $cases = [
     ['msg' => 'connect me with Alex', 'expect' => 'connections'],
     ['msg' => 'forbind mig med Alex', 'expect' => 'connections'],
     ['msg' => 'stop sharing my workouts with Alex', 'expect' => 'connections'],
+    // Granting cross-user permission (report #8: "give X permission to log for me" missed
+    // update_connection_sharing, so the assistant wrongly insisted it had no such tool).
+    ['msg' => 'Giv Alex lov til at logge træning for mig', 'expect' => 'connections'],
+    ['msg' => 'give Alex permission to log workouts for me', 'expect' => 'connections'],
+    ['msg' => 'lad Alex logge for mig', 'expect' => 'connections'],
+    ['msg' => 'log a workout on my behalf', 'expect' => 'connections'],
 
     // ---- admin (invites) ----
     ['msg' => 'invite Alex to Kachow', 'expect' => 'admin'],
