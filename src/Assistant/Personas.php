@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Assistant;
 
+use App\Data\UserSettings;
+
 /**
  * Context-aware "tone" layer. The assistant's personality is not one flat voice but a
  * per-domain character selected from the turn's matched ToolSelector group(s): a hyped
@@ -47,18 +49,16 @@ final class Personas
 
     /**
      * Builds the tone instruction to append to the system prompt this turn, or null when
-     * personality is off, the level is unknown, or no persona-bearing domain matched.
+     * personality is off (level 1), or no persona-bearing domain matched.
      *
      * @param array<int, string> $groups matched ToolSelector groups for the turn
+     * @param string             $level  the personality dial, 1–5 (normalised here)
      */
     public static function instructionFor(array $groups, string $level): ?string
     {
-        $level = strtolower(trim($level));
-        if ($level === 'off' || $level === '') {
-            return null;
-        }
-        if (!in_array($level, ['subtle', 'full'], true)) {
-            $level = 'subtle'; // defensive: any unexpected stored value → the gentle default
+        $level = UserSettings::normalizePersonality($level); // '1'..'5'
+        if ($level === '1') {
+            return null; // dial at 1 = off / neutral
         }
 
         $chosen = null;
@@ -72,10 +72,13 @@ final class Personas
             return null;
         }
 
-        $intensity = $level === 'full'
-            ? 'Lean into this voice fully.'
-            : 'Keep it light — a touch of this flavour, a word or two of character; stay mostly natural and '
-                . 'do not overdo it.';
+        $intensity = match ($level) {
+            '2'     => 'Keep it very light — just a faint touch of this flavour; stay mostly natural.',
+            '3'     => 'Use a moderate, balanced amount of this character — noticeable but not overdone.',
+            '4'     => 'Lean into this voice — clearly characterful.',
+            '5'     => 'Go all in on this voice — full character and maximal energy.',
+            default => 'Use a moderate amount of this character.',
+        };
 
         return 'TONE FOR THIS REPLY — ' . self::PERSONAS[$chosen] . ' ' . $intensity
             . ' This affects DELIVERY ONLY: never change, round, or invent any number or fact; keep the reply '

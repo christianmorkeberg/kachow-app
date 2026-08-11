@@ -609,7 +609,7 @@ final class AssistantLoop
         // `personality` setting. Delivery only — never touches facts. (Not on image turns:
         // their group is the all-tools sentinel, which matches no persona.)
         if ($this->settings !== null) {
-            $level   = $this->settings->get($userId, 'personality') ?? 'subtle';
+            $level   = $this->settings->get($userId, 'personality') ?? '2';
             $persona = Personas::instructionFor($groups, $level);
             if ($persona !== null) {
                 $system .= "\n\n" . $persona;

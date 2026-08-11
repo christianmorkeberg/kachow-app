@@ -45,7 +45,7 @@ final class GetSettings implements Tool
             'settings' => $this->settings->all($userId),
             'note'     => 'The app displays a personality slider card. Give a brief spoken summary of the '
                 . 'settings — do not re-list every setting as text.',
-            '_render'  => UserSettings::personalityCard($this->settings->get($userId, 'personality') ?? 'subtle'),
+            '_render'  => UserSettings::personalityCard($this->settings->get($userId, 'personality') ?? '2'),
         ];
     }
 }

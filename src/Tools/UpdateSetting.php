@@ -24,9 +24,10 @@ final class UpdateSetting implements Tool
     {
         return 'Changes one of the user\'s settings. Keys: "work_calendar" — the name of the Google '
             . 'calendar used for work-log tracking and the afternoon nudge (default "Arbejde"); '
-            . '"personality" — how much character the assistant\'s replies carry, one of "off" / "subtle" / '
-            . '"full" (use for "turn up your personality", "be a hype gym bro", "keep it neutral", Danish '
-            . '"skru op for personligheden", "vær mere neutral"); "cycle_show_fertile" — "on"/"off". '
+            . '"personality" — how much character the assistant\'s replies carry, on a scale of 1–5 '
+            . '(1 = off/neutral, 5 = maximum; use for "turn your personality up to 5", "be a hype gym bro" '
+            . '(→ 5), "keep it neutral" (→ 1), Danish "skru personligheden op", "vær mere neutral"); '
+            . '"cycle_show_fertile" — "on"/"off". '
             . 'Use for "use my calendar called Vagter for work", Danish "brug min kalender Vagter til '
             . 'arbejde". Pass an empty value to reset a key to its default.';
     }
@@ -50,6 +51,10 @@ final class UpdateSetting implements Tool
             return ['error' => 'Unknown setting. Valid keys: ' . implode(', ', UserSettings::keys()) . '.'];
         }
         $value = (string) ($arguments['value'] ?? '');
+        // Personality is a 1–5 dial; accept a number or a spoken word ("full", "neutral").
+        if ($key === 'personality' && $value !== '') {
+            $value = UserSettings::normalizePersonality($value);
+        }
 
         $this->settings->set($userId, $key, $value);
 

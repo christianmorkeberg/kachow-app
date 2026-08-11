@@ -35,12 +35,13 @@ final class UserSettings
             'description' => 'Whether the cycle card shows the estimated fertile window ("on"/"off"). Off = show only phase and next period.',
         ],
         'personality' => [
-            'default'     => 'subtle',
+            'default'     => '2',
             'label'       => 'Assistant personality',
-            'description' => 'How much characterful, context-aware personality the assistant\'s replies carry '
-                . '("off" = plain and neutral; "subtle" = a light flavour; "full" = leans into it). It colours '
-                . 'delivery only (e.g. a hyped gym-coach when logging workouts, a mood-matching weather '
-                . 'presenter, warm encouragement around cycle tracking) and never changes facts or numbers.',
+            'description' => 'How much characterful, context-aware personality the assistant\'s replies carry, '
+                . 'on a scale of 1–5 (1 = off / plain and neutral; 5 = maximum, leans all the way in). It '
+                . 'colours delivery only (e.g. a hyped gym-coach when logging workouts, a mood-matching '
+                . 'weather presenter, warm encouragement around cycle tracking) and never changes facts or '
+                . 'numbers.',
         ],
     ];
 
@@ -67,8 +68,30 @@ final class UserSettings
         return isset(self::DEFS[$key]) ? (string) self::DEFS[$key]['default'] : null;
     }
 
-    /** Allowed values for the personality dial, in slider order. */
-    public const PERSONALITY_LEVELS = ['off', 'subtle', 'full'];
+    /** Allowed values for the personality dial, in slider order (1 = off … 5 = max). */
+    public const PERSONALITY_LEVELS = ['1', '2', '3', '4', '5'];
+
+    /**
+     * Canonicalises any personality input to '1'..'5': accepts a number (clamped) and
+     * maps legacy/spoken words (off/neutral → 1, subtle/light → 2, medium → 3, strong → 4,
+     * full/max → 5). Unknown → '2'. Keeps old stored values and voice phrases working.
+     */
+    public static function normalizePersonality(?string $value): string
+    {
+        $v = strtolower(trim((string) $value));
+        $legacy = [
+            'off' => '1', 'neutral' => '1', 'none' => '1', 'subtle' => '2', 'light' => '2',
+            'medium' => '3', 'moderate' => '3', 'strong' => '4', 'full' => '5', 'max' => '5',
+        ];
+        if (isset($legacy[$v])) {
+            return $legacy[$v];
+        }
+        if (is_numeric($v)) {
+            return (string) max(1, min(5, (int) round((float) $v)));
+        }
+
+        return '2';
+    }
 
     /**
      * The renderable "personality slider" card payload (kind: personality). The client
@@ -78,12 +101,7 @@ final class UserSettings
      */
     public static function personalityCard(string $level): array
     {
-        $level = strtolower(trim($level));
-        if (!in_array($level, self::PERSONALITY_LEVELS, true)) {
-            $level = 'subtle';
-        }
-
-        return ['kind' => 'personality', 'level' => $level];
+        return ['kind' => 'personality', 'level' => self::normalizePersonality($level)];
     }
 
     /** @return array<int, string> the valid setting keys */
