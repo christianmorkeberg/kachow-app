@@ -27,6 +27,8 @@ final class UpdateSetting implements Tool
             . '"personality" — how much character the assistant\'s replies carry, on a scale of 1–5 '
             . '(1 = off/neutral, 5 = maximum; use for "turn your personality up to 5", "be a hype gym bro" '
             . '(→ 5), "keep it neutral" (→ 1), Danish "skru personligheden op", "vær mere neutral"); '
+            . '"theme" — the visual look, one of aurora / noir / paper / lavender / disco (use for '
+            . '"switch to the lavender theme", "make it dark", "go disco", Danish "skift til lavendel-temaet"); '
             . '"cycle_show_fertile" — "on"/"off". '
             . 'Use for "use my calendar called Vagter for work", Danish "brug min kalender Vagter til '
             . 'arbejde". Pass an empty value to reset a key to its default.';
@@ -55,6 +57,9 @@ final class UpdateSetting implements Tool
         if ($key === 'personality' && $value !== '') {
             $value = UserSettings::normalizePersonality($value);
         }
+        if ($key === 'theme' && $value !== '') {
+            $value = UserSettings::normalizeTheme($value);
+        }
 
         $this->settings->set($userId, $key, $value);
 
@@ -64,9 +69,11 @@ final class UpdateSetting implements Tool
             'value'    => $this->settings->get($userId, $key),
             'settings' => $this->settings->all($userId),
         ];
-        // Changing the personality shows the slider card reflecting the new level.
+        // Changing the personality or theme shows the matching card reflecting the change.
         if ($key === 'personality') {
             $result['_render'] = UserSettings::personalityCard((string) $result['value']);
+        } elseif ($key === 'theme') {
+            $result['_render'] = UserSettings::appearanceCard((string) $result['value']);
         }
 
         return $result;

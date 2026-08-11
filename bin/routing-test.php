@@ -150,6 +150,10 @@ $cases = [
     ['msg' => 'turn up your personality to full', 'expect' => 'settings'],
     ['msg' => 'keep your tone neutral', 'expect' => 'settings'],
     ['msg' => 'skru op for personligheden', 'expect' => 'settings'],
+    // appearance / theme
+    ['msg' => 'switch to the lavender theme', 'expect' => 'settings'],
+    ['msg' => 'change the appearance to dark mode', 'expect' => 'settings'],
+    ['msg' => 'skift til disco-temaet', 'expect' => 'settings'],
 
     // ---- feedback (developer/admin) ----
     ['msg' => 'any feedback reports?', 'expect' => 'feedback'],

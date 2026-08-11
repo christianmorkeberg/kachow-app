@@ -34,6 +34,13 @@ final class UserSettings
             'label'       => 'Show fertile window',
             'description' => 'Whether the cycle card shows the estimated fertile window ("on"/"off"). Off = show only phase and next period.',
         ],
+        'theme' => [
+            'default'     => 'aurora',
+            'label'       => 'Appearance',
+            'description' => 'The visual look / colour theme, one of: aurora (the default dark blue), noir '
+                . '(dark monochrome with an amber accent), paper (clean light), lavender (soft violet), '
+                . 'disco (neon on deep purple). Changes colours and corner rounding only.',
+        ],
         'personality' => [
             'default'     => '2',
             'label'       => 'Assistant personality',
@@ -70,6 +77,23 @@ final class UserSettings
 
     /** Allowed values for the personality dial, in slider order (1 = off … 5 = max). */
     public const PERSONALITY_LEVELS = ['1', '2', '3', '4', '5'];
+
+    /** Available visual themes (the client owns the actual palettes). */
+    public const THEMES = ['aurora', 'noir', 'paper', 'lavender', 'disco'];
+
+    /** Any theme input → a known theme id (unknown → the default 'aurora'). */
+    public static function normalizeTheme(?string $value): string
+    {
+        $v = strtolower(trim((string) $value));
+
+        return in_array($v, self::THEMES, true) ? $v : 'aurora';
+    }
+
+    /** The renderable "appearance" picker card payload (kind: appearance). */
+    public static function appearanceCard(string $theme): array
+    {
+        return ['kind' => 'appearance', 'theme' => self::normalizeTheme($theme)];
+    }
 
     /**
      * Canonicalises any personality input to '1'..'5': accepts a number (clamped) and
