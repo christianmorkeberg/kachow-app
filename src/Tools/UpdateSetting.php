@@ -22,10 +22,13 @@ final class UpdateSetting implements Tool
 
     public function description(): string
     {
-        return 'Changes one of the user\'s settings. Supported key: "work_calendar" — the name of the '
-            . 'Google calendar used for work-log tracking and the afternoon nudge (default "Arbejde"). '
-            . 'Use for "use my calendar called Vagter for work", "track work from the Shifts calendar", '
-            . 'Danish "brug min kalender Vagter til arbejde". Pass an empty value to reset to the default.';
+        return 'Changes one of the user\'s settings. Keys: "work_calendar" — the name of the Google '
+            . 'calendar used for work-log tracking and the afternoon nudge (default "Arbejde"); '
+            . '"personality" — how much character the assistant\'s replies carry, one of "off" / "subtle" / '
+            . '"full" (use for "turn up your personality", "be a hype gym bro", "keep it neutral", Danish '
+            . '"skru op for personligheden", "vær mere neutral"); "cycle_show_fertile" — "on"/"off". '
+            . 'Use for "use my calendar called Vagter for work", Danish "brug min kalender Vagter til '
+            . 'arbejde". Pass an empty value to reset a key to its default.';
     }
 
     public function parameters(): array
@@ -50,11 +53,17 @@ final class UpdateSetting implements Tool
 
         $this->settings->set($userId, $key, $value);
 
-        return [
+        $result = [
             'updated'  => true,
             'key'      => $key,
             'value'    => $this->settings->get($userId, $key),
             'settings' => $this->settings->all($userId),
         ];
+        // Changing the personality shows the slider card reflecting the new level.
+        if ($key === 'personality') {
+            $result['_render'] = UserSettings::personalityCard((string) $result['value']);
+        }
+
+        return $result;
     }
 }

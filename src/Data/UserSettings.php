@@ -34,6 +34,14 @@ final class UserSettings
             'label'       => 'Show fertile window',
             'description' => 'Whether the cycle card shows the estimated fertile window ("on"/"off"). Off = show only phase and next period.',
         ],
+        'personality' => [
+            'default'     => 'subtle',
+            'label'       => 'Assistant personality',
+            'description' => 'How much characterful, context-aware personality the assistant\'s replies carry '
+                . '("off" = plain and neutral; "subtle" = a light flavour; "full" = leans into it). It colours '
+                . 'delivery only (e.g. a hyped gym-coach when logging workouts, a mood-matching weather '
+                . 'presenter, warm encouragement around cycle tracking) and never changes facts or numbers.',
+        ],
     ];
 
     /** Interprets a stored setting value as a boolean (on/yes/true/1, incl. Danish ja). */
@@ -57,6 +65,25 @@ final class UserSettings
     public static function defaultFor(string $key): ?string
     {
         return isset(self::DEFS[$key]) ? (string) self::DEFS[$key]['default'] : null;
+    }
+
+    /** Allowed values for the personality dial, in slider order. */
+    public const PERSONALITY_LEVELS = ['off', 'subtle', 'full'];
+
+    /**
+     * The renderable "personality slider" card payload (kind: personality). The client
+     * draws the slider + bilingual labels/examples; the server just carries the level.
+     *
+     * @return array{kind:string, level:string}
+     */
+    public static function personalityCard(string $level): array
+    {
+        $level = strtolower(trim($level));
+        if (!in_array($level, self::PERSONALITY_LEVELS, true)) {
+            $level = 'subtle';
+        }
+
+        return ['kind' => 'personality', 'level' => $level];
     }
 
     /** @return array<int, string> the valid setting keys */

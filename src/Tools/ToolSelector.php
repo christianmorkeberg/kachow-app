@@ -275,9 +275,12 @@ final class ToolSelector
         'settings' => [
             'setting', 'settings', 'preference', 'configure', 'which calendar', 'work calendar',
             'use my calendar', 'change calendar', 'calendar for work', 'calendar name',
+            // personality / tone dial (the `personality` setting: off/subtle/full)
+            'personality', 'your tone', 'tone down', 'tone it down', 'be neutral', 'more neutral', 'hype gym',
             // Danish
             'indstilling', 'indstillinger', 'konfigurer', 'foretrukne', 'hvilken kalender',
             'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
+            'personlighed', 'din tone', 'vær neutral', 'mere neutral', 'skru op for',
         ],
         // One-off push reminders ("remind me to … at …").
         'reminders' => [

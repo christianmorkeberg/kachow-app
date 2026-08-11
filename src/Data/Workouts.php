@@ -86,6 +86,21 @@ final class Workouts
     }
 
     /**
+     * The heaviest weight ever logged for an exercise (user-scoped), or null if it has
+     * never been logged with a weight. Used to detect a new personal best on logging.
+     */
+    public function previousBestWeight(int $userId, string $exercise): ?float
+    {
+        $stmt = $this->db->prepare(
+            'SELECT MAX(weight) FROM workouts WHERE user_id = :u AND exercise = :e AND weight IS NOT NULL'
+        );
+        $stmt->execute([':u' => $userId, ':e' => $exercise]);
+        $v = $stmt->fetchColumn();
+
+        return ($v === null || $v === false) ? null : (float) $v;
+    }
+
+    /**
      * Returns individual set rows for a user, newest first.
      *
      * All filters are optional: narrow by exercise and/or a [from, to] date window

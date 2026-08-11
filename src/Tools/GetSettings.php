@@ -39,6 +39,13 @@ final class GetSettings implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
-        return ['settings' => $this->settings->all($userId)];
+        // The app shows a personality slider card (tap to change the tone); the model gets
+        // the full settings list too, but should summarise rather than re-list every one.
+        return [
+            'settings' => $this->settings->all($userId),
+            'note'     => 'The app displays a personality slider card. Give a brief spoken summary of the '
+                . 'settings — do not re-list every setting as text.',
+            '_render'  => UserSettings::personalityCard($this->settings->get($userId, 'personality') ?? 'subtle'),
+        ];
     }
 }

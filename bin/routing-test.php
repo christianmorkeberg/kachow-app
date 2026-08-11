@@ -146,6 +146,10 @@ $cases = [
     ['msg' => 'which calendar do you use for my work?', 'expect' => 'settings'],
     ['msg' => 'brug min kalender Vagter til arbejde', 'expect' => 'settings'],
     ['msg' => 'what are my settings?', 'expect' => 'settings'],
+    // personality / tone dial
+    ['msg' => 'turn up your personality to full', 'expect' => 'settings'],
+    ['msg' => 'keep your tone neutral', 'expect' => 'settings'],
+    ['msg' => 'skru op for personligheden', 'expect' => 'settings'],
 
     // ---- feedback (developer/admin) ----
     ['msg' => 'any feedback reports?', 'expect' => 'feedback'],

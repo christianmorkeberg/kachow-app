@@ -8,6 +8,7 @@ use App\Data\AppFlags;
 use App\Data\Conversations;
 use App\Data\Memories;
 use App\Data\UserInstructions;
+use App\Data\UserSettings;
 use App\Tools\ToolRegistry;
 use App\Tools\ToolSelector;
 use Throwable;
@@ -166,6 +167,7 @@ final class AssistantLoop
         private Conversations $conversations,
         private ?UserInstructions $instructions = null,
         private ?Memories $memories = null,
+        private ?UserSettings $settings = null,
         private string $systemInstruction = self::DEFAULT_SYSTEM_INSTRUCTION,
     ) {
     }
@@ -280,7 +282,7 @@ final class AssistantLoop
         }
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
-        $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage);
+        $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups);
 
         // Performance instrumentation for this turn.
         $reqKb       = (int) round((strlen($system) + strlen((string) json_encode($declarations))
@@ -537,7 +539,7 @@ final class AssistantLoop
     /**
      * @param array{lat: float, lon: float}|null $location
      */
-    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false): string
+    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false, array $groups = []): string
     {
         $system = $this->systemInstruction
             . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
@@ -599,6 +601,18 @@ final class AssistantLoop
                     $tag      = ($category !== '' && $category !== 'general') ? ' [' . $category . ']' : '';
                     $system .= "\n- (#" . (int) $row['id'] . ')' . $tag . ' ' . (string) $row['content'];
                 }
+            }
+        }
+
+        // Context-aware personality: a per-domain voice (gym coach / weather presenter /
+        // caring cycle support) selected from this turn's groups, gated by the per-user
+        // `personality` setting. Delivery only — never touches facts. (Not on image turns:
+        // their group is the all-tools sentinel, which matches no persona.)
+        if ($this->settings !== null) {
+            $level   = $this->settings->get($userId, 'personality') ?? 'subtle';
+            $persona = Personas::instructionFor($groups, $level);
+            if ($persona !== null) {
+                $system .= "\n\n" . $persona;
             }
         }
 

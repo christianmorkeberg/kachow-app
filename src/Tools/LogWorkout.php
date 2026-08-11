@@ -88,11 +88,19 @@ final class LogWorkout implements Tool
         // Canonicalise the name so a registered variant lands on the user's chosen name.
         $exercise = $this->aliases->resolve($userId, $exercise);
 
-        $sets = [];
+        // Prior best BEFORE this log, so we can flag a new personal best (heaviest weight).
+        $prevBest = $this->workouts->previousBestWeight($userId, $exercise);
+
+        $sets   = [];
+        $newMax = null;
         foreach ($rawSets as $set) {
-            $set = (array) $set;
+            $set    = (array) $set;
+            $weight = isset($set['weight']) && $set['weight'] !== '' ? (float) $set['weight'] : null;
+            if ($weight !== null && ($newMax === null || $weight > $newMax)) {
+                $newMax = $weight;
+            }
             $sets[] = [
-                'weight' => isset($set['weight']) && $set['weight'] !== '' ? (float) $set['weight'] : null,
+                'weight' => $weight,
                 'reps'   => isset($set['reps']) && $set['reps'] !== '' ? (int) $set['reps'] : null,
                 'notes'  => isset($set['notes']) && $set['notes'] !== '' ? (string) $set['notes'] : null,
             ];
@@ -100,9 +108,15 @@ final class LogWorkout implements Tool
 
         $ids = $this->workouts->logSets($userId, $exercise, $sets, $loggedAt);
 
+        // New PR = beat a PREVIOUS best (first-ever weighted log isn't hyped as a "PR").
+        $isPr = $newMax !== null && $prevBest !== null && $newMax > $prevBest + 0.0001;
+
         return [
-            'logged_sets' => count($ids),
-            'exercise'    => $exercise,
+            'logged_sets'      => count($ids),
+            'exercise'         => $exercise,
+            'personal_best'    => $isPr,
+            'best_weight_kg'   => $isPr ? $newMax : null,
+            'previous_best_kg' => $prevBest,
         ];
     }
 }
