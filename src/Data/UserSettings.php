@@ -39,7 +39,7 @@ final class UserSettings
             'label'       => 'Appearance',
             'description' => 'The visual look / colour theme, one of: aurora (the default dark blue), noir '
                 . '(dark monochrome with an amber accent), paper (clean light), lavender (soft violet), '
-                . 'disco (neon on deep purple). Changes colours and corner rounding only.',
+                . 'blush (soft pink), disco (neon on deep purple). Changes colours and corner rounding only.',
         ],
         'personality' => [
             'default'     => '2',
@@ -79,7 +79,7 @@ final class UserSettings
     public const PERSONALITY_LEVELS = ['1', '2', '3', '4', '5'];
 
     /** Available visual themes (the client owns the actual palettes). */
-    public const THEMES = ['aurora', 'noir', 'paper', 'lavender', 'disco'];
+    public const THEMES = ['aurora', 'noir', 'paper', 'lavender', 'blush', 'disco'];
 
     /** Any theme input → a known theme id (unknown → the default 'aurora'). */
     public static function normalizeTheme(?string $value): string

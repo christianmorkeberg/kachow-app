@@ -162,6 +162,7 @@ final class ToolRegistry
         $registry->register(new GetConnectedCycle($connections, $cycle));
         $registry->register(new GetSettings($userSettings));
         $registry->register(new UpdateSetting($userSettings));
+        $registry->register(new GetAppearance($userSettings));
         $registry->register(new AddVinyl($vinyls, $discogs));
         $registry->register(new GetVinyls($vinyls));
         $registry->register(new RateVinyl($vinyls));

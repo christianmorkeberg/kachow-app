@@ -154,6 +154,8 @@ $cases = [
     ['msg' => 'switch to the lavender theme', 'expect' => 'settings'],
     ['msg' => 'change the appearance to dark mode', 'expect' => 'settings'],
     ['msg' => 'skift til disco-temaet', 'expect' => 'settings'],
+    ['msg' => 'i want to choose theme', 'expect' => 'settings'],       // report #9: must offer the picker
+    ['msg' => 'let me pick a look', 'expect' => 'settings'],
 
     // ---- feedback (developer/admin) ----
     ['msg' => 'any feedback reports?', 'expect' => 'feedback'],

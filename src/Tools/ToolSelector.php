@@ -107,7 +107,7 @@ final class ToolSelector
             'set_reminder', 'list_reminders', 'cancel_reminder',
         ],
         'settings' => [
-            'get_settings', 'update_setting',
+            'get_settings', 'update_setting', 'get_appearance',
         ],
     ];
 
@@ -279,7 +279,8 @@ final class ToolSelector
             'personality', 'your tone', 'tone down', 'tone it down', 'be neutral', 'more neutral', 'hype gym',
             // appearance / theme (the `theme` setting)
             'theme', 'appearance', 'colour scheme', 'color scheme', 'dark mode', 'light mode',
-            'lavender', 'disco', 'noir',
+            'lavender', 'disco', 'noir', 'blush', 'choose a theme', 'pick a theme', 'choose theme',
+            'pick a look', 'choose a look', 'change the look', 'new look',
             // Danish
             'indstilling', 'indstillinger', 'konfigurer', 'foretrukne', 'hvilken kalender',
             'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
