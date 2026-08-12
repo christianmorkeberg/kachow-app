@@ -36,7 +36,10 @@ final class LogWorkEvent implements Tool
             . 'Otherwise, to close an ongoing session, log a single "out" at the time they left. If the '
             . 'user has multiple workplaces, pass "place" (the same label) so it pairs with the right '
             . 'session. The result shows that day\'s card so you can confirm in one step — trust it, '
-            . 'don\'t re-check.';
+            . 'don\'t re-check. IMPORTANT: this records only the CLOCK TIMES. If the user ALSO describes '
+            . 'WHAT they worked on (not just the hours), you MUST additionally call log_work_time to save '
+            . 'that description to their work log — logging the hours here does NOT save any work-log note, '
+            . 'so never claim you saved their notes unless you also called log_work_time.';
     }
 
     public function parameters(): array

@@ -31,9 +31,13 @@ final class LogWorkTime implements Tool
     {
         return 'Records what the user did at work on a day (free-text), for their work log. Use when '
             . 'they describe what they worked on — e.g. "at work today I prepped the lecture", or when '
-            . 'answering the afternoon "what did you get done?" nudge. job is the workplace name; if '
-            . 'omitted it is inferred from that day\'s work-calendar event. hours is OPTIONAL — do NOT ask '
-            . 'for it; only include hours if the user states them. Defaults the day to today.';
+            . 'answering the afternoon "what did you get done?" nudge. This saves the work-log DESCRIPTION; '
+            . 'it does NOT clock in/out hours (that is log_work_event). If the user gives BOTH what they '
+            . 'did and the times they worked in one message, call this for the description AND '
+            . 'log_work_event for the clock times — do not rely on one to cover the other. job is the '
+            . 'workplace name; if omitted it is inferred from that day\'s work-calendar event. hours is '
+            . 'OPTIONAL — do NOT ask for it; only include hours if the user states them. Defaults the day '
+            . 'to today.';
     }
 
     public function parameters(): array
