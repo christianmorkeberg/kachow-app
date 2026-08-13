@@ -241,6 +241,28 @@ check('quarterAt(-1) precedes quarterAt(0)', (function () {
 // Previous quarter has no activity (all test data is dated today) → no nudge.
 check('dueForNudge null when prior quarter empty', $moms->dueForNudge($U, 10) === null);
 
+echo "\n== 14. cockpit manual add (blank draft + amount-derived, like the + Add buttons) ==\n";
+// income.php create with no amounts → a blank draft dated today (editor fills the rest).
+$blankId = $income->create($U, ['issued_at' => Income::today(), 'kind' => 'invoice'], 'manual');
+$blank   = $income->get($U, $blankId);
+check('blank income draft: status draft, dated today', ($blank['status'] ?? '') === 'draft' && ($blank['issued_at'] ?? '') === Income::today(), json_encode([$blank['status'] ?? null, $blank['issued_at'] ?? null]));
+check('blank income draft: amounts null', $blank['amount_ex_vat'] === null && $blank['total'] === null);
+$income->delete($U, $blankId);
+// income.php create WITH a total → VAT derived (total/5) before insert.
+[$dex, $dvat, $dtot] = Income::deriveVat(null, null, 6250.0);
+$derId = $income->create($U, ['issued_at' => Income::today(), 'amount_ex_vat' => $dex, 'vat' => $dvat, 'total' => $dtot], 'manual');
+$der   = $income->get($U, $derId);
+check('income add from total 6250 → ex 5000 / vat 1250', money($der['amount_ex_vat']) === '5000.00' && money($der['vat']) === '1250.00', json_encode([$der['amount_ex_vat'], $der['vat']]));
+$income->delete($U, $derId);
+// receipt.php create → a draft (not yet in købsmoms until confirmed) counted by draftCount.
+$rDraft = $receipt->create($U, ['purchased_at' => Income::today(), 'vendor' => 'Manual', 'total' => 100, 'vat' => 20], 'manual');
+check('manual expense draft counts as a draft receipt', $receipt->draftCount($U) >= 1);
+$receipt->delete($U, $rDraft);
+// draws.php create → immediate record (no draft lifecycle).
+$dId = $draws->add($U, 500.0, null, 'DKK', 'from cockpit');
+check('draw add returns a new id', $dId > 0);
+$draws->delete($U, $dId);
+
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";
 exit($fail === 0 ? 0 : 1);
