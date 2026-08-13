@@ -411,6 +411,28 @@ final class Receipts
     }
 
     /**
+     * How many DRAFT (not-yet-confirmed) DKK receipts fall in a period — so the moms
+     * card can warn that unbooked expenses aren't yet counted in købsmoms.
+     */
+    public function draftCount(int $userId, ?string $from = null, ?string $to = null): int
+    {
+        $where  = ['user_id = :u', "status = 'draft'", "currency = 'DKK'"];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]         = 'purchased_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]       = 'purchased_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM receipts WHERE ' . implode(' AND ', $where));
+        $stmt->execute($params);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
      * Finds an existing receipt that looks like a duplicate of the given one —
      * same vendor (case-insensitive) + date + amount — excluding $excludeId.
      * Prefers a confirmed match. Returns a compact record or null.

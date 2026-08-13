@@ -13,6 +13,7 @@ use App\Data\AppFlags;
 use App\Data\CycleTracker;
 use App\Data\DevIdeas;
 use App\Data\Income;
+use App\Data\Moms;
 use App\Data\OwnerDraws;
 use App\Data\ExerciseAliases;
 use App\Data\FeedbackReports;
@@ -159,6 +160,7 @@ final class ToolRegistry
         $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit));
         $registry->register(new GetOwnerDraws($ownerDraws));
         $registry->register(new GetBooks(new Books($income, $receipts, $ownerDraws, $userSettings)));
+        $registry->register(new GetMoms(new Moms($income, $receipts)));
         $registry->register(new GetEmails($email));
         $registry->register(new ReadEmail($email));
         $registry->register(new MarkEmailsRead($email));

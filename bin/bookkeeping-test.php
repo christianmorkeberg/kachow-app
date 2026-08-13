@@ -22,6 +22,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use App\Data\BookkeepingAudit;
 use App\Data\Books;
 use App\Data\Income;
+use App\Data\Moms;
 use App\Data\OwnerDraws;
 use App\Data\Receipts;
 use App\Data\UserSettings;
@@ -216,6 +217,29 @@ check('all range is unbounded', $allr[0] === null && $allr[1] === null);
 $navCard = $booksObj->overview($U, 'quarter', -1);
 check('overview carries granularity/offset + can_next', ($navCard['granularity'] ?? '') === 'quarter'
     && ($navCard['offset'] ?? 1) === -1 && ($navCard['can_next'] ?? false) === true, json_encode([$navCard['granularity'] ?? null, $navCard['offset'] ?? null, $navCard['can_next'] ?? null]));
+
+echo "\n== 13. Moms quarterly settlement (salgs − købs = tilsvar) ==\n";
+// Current quarter (offset 0): booked income today = salgsmoms 3500; confirmed expense
+// today = købsmoms 50; so tilsvar = 3450 to pay. DSB draft is excluded but flagged.
+$moms = new Moms($income, $receipt);
+$ms   = $moms->settlement($U, 0);
+check('salgsmoms = 3500', money($ms['salgsmoms']) === '3500.00', money($ms['salgsmoms']));
+check('købsmoms = 50', money($ms['kobsmoms']) === '50.00', money($ms['kobsmoms']));
+check('tilsvar = 3450 to pay', money($ms['tilsvar']) === '3450.00' && $ms['pay'] === true, money($ms['tilsvar']));
+check('sales/expense counts = 2/1', $ms['sales_count'] === 2 && $ms['expense_count'] === 1, json_encode([$ms['sales_count'], $ms['expense_count']]));
+check('draft income flagged (DSB not counted)', $ms['draft_income'] === 1, (string) $ms['draft_income']);
+check('current quarter reported open', $ms['period_open'] === true);
+$mc = $moms->card($U, 0);
+check('moms card kind + label', ($mc['kind'] ?? '') === 'moms' && ($mc['period_label'] ?? '') === $ms['label'], json_encode([$mc['kind'] ?? null, $mc['period_label'] ?? null]));
+// Deadline math: quarter start + 5 months (Q1→1 Jun, Q4→1 Mar next year).
+check('deadline Q1 2026 = 2026-06-01', Moms::deadline(2026, 1)->format('Y-m-d') === '2026-06-01', Moms::deadline(2026, 1)->format('Y-m-d'));
+check('deadline Q4 2026 = 2027-03-01', Moms::deadline(2026, 4)->format('Y-m-d') === '2027-03-01', Moms::deadline(2026, 4)->format('Y-m-d'));
+check('quarterAt(-1) precedes quarterAt(0)', (function () {
+    [$y0, $q0] = Moms::quarterAt(0); [$y1, $q1] = Moms::quarterAt(-1);
+    return ($y1 * 4 + $q1) === ($y0 * 4 + $q0) - 1;
+})());
+// Previous quarter has no activity (all test data is dated today) → no nudge.
+check('dueForNudge null when prior quarter empty', $moms->dueForNudge($U, 10) === null);
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

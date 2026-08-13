@@ -98,7 +98,7 @@ final class ToolSelector
         // Income side of the books: invoices/revenue, owner drawings, udlæg reimbursement.
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
-            'get_owner_draws', 'mark_expense_reimbursed', 'get_books',
+            'get_owner_draws', 'mark_expense_reimbursed', 'get_books', 'get_moms',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -273,8 +273,10 @@ final class ToolSelector
             'løn til mig selv', 'udbetale til mig',
             // udlæg + reimbursement (shared with receipts)
             'udlæg', 'udlaeg', 'lagde ud', 'lagt ud', 'reimburse', 'reimbursed', 'refunder', 'refunderet',
-            // moms return figures
-            'moms return', 'moms afregning', 'momsafregning', 'salgsmoms', 'købsmoms', 'vat return',
+            // moms return figures + the quarterly momsafregning card
+            'moms return', 'moms afregning', 'momsafregning', 'momsangivelse', 'salgsmoms', 'købsmoms',
+            'vat return', 'tilsvar', 'how much moms', 'how much vat', 'moms this quarter', 'moms due',
+            'moms deadline', 'hvor meget moms', 'betale i moms', 'moms skal jeg betale', 'moms frist',
             // the bookkeeping cockpit / overview
             'my books', 'the books', 'open bookkeeping', 'bookkeeping overview', 'financial overview',
             'how are my finances', 'my finances', 'profit and loss', ' p&l', 'reserve', 'set aside',

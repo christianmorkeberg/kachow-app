@@ -18,6 +18,7 @@ final class NotificationTypes
     public const WEEKLY_SUMMARY = 'weekly_summary';
     public const WORK_LOG_NUDGE = 'work_log_nudge';
     public const CYCLE_UPCOMING = 'cycle_upcoming';
+    public const MOMS_DEADLINE  = 'moms_deadline';
     public const REMINDER       = 'reminder';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
@@ -44,6 +45,14 @@ final class NotificationTypes
             'description' => 'A reminder to log your period when it\'s expected but you haven\'t registered it yet.',
             'default'     => false,
         ],
+        // Sent by notify-cron in the days before a quarterly moms filing deadline, when
+        // there's activity to file. Only fires if you actually keep books, so it stays
+        // quiet for non-business users.
+        self::MOMS_DEADLINE => [
+            'label'       => 'Moms deadline',
+            'description' => 'A reminder in the days before a quarterly moms (VAT) filing deadline, if you have bookkeeping activity to file.',
+            'default'     => true,
+        ],
         self::REMINDER => [
             'label'       => 'Reminders',
             'description' => 'One-off reminders you ask me to set ("remind me to … at …").',
@@ -60,6 +69,7 @@ final class NotificationTypes
         self::WEEKLY_SUMMARY => 'work_week',  // last week's hours
         self::WORK_LOG_NUDGE => 'work_log',   // this week's work log
         self::CYCLE_UPCOMING => 'cycle',      // cycle status
+        self::MOMS_DEADLINE  => 'moms',       // the quarter awaiting filing
     ];
 
     public static function exists(string $key): bool

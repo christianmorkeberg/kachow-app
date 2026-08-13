@@ -140,6 +140,12 @@ $cases = [
     ['msg' => 'open the bookkeeping overview for this quarter', 'expect' => 'bookkeeping'],
     ['msg' => 'vis mit regnskab', 'expect' => 'bookkeeping'],
     ['msg' => 'hvor meget skal jeg hensætte til skat?', 'expect' => 'bookkeeping'],
+    // moms settlement card
+    ['msg' => 'how much moms do I owe this quarter?', 'expect' => 'bookkeeping'],
+    ['msg' => 'show my momsafregning', 'expect' => 'bookkeeping'],
+    ['msg' => 'when is the moms deadline?', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvor meget moms skal jeg betale?', 'expect' => 'bookkeeping'],
+    ['msg' => 'vis min momsangivelse for sidste kvartal', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],

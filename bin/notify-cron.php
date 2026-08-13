@@ -24,8 +24,11 @@ require __DIR__ . '/../config.php';
 use App\Auth\GoogleOAuth;
 use App\Data\Calendar;
 use App\Data\CycleTracker;
+use App\Data\Income;
+use App\Data\Moms;
 use App\Data\NotificationLog;
 use App\Data\PushSubscriptions;
+use App\Data\Receipts;
 use App\Data\Users;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
@@ -213,6 +216,47 @@ try {
     }
 } catch (\Throwable $e) {
     error_log('notify-cron cycle: ' . $e->getMessage());
+}
+
+// ---------- Moms: quarterly filing-deadline reminder ----------
+// In the days before a quarterly moms deadline, if the user has bookkeeping activity
+// in the quarter being filed, remind them once. Fires from MOMS_REMIND_HOUR (hourly
+// cron ⇒ ~09:00), once per quarter per user via the ledger (claim key "YYYY-Qn"), and
+// only if the "Moms deadline" toggle is on (default on, but gated on real activity so
+// non-business users never see it).
+const MOMS_REMIND_HOUR = 9;
+const MOMS_LEAD_DAYS    = 10;
+try {
+    $hour = (int) $nowLocal->format('G');
+    if ($hour >= MOMS_REMIND_HOUR && $hour < 12) {
+        $moms = new Moms(new Income(), new Receipts());
+
+        foreach (array_keys($subscribed) as $uid) {
+            $due = $moms->dueForNudge($uid, MOMS_LEAD_DAYS);
+            if ($due === null) {
+                continue;
+            }
+            $periodKey = $due['year'] . '-Q' . $due['quarter'];
+            if (!$log->claim($uid, NotificationTypes::MOMS_DEADLINE, $periodKey)) {
+                continue; // already reminded for this quarter
+            }
+
+            $days     = (int) $due['days_left'];
+            $when     = $days === 0 ? 'today' : 'in ' . $days . ' day' . ($days === 1 ? '' : 's');
+            $tilsvar  = (float) $due['tilsvar'];
+            $amount   = number_format(abs($tilsvar), 0, ',', '.') . ' kr';
+            $verb     = $tilsvar >= 0 ? 'to pay' : 'back';
+            $notifier->notify(
+                $uid,
+                NotificationTypes::MOMS_DEADLINE,
+                'Moms deadline ' . $when,
+                'Your ' . $due['label'] . ' moms is due ' . $due['deadline'] . ' — about ' . $amount
+                    . ' ' . $verb . '. Tap to review before you file.'
+            );
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron moms: ' . $e->getMessage());
 }
 
 exit(0);
