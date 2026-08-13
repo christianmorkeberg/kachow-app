@@ -13,7 +13,8 @@
       "Bash(php -d extension=php_pdo_sqlite \"C:/Users/Christian/AppData/Local/Temp/claude/c--Users-Christian-My-Drive-Dokumenter-kachow-assistant-kachow-app/2cd90465-0f9d-4927-9c3e-2b8c3b700d46/scratchpad/bookkeeping-test.php\")",
       "Bash(php -l kachow-web/api/draws.php)",
       "Bash(node --check kachow-web/assets/app.js)",
-      "Bash(php -d extension=php_pdo_sqlite kachow-app/bin/bookkeeping-test.php)"
+      "Bash(php -d extension=php_pdo_sqlite kachow-app/bin/bookkeeping-test.php)",
+      "Bash(node --check assets/app.js)"
     ]
   }
 }
