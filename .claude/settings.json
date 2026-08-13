@@ -8,7 +8,12 @@
       "Bash(php -l src/Data/Receipts.php)",
       "Bash(php bin/routing-test.php)",
       "Bash(php -l kachow-web/api/chat.php)",
-      "Bash(php -l kachow-web/api/photo.php)"
+      "Bash(php -l kachow-web/api/photo.php)",
+      "Bash(php -d extension=php_pdo_sqlite -r \"var_dump\\(extension_loaded\\('pdo_sqlite'\\)\\); var_dump\\(PDO::getAvailableDrivers\\(\\)\\);\")",
+      "Bash(php -d extension=php_pdo_sqlite \"C:/Users/Christian/AppData/Local/Temp/claude/c--Users-Christian-My-Drive-Dokumenter-kachow-assistant-kachow-app/2cd90465-0f9d-4927-9c3e-2b8c3b700d46/scratchpad/bookkeeping-test.php\")",
+      "Bash(php -l kachow-web/api/draws.php)",
+      "Bash(node --check kachow-web/assets/app.js)",
+      "Bash(php -d extension=php_pdo_sqlite kachow-app/bin/bookkeeping-test.php)"
     ]
   }
 }
