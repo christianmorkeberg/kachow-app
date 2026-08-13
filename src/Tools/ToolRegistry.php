@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\ApiTokens;
 use App\Data\BookkeepingAudit;
+use App\Data\Books;
 use App\Data\Calendar;
 use App\Data\Connections;
 use App\Data\AppFlags;
@@ -157,6 +158,7 @@ final class ToolRegistry
         $registry->register(new MarkInvoicePaid($income, $bookAudit));
         $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit));
         $registry->register(new GetOwnerDraws($ownerDraws));
+        $registry->register(new GetBooks(new Books($income, $receipts, $ownerDraws, $userSettings)));
         $registry->register(new GetEmails($email));
         $registry->register(new ReadEmail($email));
         $registry->register(new MarkEmailsRead($email));

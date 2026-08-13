@@ -379,6 +379,38 @@ final class Receipts
     }
 
     /**
+     * DKK totals for confirmed expenses in a period, for the cockpit KPIs: gross
+     * (incl. VAT), input VAT (købsmoms), net (ex-VAT), and count. Only DKK is summed
+     * (the cockpit is DK-only); foreign-currency receipts are excluded here.
+     *
+     * @return array{total:float, vat:float, ex:float, count:int}
+     */
+    public function periodTotals(int $userId, ?string $from = null, ?string $to = null): array
+    {
+        $where  = ['user_id = :u', "status = 'confirmed'", "currency = 'DKK'"];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]        = 'purchased_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]      = 'purchased_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT COALESCE(SUM(total),0) AS t, COALESCE(SUM(vat),0) AS v, COUNT(*) AS c
+             FROM receipts WHERE ' . implode(' AND ', $where)
+        );
+        $stmt->execute($params);
+        $r = $stmt->fetch();
+
+        $total = round((float) ($r['t'] ?? 0), 2);
+        $vat   = round((float) ($r['v'] ?? 0), 2);
+
+        return ['total' => $total, 'vat' => $vat, 'ex' => round($total - $vat, 2), 'count' => (int) ($r['c'] ?? 0)];
+    }
+
+    /**
      * Finds an existing receipt that looks like a duplicate of the given one —
      * same vendor (case-insensitive) + date + amount — excluding $excludeId.
      * Prefers a confirmed match. Returns a compact record or null.

@@ -98,7 +98,7 @@ final class ToolSelector
         // Income side of the books: invoices/revenue, owner drawings, udlæg reimbursement.
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
-            'get_owner_draws', 'mark_expense_reimbursed',
+            'get_owner_draws', 'mark_expense_reimbursed', 'get_books',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -275,6 +275,11 @@ final class ToolSelector
             'udlæg', 'udlaeg', 'lagde ud', 'lagt ud', 'reimburse', 'reimbursed', 'refunder', 'refunderet',
             // moms return figures
             'moms return', 'moms afregning', 'momsafregning', 'salgsmoms', 'købsmoms', 'vat return',
+            // the bookkeeping cockpit / overview
+            'my books', 'the books', 'open bookkeeping', 'bookkeeping overview', 'financial overview',
+            'how are my finances', 'my finances', 'profit and loss', ' p&l', 'reserve', 'set aside',
+            'mit regnskab', 'regnskabsoversigt', 'åbn regnskab', 'åbn bogføring', 'bogføringen',
+            'overblik over økonomi', 'mine finanser', 'overskud', 'hensæt',
         ],
         'email' => [
             'email', 'e-mail', ' mail', 'inbox', 'gmail', 'outlook', 'hotmail', 'unread',

@@ -330,6 +330,131 @@ final class Income
         ];
     }
 
+    /**
+     * Counts of income entries in a period by status, for the cockpit chips:
+     * draft, booked, plus paid / unpaid among the booked ones.
+     *
+     * @return array{draft:int, booked:int, paid:int, unpaid:int}
+     */
+    public function statusCounts(int $userId, ?string $from, ?string $to): array
+    {
+        $where  = ['user_id = :u'];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]        = 'issued_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]      = 'issued_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare('SELECT status, paid_at FROM income WHERE ' . implode(' AND ', $where));
+        $stmt->execute($params);
+
+        $c = ['draft' => 0, 'booked' => 0, 'paid' => 0, 'unpaid' => 0];
+        foreach ($stmt->fetchAll() as $r) {
+            if ((string) $r['status'] === 'booked') {
+                $c['booked']++;
+                if ($r['paid_at'] !== null && $r['paid_at'] !== '') {
+                    $c['paid']++;
+                } else {
+                    $c['unpaid']++;
+                }
+            } else {
+                $c['draft']++;
+            }
+        }
+
+        return $c;
+    }
+
+    /**
+     * Income entries in a period (any status by default), newest first, for the cockpit
+     * list. $status limits to 'draft'|'booked'|'paid'|'unpaid' when given.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function items(int $userId, ?string $from, ?string $to, ?string $status = null, int $limit = 50): array
+    {
+        $where  = ['user_id = :u'];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]        = 'issued_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]      = 'issued_at <= :to';
+            $params[':to'] = $to;
+        }
+        if ($status === 'draft' || $status === 'booked') {
+            $where[]       = 'status = :st';
+            $params[':st'] = $status;
+        } elseif ($status === 'paid') {
+            $where[] = "status = 'booked' AND paid_at IS NOT NULL";
+        } elseif ($status === 'unpaid') {
+            $where[] = "status = 'booked' AND paid_at IS NULL";
+        }
+        $limit = max(1, min(300, $limit));
+
+        $stmt = $this->db->prepare(
+            'SELECT id, kind, doc_number, customer, issued_at, paid_at, amount_ex_vat, vat, total, currency, category, status
+             FROM income WHERE ' . implode(' AND ', $where) . '
+             ORDER BY issued_at DESC, id DESC LIMIT ' . $limit
+        );
+        $stmt->execute($params);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = [
+                'id'         => (int) $r['id'],
+                'doc_number' => $r['doc_number'] !== null ? (string) $r['doc_number'] : '',
+                'customer'   => $r['customer'] !== null ? (string) $r['customer'] : '',
+                'date'       => $r['issued_at'] !== null ? (string) $r['issued_at'] : '',
+                'total'      => (float) $r['total'],
+                'ex'         => (float) $r['amount_ex_vat'],
+                'vat'        => (float) $r['vat'],
+                'currency'   => (string) ($r['currency'] ?? 'DKK') ?: 'DKK',
+                'status'     => (string) $r['status'],
+                'paid'       => $r['paid_at'] !== null && $r['paid_at'] !== '',
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * DKK totals for BOOKED income in a period, for the cockpit KPIs: net (ex-VAT),
+     * output VAT (salgsmoms), gross, and count. DK-only (foreign currency excluded).
+     *
+     * @return array{ex:float, vat:float, total:float, count:int}
+     */
+    public function periodTotals(int $userId, ?string $from, ?string $to): array
+    {
+        $where  = ['user_id = :u', "status = 'booked'", "currency = 'DKK'"];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]        = 'issued_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]      = 'issued_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT COALESCE(SUM(amount_ex_vat),0) AS ex, COALESCE(SUM(vat),0) AS v, COALESCE(SUM(total),0) AS t, COUNT(*) AS c
+             FROM income WHERE ' . implode(' AND ', $where)
+        );
+        $stmt->execute($params);
+        $r = $stmt->fetch();
+
+        return [
+            'ex'    => round((float) ($r['ex'] ?? 0), 2),
+            'vat'   => round((float) ($r['v'] ?? 0), 2),
+            'total' => round((float) ($r['t'] ?? 0), 2),
+            'count' => (int) ($r['c'] ?? 0),
+        ];
+    }
+
     /** Total output VAT (salgsmoms) on booked income in a period — for the moms card. */
     public function outputVat(int $userId, ?string $from, ?string $to): float
     {

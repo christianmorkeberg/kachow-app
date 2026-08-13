@@ -20,9 +20,11 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Data\BookkeepingAudit;
+use App\Data\Books;
 use App\Data\Income;
 use App\Data\OwnerDraws;
 use App\Data\Receipts;
+use App\Data\UserSettings;
 use App\Tools\AddExpense;
 use App\Tools\AddIncome;
 use App\Tools\AddOwnerDraw;
@@ -70,12 +72,17 @@ $db->exec("CREATE TABLE receipts (
     vendor TEXT, purchased_at TEXT, total NUMERIC, vat NUMERIC, currency TEXT DEFAULT 'DKK',
     category TEXT, note TEXT, line_items TEXT, paid_privately INTEGER NOT NULL DEFAULT 0,
     reimbursed_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$db->exec("CREATE TABLE user_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+    setting_key TEXT NOT NULL, setting_value TEXT NOT NULL)");
 
 $U = 1;
-$income  = new Income($db);
-$draws   = new OwnerDraws($db);
-$audit   = new BookkeepingAudit($db);
-$receipt = new Receipts($db);
+$income   = new Income($db);
+$draws    = new OwnerDraws($db);
+$audit    = new BookkeepingAudit($db);
+$receipt  = new Receipts($db);
+$settings = new UserSettings($db);
+$booksObj = new Books($income, $receipt, $draws, $settings);
 
 echo "\n== 1. VAT derivation (25% moms), pure math ==\n";
 [$ex, $vat, $tot] = Income::deriveVat(null, null, 10000.0);          // total only
@@ -172,6 +179,30 @@ $uc = $u['_render'] ?? [];
 check('draft now 10000 incl. moms (ex 8000 / vat 2000)',
     money($uc['total'] ?? 0) === '10000.00' && money($uc['ex'] ?? 0) === '8000.00' && money($uc['vat'] ?? 0) === '2000.00',
     json_encode(['ex' => $uc['ex'] ?? null, 'vat' => $uc['vat'] ?? null, 'total' => $uc['total'] ?? null]));
+
+echo "\n== 11. Books cockpit overview (KPIs, moms, reserve) ==\n";
+// State so far (all DKK): booked income = kommune (ex 10000 / vat 2500) + private
+// (ex 4000 / vat 1000) → revenue 14000, output VAT 3500. One draft (DSB, not counted).
+// Confirmed expenses = parking (total 250 / vat 50 → ex 200). Draws deleted.
+$ov = $booksObj->overview($U, null, null, 'All', 'all');
+$k  = $ov['kpis'];
+check('kind = bookkeeping', ($ov['kind'] ?? '') === 'bookkeeping');
+check('revenue (ex-moms) = 14000', money($k['revenue']) === '14000.00', money($k['revenue']));
+check('output VAT = 3500, input VAT = 50', money($k['output_vat']) === '3500.00' && money($k['input_vat']) === '50.00', json_encode([$k['output_vat'], $k['input_vat']]));
+check('net moms = 3450', money($k['net_moms']) === '3450.00', money($k['net_moms']));
+check('profit = 13800', money($k['profit']) === '13800.00', money($k['profit']));
+check('reserve = 8970 (3450 moms + 40% of 13800)', money($k['reserve']['total']) === '8970.00', money($k['reserve']['total']));
+check('reserve pct = 40', (int) $k['reserve']['pct'] === 40, (string) $k['reserve']['pct']);
+$ic = $ov['income']['counts'];
+check('income counts: 1 draft, 2 booked, 2 paid, 0 unpaid',
+    $ic['draft'] === 1 && $ic['booked'] === 2 && $ic['paid'] === 2 && $ic['unpaid'] === 0, json_encode($ic));
+check('income module lists all 3 entries', count($ov['income']['items']) === 3, (string) count($ov['income']['items']));
+check('reserve % is configurable', (function () use ($db, $booksObj, $U) {
+    // Insert directly (UserSettings::set uses MySQL ON DUPLICATE KEY, not SQLite).
+    $db->exec("INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES ({$U}, 'tax_reserve_pct', '50')");
+    $o = $booksObj->overview($U, null, null, 'All', 'all');
+    return money($o['kpis']['reserve']['tax']) === '6900.00'; // 50% of 13800
+})(), 'tax at 50% should be 6900');
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

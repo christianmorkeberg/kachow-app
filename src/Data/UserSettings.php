@@ -50,7 +50,23 @@ final class UserSettings
                 . 'weather presenter, warm encouragement around cycle tracking) and never changes facts or '
                 . 'numbers.',
         ],
+        'tax_reserve_pct' => [
+            'default'     => '40',
+            'label'       => 'Tax reserve %',
+            'description' => 'The percentage of business profit (revenue − expenses) to set aside for income '
+                . 'tax + AM-bidrag, used for the bookkeeping "reserve" estimate. A rough buffer so the owner '
+                . 'does not overspend money that is really SKAT\'s — NOT a filed tax figure. Whole number 0–100 '
+                . '(default 40).',
+        ],
     ];
+
+    /** The tax-reserve percentage (0–100) for the reserve estimate; default 40. */
+    public function reservePct(int $userId): int
+    {
+        $v = (int) round((float) ($this->get($userId, 'tax_reserve_pct') ?? '40'));
+
+        return max(0, min(100, $v));
+    }
 
     /** Interprets a stored setting value as a boolean (on/yes/true/1, incl. Danish ja). */
     public static function isTruthy(?string $value): bool

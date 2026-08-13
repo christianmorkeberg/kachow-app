@@ -136,6 +136,10 @@ $cases = [
     // coupled — either side offers both toolsets.
     ['msg' => 'i also sent them one on 5k a week ago', 'recent' => "no it's 10k with vat", 'expect' => 'bookkeeping'],
     ['msg' => 'log an expense of 200 kr', 'expect' => 'bookkeeping'],   // coupling: expense turn also offers income tools
+    ['msg' => 'show my books', 'expect' => 'bookkeeping'],
+    ['msg' => 'open the bookkeeping overview for this quarter', 'expect' => 'bookkeeping'],
+    ['msg' => 'vis mit regnskab', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvor meget skal jeg hensætte til skat?', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],
