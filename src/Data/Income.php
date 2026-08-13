@@ -492,6 +492,7 @@ final class Income
             'entry_kind' => (string) $r['kind'],
             'has_image'  => $r['file_ref'] !== null,
             'image_url'  => $r['file_ref'] !== null ? '/api/income-file.php?id=' . $id : null,
+            'mime'       => isset($r['mime']) && $r['mime'] !== null ? (string) $r['mime'] : '',
             'doc_number' => $r['doc_number'] !== null ? (string) $r['doc_number'] : '',
             'customer'   => $r['customer'] !== null ? (string) $r['customer'] : '',
             'date'       => $r['issued_at'] !== null ? (string) $r['issued_at'] : '',

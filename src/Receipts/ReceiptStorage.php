@@ -22,6 +22,9 @@ final class ReceiptStorage
     /** Accepted incoming image types (converted to JPEG on store). */
     private const ACCEPTED = ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
 
+    /** Non-image documents stored verbatim (not converted) — invoices are often PDFs. */
+    private const ACCEPTED_DOC = ['application/pdf'];
+
     private string $baseDir;
 
     public function __construct(?string $baseDir = null)
@@ -41,16 +44,27 @@ final class ReceiptStorage
     public function store(int $userId, string $tmpPath, int $size): array
     {
         if ($size <= 0 || $size > self::MAX_BYTES) {
-            throw new RuntimeException('That image is too large (max 12 MB).');
+            throw new RuntimeException('That file is too large (max 12 MB).');
         }
         $mime = $this->detectMime($tmpPath);
-        if (!in_array($mime, self::ACCEPTED, true)) {
-            throw new RuntimeException('Please upload a photo (JPEG, PNG, HEIC or WebP).');
+        $isDoc = in_array($mime, self::ACCEPTED_DOC, true);
+        if (!$isDoc && !in_array($mime, self::ACCEPTED, true)) {
+            throw new RuntimeException('Please upload an image (JPEG, PNG, HEIC, WebP) or a PDF.');
         }
 
         $dir = $this->userDir($userId);
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
-            throw new RuntimeException('Could not prepare storage for the receipt.');
+            throw new RuntimeException('Could not prepare storage for the file.');
+        }
+
+        // PDFs (and other documents) are stored verbatim — no image conversion.
+        if ($isDoc) {
+            $docName = bin2hex(random_bytes(16)) . '.pdf';
+            $docDest = $dir . '/' . $docName;
+            if (!@copy($tmpPath, $docDest)) {
+                throw new RuntimeException('Could not store that file. Try again.');
+            }
+            return ['file_ref' => $docName, 'mime' => 'application/pdf'];
         }
 
         $name = bin2hex(random_bytes(16)) . '.jpg';
