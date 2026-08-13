@@ -16,7 +16,9 @@
       "Bash(php -d extension=php_pdo_sqlite kachow-app/bin/bookkeeping-test.php)",
       "Bash(node --check assets/app.js)",
       "Bash(php -l kachow-web/api/books.php)",
-      "Bash(php -l kachow-app/src/Data/Books.php)"
+      "Bash(php -l kachow-app/src/Data/Books.php)",
+      "Bash(php -l kachow-web/index.php)",
+      "Bash(php -l kachow-web/api/receipt.php)"
     ]
   }
 }
