@@ -184,7 +184,7 @@ echo "\n== 11. Books cockpit overview (KPIs, moms, reserve) ==\n";
 // State so far (all DKK): booked income = kommune (ex 10000 / vat 2500) + private
 // (ex 4000 / vat 1000) → revenue 14000, output VAT 3500. One draft (DSB, not counted).
 // Confirmed expenses = parking (total 250 / vat 50 → ex 200). Draws deleted.
-$ov = $booksObj->overview($U, null, null, 'All', 'all');
+$ov = $booksObj->overview($U, 'all', 0);
 $k  = $ov['kpis'];
 check('kind = bookkeeping', ($ov['kind'] ?? '') === 'bookkeeping');
 check('revenue (ex-moms) = 14000', money($k['revenue']) === '14000.00', money($k['revenue']));
@@ -200,9 +200,22 @@ check('income module lists all 3 entries', count($ov['income']['items']) === 3, 
 check('reserve % is configurable', (function () use ($db, $booksObj, $U) {
     // Insert directly (UserSettings::set uses MySQL ON DUPLICATE KEY, not SQLite).
     $db->exec("INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES ({$U}, 'tax_reserve_pct', '50')");
-    $o = $booksObj->overview($U, null, null, 'All', 'all');
+    $o = $booksObj->overview($U, 'all', 0);
     return money($o['kpis']['reserve']['tax']) === '6900.00'; // 50% of 13800
 })(), 'tax at 50% should be 6900');
+
+echo "\n== 12. period navigation (granularity + offset) ==\n";
+$q0 = Books::range('quarter', 0); $qm1 = Books::range('quarter', -1);
+check('previous quarter ends before current quarter starts', $qm1[1] < $q0[0], $qm1[1] . ' vs ' . $q0[0]);
+$m0 = Books::range('month', 0); $mm1 = Books::range('month', -1);
+check('previous month ends before current month starts', $mm1[1] < $m0[0], $mm1[1] . ' vs ' . $m0[0]);
+$y0 = Books::range('year', 0); $ym1 = Books::range('year', -1);
+check('previous year label is one less', ((int) $ym1[2]) === ((int) $y0[2]) - 1, $ym1[2] . ' vs ' . $y0[2]);
+$allr = Books::range('all', 0);
+check('all range is unbounded', $allr[0] === null && $allr[1] === null);
+$navCard = $booksObj->overview($U, 'quarter', -1);
+check('overview carries granularity/offset + can_next', ($navCard['granularity'] ?? '') === 'quarter'
+    && ($navCard['offset'] ?? 1) === -1 && ($navCard['can_next'] ?? false) === true, json_encode([$navCard['granularity'] ?? null, $navCard['offset'] ?? null, $navCard['can_next'] ?? null]));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

@@ -18,7 +18,9 @@
       "Bash(php -l kachow-web/api/books.php)",
       "Bash(php -l kachow-app/src/Data/Books.php)",
       "Bash(php -l kachow-web/index.php)",
-      "Bash(php -l kachow-web/api/receipt.php)"
+      "Bash(php -l kachow-web/api/receipt.php)",
+      "Bash(php -l kachow-app/src/Tools/GetBooks.php)",
+      "Bash(php kachow-app/bin/routing-test.php)"
     ]
   }
 }

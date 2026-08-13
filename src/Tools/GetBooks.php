@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Books;
-use App\Tools\GetExpenses;
 
 /**
  * Tool: open the bookkeeping cockpit — a single dashboard overview of the books
@@ -42,8 +41,9 @@ final class GetBooks implements Tool
             'properties' => [
                 'period' => [
                     'type'        => 'string',
-                    'enum'        => ['this_month', 'last_month', 'this_quarter', 'this_year', 'all'],
-                    'description' => 'Which period. Defaults to this_quarter.',
+                    'enum'        => ['this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'all'],
+                    'description' => 'Which period to open on. Defaults to this_quarter. The user can then page '
+                        . 'to other periods within the card.',
                 ],
             ],
             'required' => [],
@@ -52,18 +52,25 @@ final class GetBooks implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
+        // Map the model's period word to a granularity + offset (0 = current, -1 = previous).
+        $map = [
+            'this_month'   => ['month', 0],   'last_month'   => ['month', -1],
+            'this_quarter' => ['quarter', 0], 'last_quarter' => ['quarter', -1],
+            'this_year'    => ['year', 0],    'last_year'    => ['year', -1],
+            'all'          => ['all', 0],
+        ];
         $period = (string) ($arguments['period'] ?? 'this_quarter');
-        [$from, $to, $label] = GetExpenses::resolveRange($period, null, null);
+        [$gran, $offset] = $map[$period] ?? ['quarter', 0];
 
-        $card = $this->books->overview($userId, $from, $to, $label, $period);
+        $card = $this->books->overview($userId, $gran, $offset);
 
         return [
-            'opened'  => true,
-            'period'  => $label,
-            'revenue' => $card['kpis']['revenue'],
+            'opened'   => true,
+            'period'   => $card['period_label'],
+            'revenue'  => $card['kpis']['revenue'],
             'net_moms' => $card['kpis']['net_moms'],
-            'reserve' => $card['kpis']['reserve']['total'],
-            '_render' => $card,
+            'reserve'  => $card['kpis']['reserve']['total'],
+            '_render'  => $card,
         ];
     }
 }
