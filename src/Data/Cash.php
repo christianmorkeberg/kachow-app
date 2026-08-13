@@ -58,8 +58,11 @@ final class Cash
         $allInc = $this->income->periodTotals($userId, null, null);   // ex / vat / total / count (booked DKK)
         $allExp = $this->receipts->periodTotals($userId, null, null); // total / vat / ex / count (confirmed DKK)
 
-        $cumNetMoms = round($allInc['vat'] - $allExp['vat'], 2);      // salgs − købs, all time
-        $momsOwed   = round(max(0.0, $cumNetMoms + $this->entries->net($userId, 'moms')), 2);
+        // Signed running moms position after payments: + = you still owe SKAT, − = SKAT
+        // owes you a refund (købsmoms exceeded salgsmoms, or you overpaid).
+        $momsNet    = round(($allInc['vat'] - $allExp['vat']) + $this->entries->net($userId, 'moms'), 2);
+        $momsOwed   = round(max(0.0, $momsNet), 2);   // set aside only when you owe
+        $refundDue  = round(max(0.0, -$momsNet), 2);  // expected inflow, not yet in the account
 
         $pct        = $this->settings->reservePct($userId);
         $cumProfit  = round($allInc['ex'] - $allExp['ex'], 2);
@@ -75,6 +78,10 @@ final class Cash
             'currency'      => 'DKK',
             'expected'      => $expected,
             'free_to_spend' => $free,
+            // A moms refund SKAT owes you but hasn't paid yet (0 when you owe instead).
+            // Not in expected/free-to-spend until received; shown so it isn't forgotten.
+            'refund_expected'  => $refundDue,
+            'free_incl_refund' => round($free + $refundDue, 2),
             'opening'       => $opening,
             'money_in'      => ['total' => $moneyIn, 'invoices_paid' => $received, 'other' => $manual['in']],
             'money_out'     => ['total' => $moneyOut, 'expenses' => $expensesOut, 'draws' => $drawsOut, 'other' => $manual['out']],

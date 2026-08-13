@@ -304,6 +304,24 @@ $pos2 = $cashObj->position($U2);
 check('paying more moms leaves free-to-spend unchanged', money($pos2['free_to_spend']) === money($freeBefore), money($pos2['free_to_spend']));
 check('expected dropped by the 1250 moms payment', money($pos2['expected']) === '5000.00', money($pos2['expected']));
 
+echo "\n== 16. Cash: expected moms REFUND surfaced (SKAT owes you), fresh user U3 ==\n";
+$U3 = 3;
+// købsmoms (500) exceeds salgsmoms (0): a moms refund is due. Confirmed expense
+// total 2500 / vat 500, business-paid, no income.
+$rr = $receipt->create($U3, ['purchased_at' => Income::today(), 'vendor' => 'Big buy', 'total' => 2500, 'vat' => 500], 'manual');
+$receipt->confirm($U3, $rr);
+$pos3 = $cashObj->position($U3);
+// momsNet = 0 − 500 = −500 → owed 0, refund_expected 500.
+check('moms reserve is 0 when a refund is due', money($pos3['reserve']['moms']) === '0.00', money($pos3['reserve']['moms']));
+check('refund_expected = 500', money($pos3['refund_expected']) === '500.00', money($pos3['refund_expected']));
+// expected = 0 − 2500 = −2500 (paid out, nothing in yet). free_incl_refund = free + 500.
+check('free_incl_refund = free_to_spend + refund', money($pos3['free_incl_refund']) === money($pos3['free_to_spend'] + 500), json_encode([$pos3['free_to_spend'], $pos3['free_incl_refund']]));
+// Receiving the refund (cash in, moms) clears refund_expected and lifts expected.
+$cashEntries->add($U3, 'in', 500.0, 'moms', 'refund received');
+$pos3b = $cashObj->position($U3);
+check('refund_expected clears once received', money($pos3b['refund_expected']) === '0.00', money($pos3b['refund_expected']));
+check('expected rises by the received refund', money($pos3b['expected']) === money($pos3['expected'] + 500), money($pos3b['expected']));
+
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";
 exit($fail === 0 ? 0 : 1);
