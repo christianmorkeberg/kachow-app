@@ -30,6 +30,7 @@ use App\Tools\GetIncome;
 use App\Tools\GetOwnerDraws;
 use App\Tools\MarkExpenseReimbursed;
 use App\Tools\MarkInvoicePaid;
+use App\Tools\UpdateIncome;
 
 if (!extension_loaded('pdo_sqlite')) {
     fwrite(STDERR, "pdo_sqlite not loaded — re-run with:\n  php -d extension=php_pdo_sqlite bin/bookkeeping-test.php\n");
@@ -158,6 +159,19 @@ check('draws empty after delete', ($gd2['count'] ?? -1) === 0, 'count=' . ($gd2[
 echo "\n== 9. invoice-number series helper (for generated private invoices) ==\n";
 $next = $income->nextInvoiceNumber($U, 2026);
 check('nextInvoiceNumber = K-2026-001', $next === 'K-2026-001', $next);
+
+echo "\n== 10. update_income corrects a draft in place — no duplicate (report #11) ==\n";
+$upd = new UpdateIncome($income, $audit);
+$c1  = $addIncome->execute(['amount_ex_vat' => 10000, 'customer' => 'DSB'], $U); // draft: ex 10000 → total 12500
+$cid = $c1['id'];
+$rowsBefore = (int) $db->query('SELECT COUNT(*) FROM income')->fetchColumn();
+$u   = $upd->execute(['id' => $cid, 'total' => 10000], $U);                       // "no, 10k INCL vat"
+$rowsAfter  = (int) $db->query('SELECT COUNT(*) FROM income')->fetchColumn();
+check('update did not create a new row', $rowsBefore === $rowsAfter, "{$rowsBefore} -> {$rowsAfter}");
+$uc = $u['_render'] ?? [];
+check('draft now 10000 incl. moms (ex 8000 / vat 2000)',
+    money($uc['total'] ?? 0) === '10000.00' && money($uc['ex'] ?? 0) === '8000.00' && money($uc['vat'] ?? 0) === '2000.00',
+    json_encode(['ex' => $uc['ex'] ?? null, 'vat' => $uc['vat'] ?? null, 'total' => $uc['total'] ?? null]));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

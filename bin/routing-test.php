@@ -130,6 +130,12 @@ $cases = [
     ['msg' => 'hvad er min omsætning i år?', 'expect' => 'bookkeeping'],
     // reimbursing an udlæg — both bookkeeping and receipts carry the tool
     ['msg' => 'jeg har refunderet mit udlæg', 'expect' => 'bookkeeping'],
+    ['msg' => 'I sent DSB a 5000 invoice', 'expect' => 'bookkeeping'],
+    // report #11: a keyword-less income follow-up after a "vat" turn was routed to
+    // receipts-only, so the invoice got booked as an expense. Income+expenses are now
+    // coupled — either side offers both toolsets.
+    ['msg' => 'i also sent them one on 5k a week ago', 'recent' => "no it's 10k with vat", 'expect' => 'bookkeeping'],
+    ['msg' => 'log an expense of 200 kr', 'expect' => 'bookkeeping'],   // coupling: expense turn also offers income tools
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],

@@ -26,7 +26,10 @@ final class AddExpense implements Tool
 
     public function description(): string
     {
-        return 'Records a business expense the user describes in words (no receipt photo). Provide '
+        return 'Records a business EXPENSE — money the user SPENT / PAID OUT (a cost). Only use this for '
+            . 'outgoing money: "I paid…", "I bought…", "it cost…". If instead the user SENT or ISSUED an '
+            . 'invoice, billed someone, or received money ("I sent them a bill", "I invoiced", "they paid '
+            . 'me"), that is INCOME → use add_income, NOT this. Provide '
             . 'what they said: amount as total (incl. VAT), the vendor/what it was for, and if they '
             . 'gave them: the VAT/moms amount, the date, and a category. Amounts are DKK unless stated. '
             . 'Set paid_privately=true when the user paid for a business cost out of their OWN private '

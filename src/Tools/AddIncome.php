@@ -36,8 +36,10 @@ final class AddIncome implements Tool
             . 'source is "nemhandel" for public-body invoices sent via NemHandel, "private" for a private '
             . 'client, else "manual". doc_number is the invoice number if the user has one (do NOT invent one). '
             . 'It becomes a draft card the user confirms — you need not fill every field. Amounts are DKK '
-            . 'unless stated. This is INCOME, never an expense (that is add_expense). Categories: '
-            . implode(', ', Income::CATEGORIES) . '.';
+            . 'unless stated. This is INCOME — money the user SENT an invoice for or RECEIVED — never an '
+            . 'expense they paid (that is add_expense). If the user then CORRECTS a draft you just created '
+            . '(wrong amount, or "it\'s incl. VAT"), call update_income with that id — do NOT create another '
+            . 'draft. Categories: ' . implode(', ', Income::CATEGORIES) . '.';
     }
 
     public function parameters(): array

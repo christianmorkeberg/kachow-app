@@ -152,6 +152,7 @@ final class ToolRegistry
         $registry->register(new ExportExpensesCsv($receipts));
         $registry->register(new MarkExpenseReimbursed($receipts, $bookAudit));
         $registry->register(new AddIncome($income, $bookAudit));
+        $registry->register(new UpdateIncome($income, $bookAudit));
         $registry->register(new GetIncome($income));
         $registry->register(new MarkInvoicePaid($income, $bookAudit));
         $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit));

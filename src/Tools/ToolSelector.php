@@ -97,8 +97,8 @@ final class ToolSelector
         ],
         // Income side of the books: invoices/revenue, owner drawings, udlæg reimbursement.
         'bookkeeping' => [
-            'add_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw', 'get_owner_draws',
-            'mark_expense_reimbursed',
+            'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
+            'get_owner_draws', 'mark_expense_reimbursed',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -263,7 +263,8 @@ final class ToolSelector
         'bookkeeping' => [
             'income', 'invoice', 'invoiced', 'invoicing', 'revenue', 'turnover', 'earned', 'earnings',
             ' sales', 'a customer paid', 'got paid', 'owes me', 'owe me', 'outstanding invoice',
-            'still outstanding', 'debtor', 'debtors',
+            'still outstanding', 'debtor', 'debtors', 'sent them a', 'sent an invoice', 'sent a bill',
+            'issued an invoice', 'billed them', 'sendte en faktura', 'sendte dem', 'sendt en faktura',
             'nemhandel', 'faktura', 'fakturer', 'fakturere', 'faktureret', 'fakturering',
             'indtægt', 'indtægter', 'omsætning', 'tjent', 'indtjening', 'debitor', 'skylder mig', 'udestående',
             // owner drawings / paying yourself (avoid bare "draw" — matches drawn/withdrawer/etc.)
@@ -396,6 +397,19 @@ final class ToolSelector
                     break;
                 }
             }
+        }
+
+        // Income and expenses are two halves of ONE bookkeeping conversation: a turn
+        // about money often names only one side ("I sent them a 5k invoice" has no
+        // expense words; "vat" leans expense). Whenever either matches, offer BOTH so
+        // the model can classify money-in vs money-out correctly instead of being boxed
+        // into the only toolset it was handed (report #11: an issued invoice got booked
+        // as an expense because add_income was never sent).
+        $has = array_flip($groups);
+        if (isset($has['receipts']) && !isset($has['bookkeeping'])) {
+            $groups[] = 'bookkeeping';
+        } elseif (isset($has['bookkeeping']) && !isset($has['receipts'])) {
+            $groups[] = 'receipts';
         }
 
         return $groups;
