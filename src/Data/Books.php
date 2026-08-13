@@ -136,4 +136,17 @@ final class Books
 
         return $row !== null ? $this->income->card($row) : null;
     }
+
+    /**
+     * The detail card for one expense (receipt) — for the cockpit expense drill-in.
+     * Returns the standard receipt card (with duplicate check), or null if not found.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function expenseEntry(int $userId, int $id): ?array
+    {
+        $row = $this->receipts->get($userId, $id);
+
+        return $row !== null ? $this->receipts->cardWithChecks($userId, $row) : null;
+    }
 }
