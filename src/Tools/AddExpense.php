@@ -29,8 +29,10 @@ final class AddExpense implements Tool
         return 'Records a business expense the user describes in words (no receipt photo). Provide '
             . 'what they said: amount as total (incl. VAT), the vendor/what it was for, and if they '
             . 'gave them: the VAT/moms amount, the date, and a category. Amounts are DKK unless stated. '
-            . 'It becomes a draft shown as a card for the user to confirm — so you do not need every '
-            . 'field. Categories: ' . implode(', ', Receipts::CATEGORIES) . '.';
+            . 'Set paid_privately=true when the user paid for a business cost out of their OWN private '
+            . 'money (an udlæg, "jeg lagde ud for …") — it stays a normal deductible expense but is tracked '
+            . 'as owed back to them until reimbursed. It becomes a draft shown as a card for the user to '
+            . 'confirm — so you do not need every field. Categories: ' . implode(', ', Receipts::CATEGORIES) . '.';
     }
 
     public function parameters(): array
@@ -45,6 +47,7 @@ final class AddExpense implements Tool
                 'category' => ['type' => 'string', 'enum' => Receipts::CATEGORIES, 'description' => 'Best-fit category.'],
                 'currency' => ['type' => 'string', 'description' => 'ISO currency, default DKK.'],
                 'note'     => ['type' => 'string', 'description' => 'Optional short note.'],
+                'paid_privately' => ['type' => 'boolean', 'description' => 'True if the user paid this business cost from private funds (udlæg), to be reimbursed.'],
             ],
             'required' => ['total'],
         ];
@@ -61,13 +64,14 @@ final class AddExpense implements Tool
             : (new DateTimeImmutable('now', new DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
 
         $id = $this->receipts->create($userId, [
-            'total'        => $arguments['total'],
-            'vendor'       => $arguments['vendor'] ?? null,
-            'vat'          => $arguments['vat'] ?? null,
-            'purchased_at' => $date,
-            'category'     => $arguments['category'] ?? null,
-            'currency'     => $arguments['currency'] ?? 'DKK',
-            'note'         => $arguments['note'] ?? null,
+            'total'          => $arguments['total'],
+            'vendor'         => $arguments['vendor'] ?? null,
+            'vat'            => $arguments['vat'] ?? null,
+            'purchased_at'   => $date,
+            'category'       => $arguments['category'] ?? null,
+            'currency'       => $arguments['currency'] ?? 'DKK',
+            'note'           => $arguments['note'] ?? null,
+            'paid_privately' => !empty($arguments['paid_privately']),
         ], 'manual');
 
         $row = $this->receipts->get($userId, $id);

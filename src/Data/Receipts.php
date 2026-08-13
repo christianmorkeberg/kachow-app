@@ -27,7 +27,7 @@ final class Receipts
         'Other',
     ];
 
-    private const FIELDS = ['vendor', 'purchased_at', 'total', 'vat', 'currency', 'category', 'note'];
+    private const FIELDS = ['vendor', 'purchased_at', 'total', 'vat', 'currency', 'category', 'note', 'paid_privately', 'reimbursed_at'];
 
     private PDO $db;
 
@@ -154,8 +154,71 @@ final class Receipts
             'category'   => $r['category'] !== null ? (string) $r['category'] : '',
             'note'       => $r['note'] !== null ? (string) $r['note'] : '',
             'line_items' => self::decodeLineItems($r['line_items'] ?? null),
+            // Udlæg: this expense was paid from the owner's private funds. It's still a
+            // normal deductible business expense; these flags only track the outlay and
+            // whether the company has reimbursed the owner yet.
+            'paid_privately' => (bool) ($r['paid_privately'] ?? false),
+            'reimbursed_at'  => ($r['reimbursed_at'] ?? null) !== null ? (string) $r['reimbursed_at'] : '',
+            'reimbursed'     => ($r['reimbursed_at'] ?? null) !== null && $r['reimbursed_at'] !== '',
             'categories' => self::CATEGORIES,
         ];
+    }
+
+    /** Marks a privately-paid expense (udlæg) reimbursed on a date (defaults today). */
+    public function markReimbursed(int $userId, int $id, ?string $date = null): bool
+    {
+        $date = $date !== null && trim($date) !== '' ? date('Y-m-d', strtotime($date) ?: time()) : date('Y-m-d');
+        $stmt = $this->db->prepare(
+            'UPDATE receipts SET paid_privately = 1, reimbursed_at = :d WHERE id = :id AND user_id = :u'
+        );
+        $stmt->execute([':d' => $date, ':id' => $id, ':u' => $userId]);
+
+        return $this->get($userId, $id) !== null;
+    }
+
+    /**
+     * Outstanding udlæg — confirmed expenses paid privately but not yet reimbursed,
+     * i.e. what the company still owes the owner. Totals per currency (never blended).
+     *
+     * @return array{
+     *   items:array<int,array{id:int,vendor:string,date:string,total:float,currency:string}>,
+     *   count:int, totals:array<int,array{currency:string,total:float,count:int}>
+     * }
+     */
+    public function outstandingUdlaeg(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, vendor, purchased_at, total, currency FROM receipts
+             WHERE user_id = :u AND status = 'confirmed'
+               AND paid_privately = 1 AND reimbursed_at IS NULL
+             ORDER BY purchased_at DESC, id DESC LIMIT 300"
+        );
+        $stmt->execute([':u' => $userId]);
+
+        $items = [];
+        $byCur = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $t   = (float) $r['total'];
+            $cur = (string) ($r['currency'] ?? 'DKK') ?: 'DKK';
+            $byCur[$cur] ??= ['total' => 0.0, 'count' => 0];
+            $byCur[$cur]['total'] += $t;
+            $byCur[$cur]['count']++;
+            $items[] = [
+                'id'       => (int) $r['id'],
+                'vendor'   => $r['vendor'] !== null ? (string) $r['vendor'] : '',
+                'date'     => $r['purchased_at'] !== null ? (string) $r['purchased_at'] : '',
+                'total'    => $t,
+                'currency' => $cur,
+            ];
+        }
+
+        $totals = [];
+        foreach ($byCur as $cur => $agg) {
+            $totals[] = ['currency' => $cur, 'total' => round($agg['total'], 2), 'count' => $agg['count']];
+        }
+        usort($totals, static fn (array $a, array $b): int => $b['total'] <=> $a['total']);
+
+        return ['items' => $items, 'count' => count($items), 'totals' => $totals];
     }
 
     /**
@@ -420,6 +483,8 @@ final class Receipts
             $out[$f] = match ($f) {
                 'total', 'vat'   => ($v === null || $v === '') ? null : round((float) $v, 2),
                 'purchased_at'   => $this->normalizeDate($v),
+                'reimbursed_at'  => ($v === null || $v === '') ? null : $this->normalizeDate($v),
+                'paid_privately' => (int) (bool) $v,
                 'currency'       => strtoupper(mb_substr(trim((string) $v), 0, 3)) ?: 'DKK',
                 'category'       => self::normalizeCategory($v !== null ? (string) $v : null),
                 'vendor'         => mb_substr(trim((string) $v), 0, 160),

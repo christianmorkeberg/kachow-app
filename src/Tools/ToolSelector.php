@@ -93,6 +93,12 @@ final class ToolSelector
         ],
         'receipts' => [
             'add_expense', 'update_receipt', 'delete_receipt', 'get_expenses', 'export_expenses_csv',
+            'mark_expense_reimbursed',
+        ],
+        // Income side of the books: invoices/revenue, owner drawings, udlæg reimbursement.
+        'bookkeeping' => [
+            'add_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw', 'get_owner_draws',
+            'mark_expense_reimbursed',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -244,12 +250,30 @@ final class ToolSelector
         ],
         'receipts' => [
             'expense', 'expenses', 'receipt', 'receipts', 'moms', 'vat', 'deductible', 'write off',
-            'write-off', 'i paid', 'paid for', 'business cost', 'reimburse', 'log a cost',
+            'write-off', 'i paid', 'paid for', 'business cost', 'reimburse', 'reimbursed', 'log a cost',
             'how much have i spent', 'have i spent', 'what have i spent', 'spending', 'my spend',
-            'export', 'csv', 'accountant', 'bookkeeping',
+            'export', 'csv', 'accountant', 'bookkeeping', 'udlæg', 'udlaeg', 'laid out', 'out of pocket',
+            'paid privately', 'paid it myself', 'lagde ud', 'lagt ud', 'refunder', 'refunderet',
             // Danish
             'udgift', 'udgifter', 'kvittering', 'bilag', 'fradrag', 'regning', 'jeg betalte', 'moms',
             'hvad har jeg brugt', 'brugt på', 'regnskab', 'bogføring', 'eksport', 'revisor',
+        ],
+        // Income side of the books: invoices issued, revenue in, outstanding debtors,
+        // owner drawings (pay-to-self), udlæg reimbursement, VAT-return figures.
+        'bookkeeping' => [
+            'income', 'invoice', 'invoiced', 'invoicing', 'revenue', 'turnover', 'earned', 'earnings',
+            ' sales', 'a customer paid', 'got paid', 'owes me', 'owe me', 'outstanding invoice',
+            'still outstanding', 'debtor', 'debtors',
+            'nemhandel', 'faktura', 'fakturer', 'fakturere', 'faktureret', 'fakturering',
+            'indtægt', 'indtægter', 'omsætning', 'tjent', 'indtjening', 'debitor', 'skylder mig', 'udestående',
+            // owner drawings / paying yourself (avoid bare "draw" — matches drawn/withdrawer/etc.)
+            'owner draw', 'pay myself', 'paid myself', 'pay to myself', 'take out of the business',
+            'private withdrawal', 'privat hævning', 'hævning', 'hævede', 'hæve til mig', 'min løn',
+            'løn til mig selv', 'udbetale til mig',
+            // udlæg + reimbursement (shared with receipts)
+            'udlæg', 'udlaeg', 'lagde ud', 'lagt ud', 'reimburse', 'reimbursed', 'refunder', 'refunderet',
+            // moms return figures
+            'moms return', 'moms afregning', 'momsafregning', 'salgsmoms', 'købsmoms', 'vat return',
         ],
         'email' => [
             'email', 'e-mail', ' mail', 'inbox', 'gmail', 'outlook', 'hotmail', 'unread',

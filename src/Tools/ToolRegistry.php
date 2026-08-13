@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\ApiTokens;
+use App\Data\BookkeepingAudit;
 use App\Data\Calendar;
 use App\Data\Connections;
 use App\Data\AppFlags;
 use App\Data\CycleTracker;
 use App\Data\DevIdeas;
+use App\Data\Income;
+use App\Data\OwnerDraws;
 use App\Data\ExerciseAliases;
 use App\Data\FeedbackReports;
 use App\Data\Invites;
@@ -76,6 +79,9 @@ final class ToolRegistry
         EmailService $email,
         CycleTracker $cycle,
         UserSettings $userSettings,
+        Income $income,
+        OwnerDraws $ownerDraws,
+        BookkeepingAudit $bookAudit,
         ?Discogs $discogs = null
     ): self {
         $registry = new self();
@@ -144,6 +150,12 @@ final class ToolRegistry
         $registry->register(new DeleteReceipt($receipts, $receiptStorage));
         $registry->register(new GetExpenses($receipts));
         $registry->register(new ExportExpensesCsv($receipts));
+        $registry->register(new MarkExpenseReimbursed($receipts, $bookAudit));
+        $registry->register(new AddIncome($income, $bookAudit));
+        $registry->register(new GetIncome($income));
+        $registry->register(new MarkInvoicePaid($income, $bookAudit));
+        $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit));
+        $registry->register(new GetOwnerDraws($ownerDraws));
         $registry->register(new GetEmails($email));
         $registry->register(new ReadEmail($email));
         $registry->register(new MarkEmailsRead($email));

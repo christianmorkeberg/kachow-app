@@ -112,6 +112,24 @@ $cases = [
     ['msg' => 'export my expenses to csv', 'expect' => 'receipts'],
     ['msg' => 'hvad har jeg brugt på mad?', 'expect' => 'receipts'],
     ['msg' => 'her er en kvittering fra Netto', 'expect' => 'receipts'],
+    // udlæg (privately paid) — must offer the expense tools too
+    ['msg' => 'I paid for the parking myself, log it as an udlæg', 'expect' => 'receipts'],
+    ['msg' => 'jeg lagde ud for kontorartikler', 'expect' => 'receipts'],
+
+    // ---- bookkeeping: income / invoices / draws ----
+    ['msg' => 'I invoiced the kommune 10000 plus moms', 'expect' => 'bookkeeping'],
+    ['msg' => "what's my revenue this quarter?", 'expect' => 'bookkeeping'],
+    ['msg' => 'how much have I invoiced this year?', 'expect' => 'bookkeeping'],
+    ['msg' => 'which invoices are still outstanding?', 'expect' => 'bookkeeping'],
+    ['msg' => 'mark the kommune invoice as paid', 'expect' => 'bookkeeping'],
+    ['msg' => 'I paid myself 15000 today', 'expect' => 'bookkeeping'],
+    ['msg' => 'jeg har sendt en faktura til kommunen på 8000', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvor meget har jeg faktureret i denne måned?', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvem skylder mig penge?', 'expect' => 'bookkeeping'],
+    ['msg' => 'jeg hævede 10000 til mig selv', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvad er min omsætning i år?', 'expect' => 'bookkeeping'],
+    // reimbursing an udlæg — both bookkeeping and receipts carry the tool
+    ['msg' => 'jeg har refunderet mit udlæg', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],
