@@ -99,6 +99,7 @@ final class ToolSelector
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'get_books', 'get_moms',
+            'get_cash', 'record_cash_movement',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -277,6 +278,12 @@ final class ToolSelector
             'moms return', 'moms afregning', 'momsafregning', 'momsangivelse', 'salgsmoms', 'købsmoms',
             'vat return', 'tilsvar', 'how much moms', 'how much vat', 'moms this quarter', 'moms due',
             'moms deadline', 'hvor meget moms', 'betale i moms', 'moms skal jeg betale', 'moms frist',
+            // cash position / expected bank balance
+            'bank balance', 'account balance', 'in my account', 'in the account', 'in my bank',
+            'how much money do i have', 'do i actually have', 'money do i have', 'free to spend', 'cash position',
+            'liquidity', 'kontosaldo', 'på kontoen', 'på min konto', 'hvor meget står der', 'likviditet',
+            'hvor meget kan jeg bruge', 'hvor meget har jeg', 'bank fee', 'bankgebyr', 'gebyr',
+            'paid moms', 'betalte moms', 'betalt moms', 'put into the business', 'indskud',
             // the bookkeeping cockpit / overview
             'my books', 'the books', 'open bookkeeping', 'bookkeeping overview', 'financial overview',
             'how are my finances', 'my finances', 'profit and loss', ' p&l', 'reserve', 'set aside',

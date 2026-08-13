@@ -146,6 +146,16 @@ $cases = [
     ['msg' => 'when is the moms deadline?', 'expect' => 'bookkeeping'],
     ['msg' => 'hvor meget moms skal jeg betale?', 'expect' => 'bookkeeping'],
     ['msg' => 'vis min momsangivelse for sidste kvartal', 'expect' => 'bookkeeping'],
+    // cash position / expected bank balance
+    ['msg' => 'how much should be in my bank account?', 'expect' => 'bookkeeping'],
+    ['msg' => 'how much money do I actually have?', 'expect' => 'bookkeeping'],
+    ['msg' => 'how much am I free to spend?', 'expect' => 'bookkeeping'],
+    ['msg' => 'I paid 3450 kr moms to SKAT today', 'expect' => 'bookkeeping'],
+    ['msg' => 'log a bank fee of 50 kr', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvor meget står der på kontoen?', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvor meget kan jeg bruge?', 'expect' => 'bookkeeping'],
+    ['msg' => 'jeg betalte 3450 i moms', 'expect' => 'bookkeeping'],
+    ['msg' => 'jeg har indskudt 10000 i virksomheden', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],

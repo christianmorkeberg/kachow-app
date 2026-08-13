@@ -58,7 +58,20 @@ final class UserSettings
                 . 'does not overspend money that is really SKAT\'s — NOT a filed tax figure. Whole number 0–100 '
                 . '(default 40).',
         ],
+        'cash_opening' => [
+            'default'     => '0',
+            'label'       => 'Opening bank balance',
+            'description' => 'The bank-account balance BEFORE any tracked movement — the anchor for the cash / '
+                . 'expected-balance view. A brand-new business starts at 0; set it if Kachow should reconcile '
+                . 'against an account that already had money in it. A number in DKK (default 0).',
+        ],
     ];
+
+    /** The opening (anchor) bank balance in DKK for the cash view; default 0. */
+    public function openingBalance(int $userId): float
+    {
+        return round((float) ($this->get($userId, 'cash_opening') ?? '0'), 2);
+    }
 
     /** The tax-reserve percentage (0–100) for the reserve estimate; default 40. */
     public function reservePct(int $userId): int

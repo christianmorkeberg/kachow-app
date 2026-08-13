@@ -21,6 +21,8 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use App\Data\BookkeepingAudit;
 use App\Data\Books;
+use App\Data\Cash;
+use App\Data\CashEntries;
 use App\Data\Income;
 use App\Data\Moms;
 use App\Data\OwnerDraws;
@@ -76,6 +78,10 @@ $db->exec("CREATE TABLE receipts (
 $db->exec("CREATE TABLE user_settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
     setting_key TEXT NOT NULL, setting_value TEXT NOT NULL)");
+$db->exec("CREATE TABLE cash_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+    occurred_at TEXT NOT NULL, direction TEXT NOT NULL, amount NUMERIC NOT NULL,
+    category TEXT DEFAULT 'other', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 
 $U = 1;
 $income   = new Income($db);
@@ -262,6 +268,41 @@ $receipt->delete($U, $rDraft);
 $dId = $draws->add($U, 500.0, null, 'DKK', 'from cockpit');
 check('draw add returns a new id', $dId > 0);
 $draws->delete($U, $dId);
+
+echo "\n== 15. Cash position (expected balance + free-to-spend), fresh user U2 ==\n";
+$U2 = 2;
+$cashEntries = new CashEntries($db);
+// Paid invoice (cash in 12500) + an UNPAID invoice (moms owed, but no cash yet).
+$ci1 = $income->create($U2, ['issued_at' => Income::today(), 'amount_ex_vat' => 10000, 'vat' => 2500, 'total' => 12500], 'manual');
+$income->book($U2, $ci1); $income->markPaid($U2, $ci1);
+$ci2 = $income->create($U2, ['issued_at' => Income::today(), 'amount_ex_vat' => 4000, 'vat' => 1000, 'total' => 5000], 'manual');
+$income->book($U2, $ci2); // left unpaid
+// A confirmed expense the business paid (cash out 1250), an owner draw (3000),
+// and a moms payment to SKAT (cash out 2000, category moms).
+$cr = $receipt->create($U2, ['purchased_at' => Income::today(), 'vendor' => 'Supplier', 'total' => 1250, 'vat' => 250], 'manual');
+$receipt->confirm($U2, $cr);
+$draws->add($U2, 3000.0);
+$cashEntries->add($U2, 'out', 2000.0, 'moms', 'Q moms');
+$cashObj = new Cash($income, $receipt, $draws, $cashEntries, $settings);
+$pos = $cashObj->position($U2);
+// expected = 0 + 12500 − (1250 + 3000 + 2000) = 6250
+check('expected balance = 6250', money($pos['expected']) === '6250.00', money($pos['expected']));
+check('money in: invoices paid 12500', money($pos['money_in']['invoices_paid']) === '12500.00', money($pos['money_in']['invoices_paid']));
+check('money out: expenses 1250 / draws 3000 / other 2000',
+    money($pos['money_out']['expenses']) === '1250.00' && money($pos['money_out']['draws']) === '3000.00' && money($pos['money_out']['other']) === '2000.00',
+    json_encode($pos['money_out']));
+// moms owed = (3500 salgs − 250 købs) − 2000 paid = 1250; tax = 40% of (14000−1000)=5200.
+check('reserve: moms owed 1250 + tax 5200 = 6450',
+    money($pos['reserve']['moms']) === '1250.00' && money($pos['reserve']['tax']) === '5200.00' && money($pos['reserve']['total']) === '6450.00',
+    json_encode($pos['reserve']));
+// free = 6250 − 6450 = −200 (owes SKAT more than the cash on hand — a real warning).
+check('free to spend = −200', money($pos['free_to_spend']) === '-200.00', money($pos['free_to_spend']));
+// A moms payment reduces expected AND moms owed equally → free-to-spend unchanged.
+$freeBefore = $pos['free_to_spend'];
+$cashEntries->add($U2, 'out', 1250.0, 'moms', 'rest of moms');
+$pos2 = $cashObj->position($U2);
+check('paying more moms leaves free-to-spend unchanged', money($pos2['free_to_spend']) === money($freeBefore), money($pos2['free_to_spend']));
+check('expected dropped by the 1250 moms payment', money($pos2['expected']) === '5000.00', money($pos2['expected']));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

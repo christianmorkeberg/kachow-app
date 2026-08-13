@@ -411,6 +411,32 @@ final class Receipts
     }
 
     /**
+     * Gross total of expenses the BUSINESS actually paid out — for the cash / expected-
+     * balance view. That means confirmed DKK receipts that were either paid directly by
+     * the business (not paid_privately) OR were udlæg since reimbursed to the owner. A
+     * not-yet-reimbursed udlæg is the owner's own money, so it's NOT business cash out.
+     * All-time when no range.
+     */
+    public function cashPaidTotal(int $userId, ?string $from = null, ?string $to = null): float
+    {
+        $where  = ['user_id = :u', "status = 'confirmed'", "currency = 'DKK'",
+            '(paid_privately = 0 OR reimbursed_at IS NOT NULL)'];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]         = 'purchased_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]       = 'purchased_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare('SELECT COALESCE(SUM(total),0) FROM receipts WHERE ' . implode(' AND ', $where));
+        $stmt->execute($params);
+
+        return round((float) $stmt->fetchColumn(), 2);
+    }
+
+    /**
      * How many DRAFT (not-yet-confirmed) DKK receipts fall in a period — so the moms
      * card can warn that unbooked expenses aren't yet counted in købsmoms.
      */

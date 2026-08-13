@@ -455,6 +455,28 @@ final class Income
         ];
     }
 
+    /**
+     * Cash actually RECEIVED: gross total of booked invoices that have been paid
+     * (paid_at set), DKK. For the cash / expected-balance view. All-time when no range.
+     */
+    public function receivedTotal(int $userId, ?string $from = null, ?string $to = null): float
+    {
+        $where  = ['user_id = :u', "status = 'booked'", "currency = 'DKK'", 'paid_at IS NOT NULL'];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]         = 'paid_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]       = 'paid_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare('SELECT COALESCE(SUM(total),0) FROM income WHERE ' . implode(' AND ', $where));
+        $stmt->execute($params);
+
+        return round((float) $stmt->fetchColumn(), 2);
+    }
+
     /** Total output VAT (salgsmoms) on booked income in a period — for the moms card. */
     public function outputVat(int $userId, ?string $from, ?string $to): float
     {
