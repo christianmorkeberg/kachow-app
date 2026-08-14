@@ -65,7 +65,49 @@ final class UserSettings
                 . 'expected-balance view. A brand-new business starts at 0; set it if Kachow should reconcile '
                 . 'against an account that already had money in it. A number in DKK (default 0).',
         ],
+        // Seller/company details for generated private invoices (the "from" block).
+        'company_name' => [
+            'default'     => '',
+            'label'       => 'Company name',
+            'description' => 'Your business name, shown as the sender on invoices you generate.',
+        ],
+        'company_cvr' => [
+            'default'     => '',
+            'label'       => 'CVR number',
+            'description' => 'Your CVR (Danish business registration) number, shown on generated invoices.',
+        ],
+        'company_address' => [
+            'default'     => '',
+            'label'       => 'Company address',
+            'description' => 'Your business address (street, postcode, city), shown on generated invoices. Use commas or line breaks between lines.',
+        ],
+        'company_email' => [
+            'default'     => '',
+            'label'       => 'Company email',
+            'description' => 'Contact email shown on generated invoices.',
+        ],
+        'company_payment' => [
+            'default'     => '',
+            'label'       => 'Payment details',
+            'description' => 'How clients pay you — e.g. "Reg 1234 Konto 5678901", an IBAN, or "MobilePay 12345". Shown on generated invoices.',
+        ],
     ];
+
+    /**
+     * The seller/company profile for generated invoices.
+     *
+     * @return array{name:string, cvr:string, address:string, email:string, payment:string}
+     */
+    public function companyProfile(int $userId): array
+    {
+        return [
+            'name'    => (string) ($this->get($userId, 'company_name') ?? ''),
+            'cvr'     => (string) ($this->get($userId, 'company_cvr') ?? ''),
+            'address' => (string) ($this->get($userId, 'company_address') ?? ''),
+            'email'   => (string) ($this->get($userId, 'company_email') ?? ''),
+            'payment' => (string) ($this->get($userId, 'company_payment') ?? ''),
+        ];
+    }
 
     /** The opening (anchor) bank balance in DKK for the cash view; default 0. */
     public function openingBalance(int $userId): float

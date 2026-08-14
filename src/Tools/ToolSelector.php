@@ -99,7 +99,8 @@ final class ToolSelector
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'get_books', 'get_moms',
-            'get_cash', 'record_cash_movement',
+            'get_cash', 'record_cash_movement', 'get_profit_loss',
+            'create_invoice', 'set_company_profile',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -267,6 +268,11 @@ final class ToolSelector
             'still outstanding', 'debtor', 'debtors', 'sent them a', 'sent an invoice', 'sent a bill',
             'issued an invoice', 'billed them', 'sendte en faktura', 'sendte dem', 'sendt en faktura',
             'nemhandel', 'faktura', 'fakturer', 'fakturere', 'faktureret', 'fakturering',
+            // generate an invoice / company (seller) profile
+            'create an invoice', 'generate an invoice', 'make an invoice', 'make me an invoice',
+            'lav en faktura', 'opret en faktura', 'opret faktura', 'skriv en faktura', 'send a bill to',
+            'company details', 'company profile', 'my cvr', 'cvr number', 'cvr-nummer', 'virksomhedsoplysninger',
+            'payment details', 'my company is', 'min virksomhed', 'set my company',
             'indtægt', 'indtægter', 'omsætning', 'tjent', 'indtjening', 'debitor', 'skylder mig', 'udestående',
             // owner drawings / paying yourself (avoid bare "draw" — matches drawn/withdrawer/etc.)
             'owner draw', 'pay myself', 'paid myself', 'pay to myself', 'take out of the business',
@@ -287,6 +293,8 @@ final class ToolSelector
             // the bookkeeping cockpit / overview
             'my books', 'the books', 'open bookkeeping', 'bookkeeping overview', 'financial overview',
             'how are my finances', 'my finances', 'profit and loss', ' p&l', 'reserve', 'set aside',
+            'resultatopgørelse', 'resultat', 'profit this', 'my profit', 'expenses by category', 'earn this',
+            'am i in profit', 'net result', 'bundlinje', 'hvad er mit overskud', 'mit resultat',
             'mit regnskab', 'regnskabsoversigt', 'åbn regnskab', 'åbn bogføring', 'bogføringen',
             'overblik over økonomi', 'mine finanser', 'overskud', 'hensæt',
         ],

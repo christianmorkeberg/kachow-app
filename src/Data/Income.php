@@ -33,7 +33,7 @@ final class Income
     public const CATEGORIES = ['Services', 'Goods', 'Subscription', 'Public sector', 'Other'];
 
     private const FIELDS = [
-        'kind', 'doc_number', 'customer', 'issued_at', 'paid_at',
+        'kind', 'doc_number', 'customer', 'issued_at', 'paid_at', 'due_at',
         'amount_ex_vat', 'vat', 'total', 'currency', 'category', 'note',
     ];
 
@@ -210,6 +210,116 @@ final class Income
         }
 
         return $prefix . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Generates a private-client invoice: a BOOKED income entry with line items, a due
+     * date, and the next gapless K-YEAR-NNN number (assigned now, at issue). Amounts are
+     * derived from the line items (unit_price × qty), 25% moms unless $vatable is false.
+     * Returns the new id.
+     *
+     * @param array<string, mixed> $data customer, issued_at?, due_at?, note?, category?,
+     *                                    vatable?, line_items:[{description, qty, unit_price}]
+     */
+    public function createInvoice(int $userId, array $data): int
+    {
+        $issued  = $this->normalizeDate($data['issued_at'] ?? '') ?? self::today();
+        $due     = $this->normalizeDate($data['due_at'] ?? '');
+        $vatable = ($data['vatable'] ?? true) !== false;
+        $lines   = self::normalizeInvoiceLines($data['line_items'] ?? []);
+
+        $ex = 0.0;
+        foreach ($lines as $l) {
+            $ex += (float) $l['amount'];
+        }
+        [$ex, $vat, $total] = self::deriveVat(round($ex, 2), null, null, $vatable);
+
+        $number = $this->nextInvoiceNumber($userId, (int) substr($issued, 0, 4));
+
+        $fields = [
+            'kind'          => 'invoice',
+            'source'        => 'private',
+            'status'        => 'booked',
+            'doc_number'    => $number,
+            'customer'      => mb_substr(trim((string) ($data['customer'] ?? '')), 0, 160),
+            'issued_at'     => $issued,
+            'due_at'        => $due,
+            'amount_ex_vat' => $ex,
+            'vat'           => $vat,
+            'total'         => $total,
+            'currency'      => 'DKK',
+            'category'      => self::normalizeCategory($data['category'] ?? null),
+            'note'          => isset($data['note']) ? mb_substr(trim((string) $data['note']), 0, 255) : null,
+            'line_items'    => self::encodeInvoiceLines($lines),
+        ];
+        $fields['user_id'] = $userId;
+
+        $cols = array_keys($fields);
+        $ph   = array_map(static fn (string $c): string => ':' . $c, $cols);
+        $stmt = $this->db->prepare(
+            'INSERT INTO income (' . implode(',', $cols) . ') VALUES (' . implode(',', $ph) . ')'
+        );
+        $stmt->execute(array_combine($ph, array_values($fields)));
+
+        return (int) $this->db->lastInsertId();
+    }
+
+    /**
+     * Cleans invoice line input into [{description, qty, unit_price, amount}] where
+     * amount = qty × unit_price. Skips blank rows; bounded to 60 lines.
+     *
+     * @param mixed $items
+     * @return array<int, array{description:string, qty:float, unit_price:float, amount:float}>
+     */
+    public static function normalizeInvoiceLines(mixed $items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+        $out = [];
+        foreach ($items as $it) {
+            if (!is_array($it)) {
+                continue;
+            }
+            $desc = trim((string) ($it['description'] ?? ''));
+            if ($desc === '') {
+                continue;
+            }
+            $qty   = isset($it['qty']) && is_numeric($it['qty']) ? (float) $it['qty'] : 1.0;
+            $unit  = isset($it['unit_price']) && is_numeric($it['unit_price']) ? (float) $it['unit_price'] : 0.0;
+            $out[] = [
+                'description' => mb_substr($desc, 0, 160),
+                'qty'         => round($qty, 2),
+                'unit_price'  => round($unit, 2),
+                'amount'      => round($qty * $unit, 2),
+            ];
+            if (count($out) >= 60) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /** @param array<int, array<string, mixed>> $lines */
+    private static function encodeInvoiceLines(array $lines): ?string
+    {
+        return $lines === [] ? null : json_encode($lines, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Decodes stored invoice line_items into a clean list (tolerant of null/garbage).
+     *
+     * @return array<int, array{description:string, qty:float, unit_price:float, amount:float}>
+     */
+    public static function decodeInvoiceLines(mixed $raw): array
+    {
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? self::normalizeInvoiceLines($decoded) : [];
     }
 
     /**
@@ -504,29 +614,36 @@ final class Income
      */
     public function card(array $r): array
     {
-        $id = (int) $r['id'];
+        $id    = (int) $r['id'];
+        $lines = self::decodeInvoiceLines($r['line_items'] ?? null);
+        // A generated (private) invoice with line items has a printable document.
+        $isDoc = $lines !== [] && (string) ($r['source'] ?? '') === 'private';
 
         return [
-            'kind'       => 'income',
-            'id'         => $id,
-            'status'     => (string) $r['status'],
-            'source'     => (string) $r['source'],
-            'entry_kind' => (string) $r['kind'],
-            'has_image'  => $r['file_ref'] !== null,
-            'image_url'  => $r['file_ref'] !== null ? '/api/income-file.php?id=' . $id : null,
-            'mime'       => isset($r['mime']) && $r['mime'] !== null ? (string) $r['mime'] : '',
-            'doc_number' => $r['doc_number'] !== null ? (string) $r['doc_number'] : '',
-            'customer'   => $r['customer'] !== null ? (string) $r['customer'] : '',
-            'date'       => $r['issued_at'] !== null ? (string) $r['issued_at'] : '',
-            'paid_at'    => $r['paid_at'] !== null ? (string) $r['paid_at'] : '',
-            'paid'       => $r['paid_at'] !== null && $r['paid_at'] !== '',
-            'ex'         => $r['amount_ex_vat'] !== null ? (float) $r['amount_ex_vat'] : null,
-            'vat'        => $r['vat'] !== null ? (float) $r['vat'] : null,
-            'total'      => $r['total'] !== null ? (float) $r['total'] : null,
-            'currency'   => (string) ($r['currency'] ?? 'DKK'),
-            'category'   => $r['category'] !== null ? (string) $r['category'] : '',
-            'note'       => $r['note'] !== null ? (string) $r['note'] : '',
-            'categories' => self::CATEGORIES,
+            'kind'        => 'income',
+            'id'          => $id,
+            'status'      => (string) $r['status'],
+            'source'      => (string) $r['source'],
+            'entry_kind'  => (string) $r['kind'],
+            'has_image'   => $r['file_ref'] !== null,
+            'image_url'   => $r['file_ref'] !== null ? '/api/income-file.php?id=' . $id : null,
+            'mime'        => isset($r['mime']) && $r['mime'] !== null ? (string) $r['mime'] : '',
+            'doc_number'  => $r['doc_number'] !== null ? (string) $r['doc_number'] : '',
+            'customer'    => $r['customer'] !== null ? (string) $r['customer'] : '',
+            'date'        => $r['issued_at'] !== null ? (string) $r['issued_at'] : '',
+            'due_at'      => isset($r['due_at']) && $r['due_at'] !== null ? (string) $r['due_at'] : '',
+            'paid_at'     => $r['paid_at'] !== null ? (string) $r['paid_at'] : '',
+            'paid'        => $r['paid_at'] !== null && $r['paid_at'] !== '',
+            'ex'          => $r['amount_ex_vat'] !== null ? (float) $r['amount_ex_vat'] : null,
+            'vat'         => $r['vat'] !== null ? (float) $r['vat'] : null,
+            'total'       => $r['total'] !== null ? (float) $r['total'] : null,
+            'currency'    => (string) ($r['currency'] ?? 'DKK'),
+            'category'    => $r['category'] !== null ? (string) $r['category'] : '',
+            'note'        => $r['note'] !== null ? (string) $r['note'] : '',
+            'categories'  => self::CATEGORIES,
+            'line_items'  => $lines,
+            'is_invoice_doc' => $isDoc,
+            'invoice_url' => $isDoc ? '/api/invoice-view.php?id=' . $id : null,
         ];
     }
 
@@ -587,7 +704,7 @@ final class Income
             $v = $fields[$f];
             $out[$f] = match ($f) {
                 'amount_ex_vat', 'vat', 'total' => ($v === null || $v === '') ? null : round((float) $v, 2),
-                'issued_at', 'paid_at'          => $this->normalizeDate($v),
+                'issued_at', 'paid_at', 'due_at' => $this->normalizeDate($v),
                 'currency'                      => strtoupper(mb_substr(trim((string) $v), 0, 3)) ?: 'DKK',
                 'category'                      => self::normalizeCategory($v !== null ? (string) $v : null),
                 'kind'                          => ((string) $v === 'other') ? 'other' : 'invoice',

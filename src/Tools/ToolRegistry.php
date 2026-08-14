@@ -17,6 +17,7 @@ use App\Data\CashEntries;
 use App\Data\Income;
 use App\Data\Moms;
 use App\Data\OwnerDraws;
+use App\Data\ProfitLoss;
 use App\Data\ExerciseAliases;
 use App\Data\FeedbackReports;
 use App\Data\Invites;
@@ -167,6 +168,9 @@ final class ToolRegistry
         $cash        = new Cash($income, $receipts, $ownerDraws, $cashEntries, $userSettings);
         $registry->register(new GetCash($cash));
         $registry->register(new RecordCashMovement($cashEntries, $cash));
+        $registry->register(new GetProfitLoss(new ProfitLoss($income, $receipts, $userSettings)));
+        $registry->register(new CreateInvoice($income, $userSettings, $bookAudit));
+        $registry->register(new SetCompanyProfile($userSettings));
         $registry->register(new GetEmails($email));
         $registry->register(new ReadEmail($email));
         $registry->register(new MarkEmailsRead($email));

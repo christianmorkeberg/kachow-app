@@ -26,6 +26,7 @@ use App\Data\CashEntries;
 use App\Data\Income;
 use App\Data\Moms;
 use App\Data\OwnerDraws;
+use App\Data\ProfitLoss;
 use App\Data\Receipts;
 use App\Data\UserSettings;
 use App\Tools\AddExpense;
@@ -57,9 +58,9 @@ $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $db->exec("CREATE TABLE income (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
     kind TEXT DEFAULT 'invoice', source TEXT DEFAULT 'manual', status TEXT DEFAULT 'draft',
-    doc_number TEXT, customer TEXT, issued_at TEXT, paid_at TEXT,
+    doc_number TEXT, customer TEXT, issued_at TEXT, paid_at TEXT, due_at TEXT,
     amount_ex_vat NUMERIC, vat NUMERIC, total NUMERIC, currency TEXT DEFAULT 'DKK',
-    category TEXT, note TEXT, file_ref TEXT, mime TEXT,
+    category TEXT, note TEXT, file_ref TEXT, mime TEXT, line_items TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 $db->exec("CREATE TABLE owner_draws (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
@@ -321,6 +322,49 @@ $cashEntries->add($U3, 'in', 500.0, 'moms', 'refund received');
 $pos3b = $cashObj->position($U3);
 check('refund_expected clears once received', money($pos3b['refund_expected']) === '0.00', money($pos3b['refund_expected']));
 check('expected rises by the received refund', money($pos3b['expected']) === money($pos3['expected'] + 500), money($pos3b['expected']));
+
+echo "\n== 17. P&L / resultatopgørelse (ex-VAT, by category), fresh user U4 ==\n";
+$U4 = 4;
+$pi = $income->create($U4, ['issued_at' => Income::today(), 'amount_ex_vat' => 20000, 'vat' => 5000, 'total' => 25000], 'manual');
+$income->book($U4, $pi);
+$pe1 = $receipt->create($U4, ['purchased_at' => Income::today(), 'vendor' => 'Tools', 'total' => 1250, 'vat' => 250, 'category' => 'Office & Equipment'], 'manual');
+$receipt->confirm($U4, $pe1);
+$pe2 = $receipt->create($U4, ['purchased_at' => Income::today(), 'vendor' => 'Train', 'total' => 500, 'vat' => 100, 'category' => 'Travel & Transport'], 'manual');
+$receipt->confirm($U4, $pe2);
+$plObj = new ProfitLoss($income, $receipt, $settings);
+$pl = $plObj->statement($U4, 'all', 0);
+check('P&L revenue (ex-VAT) = 20000', money($pl['revenue']) === '20000.00', money($pl['revenue']));
+check('P&L total expenses (ex-VAT) = 1400 (1000 + 400)', money($pl['expenses']) === '1400.00', money($pl['expenses']));
+check('P&L profit = 18600', money($pl['profit']) === '18600.00', money($pl['profit']));
+check('P&L has 2 expense categories', count($pl['expense_categories']) === 2, (string) count($pl['expense_categories']));
+check('P&L biggest category first (Office 1000)', money($pl['expense_categories'][0]['ex']) === '1000.00', json_encode($pl['expense_categories'][0]));
+check('P&L tax reserve = 40% of 18600 = 7440', money($pl['tax_reserve']['amount']) === '7440.00', money($pl['tax_reserve']['amount']));
+
+echo "\n== 18. Invoice generation (K-series, line items, moms, due date), user U5 ==\n";
+$U5 = 5;
+$invId = $income->createInvoice($U5, [
+    'customer'   => "Private Client\nStreet 1",
+    'issued_at'  => '2026-03-15',
+    'due_at'     => '2026-03-29',
+    'line_items' => [
+        ['description' => 'Consulting', 'qty' => 10, 'unit_price' => 800],   // 8000
+        ['description' => 'Setup fee', 'qty' => 1, 'unit_price' => 2000],    // 2000
+    ],
+]);
+$invRow  = $income->get($U5, $invId);
+$invCard = $income->card($invRow);
+check('invoice booked (status booked, source private)', ($invRow['status'] ?? '') === 'booked' && ($invRow['source'] ?? '') === 'private', json_encode([$invRow['status'] ?? null, $invRow['source'] ?? null]));
+check('invoice number = K-2026-001', ($invCard['doc_number'] ?? '') === 'K-2026-001', (string) ($invCard['doc_number'] ?? ''));
+check('invoice ex 10000 / vat 2500 / total 12500', money($invCard['ex']) === '10000.00' && money($invCard['vat']) === '2500.00' && money($invCard['total']) === '12500.00', json_encode([$invCard['ex'], $invCard['vat'], $invCard['total']]));
+check('invoice has 2 line items with computed amounts', count($invCard['line_items']) === 2 && money($invCard['line_items'][0]['amount']) === '8000.00', json_encode($invCard['line_items']));
+check('invoice is a printable doc (invoice_url set)', ($invCard['is_invoice_doc'] ?? false) === true && !empty($invCard['invoice_url']));
+check('invoice due date carried', ($invCard['due_at'] ?? '') === '2026-03-29', (string) ($invCard['due_at'] ?? ''));
+// The next invoice that year is 002 (gapless series).
+$invId2 = $income->createInvoice($U5, ['customer' => 'Client 2', 'issued_at' => '2026-06-01', 'line_items' => [['description' => 'Work', 'qty' => 1, 'unit_price' => 1000]]]);
+check('next invoice number = K-2026-002', ($income->card($income->get($U5, $invId2))['doc_number'] ?? '') === 'K-2026-002');
+// A generated invoice counts as booked revenue for that quarter's moms.
+$mQ = (new Moms($income, $receipt))->settlement($U5, 0); // may differ by run date; just assert it ran
+check('generated invoice flows into moms salgsmoms (all-time output VAT ≥ 2500)', $income->outputVat($U5, null, null) >= 2500.0, money($income->outputVat($U5, null, null)));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

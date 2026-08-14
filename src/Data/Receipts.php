@@ -411,6 +411,48 @@ final class Receipts
     }
 
     /**
+     * Confirmed DKK expenses grouped by category, EX-VAT (total − vat) — for the P&L /
+     * resultatopgørelse (where VAT is neither cost nor income). Sorted biggest first.
+     *
+     * @return array<int, array{category:string, ex:float, vat:float, total:float, count:int}>
+     */
+    public function categoryTotals(int $userId, ?string $from = null, ?string $to = null): array
+    {
+        $where  = ['user_id = :u', "status = 'confirmed'", "currency = 'DKK'"];
+        $params = [':u' => $userId];
+        if ($from !== null) {
+            $where[]         = 'purchased_at >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to !== null) {
+            $where[]       = 'purchased_at <= :to';
+            $params[':to'] = $to;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT COALESCE(NULLIF(category, \'\'), \'Other\') AS cat,
+                    COALESCE(SUM(total),0) AS t, COALESCE(SUM(vat),0) AS v, COUNT(*) AS c
+             FROM receipts WHERE ' . implode(' AND ', $where) . ' GROUP BY cat'
+        );
+        $stmt->execute($params);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $total = round((float) $r['t'], 2);
+            $vat   = round((float) $r['v'], 2);
+            $out[] = [
+                'category' => (string) $r['cat'],
+                'ex'       => round($total - $vat, 2),
+                'vat'      => $vat,
+                'total'    => $total,
+                'count'    => (int) $r['c'],
+            ];
+        }
+        usort($out, static fn (array $a, array $b): int => $b['ex'] <=> $a['ex']);
+
+        return $out;
+    }
+
+    /**
      * Gross total of expenses the BUSINESS actually paid out — for the cash / expected-
      * balance view. That means confirmed DKK receipts that were either paid directly by
      * the business (not paid_privately) OR were udlæg since reimbursed to the owner. A

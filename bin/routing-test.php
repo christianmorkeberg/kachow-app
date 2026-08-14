@@ -156,6 +156,18 @@ $cases = [
     ['msg' => 'hvor meget kan jeg bruge?', 'expect' => 'bookkeeping'],
     ['msg' => 'jeg betalte 3450 i moms', 'expect' => 'bookkeeping'],
     ['msg' => 'jeg har indskudt 10000 i virksomheden', 'expect' => 'bookkeeping'],
+    // profit & loss (resultatopgørelse)
+    ['msg' => 'show my profit and loss for this year', 'expect' => 'bookkeeping'],
+    ['msg' => 'what is my profit this quarter?', 'expect' => 'bookkeeping'],
+    ['msg' => 'vis min resultatopgørelse', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvad er mit overskud i år?', 'expect' => 'bookkeeping'],
+    ['msg' => 'expenses by category this year', 'expect' => 'bookkeeping'],
+    // invoice generation + company profile
+    ['msg' => 'create an invoice for a client for 5000 plus moms', 'expect' => 'bookkeeping'],
+    ['msg' => 'generate an invoice for 10 hours of consulting', 'expect' => 'bookkeeping'],
+    ['msg' => 'lav en faktura til en privat kunde', 'expect' => 'bookkeeping'],
+    ['msg' => 'set my company details, CVR is 12345678', 'expect' => 'bookkeeping'],
+    ['msg' => 'min virksomhed hedder Kachow og mit cvr-nummer er 12345678', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],
