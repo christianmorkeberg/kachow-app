@@ -65,6 +65,7 @@ final class Books
         private Receipts $receipts,
         private OwnerDraws $draws,
         private UserSettings $settings,
+        private Mileage $mileage,
     ) {
     }
 
@@ -82,7 +83,8 @@ final class Books
         $outputVat = $inc['vat'];
         $inputVat  = $exp['vat'];
         $netMoms   = round($outputVat - $inputVat, 2);
-        $profitEx  = round($inc['ex'] - $exp['ex'], 2);
+        $mileage   = $this->mileage->businessDeduction($userId, $from, $to);   // business kørsel deduction
+        $profitEx  = round($inc['ex'] - $exp['ex'] - $mileage, 2);
 
         $pct         = $this->settings->reservePct($userId);
         $taxReserve  = round(max(0.0, $profitEx) * $pct / 100, 2);
@@ -127,6 +129,7 @@ final class Books
                 'net_moms'    => $netMoms,
                 'expenses_ex' => $exp['ex'],
                 'expenses'    => $exp['total'],
+                'mileage'     => $mileage,
                 'profit'      => $profitEx,
                 'outstanding' => $outstandingTotal,
                 'reserve'     => [

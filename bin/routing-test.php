@@ -168,6 +168,13 @@ $cases = [
     ['msg' => 'lav en faktura til en privat kunde', 'expect' => 'bookkeeping'],
     ['msg' => 'set my company details, CVR is 12345678', 'expect' => 'bookkeeping'],
     ['msg' => 'min virksomhed hedder Kachow og mit cvr-nummer er 12345678', 'expect' => 'bookkeeping'],
+    // mileage / driving (kørsel)
+    ['msg' => 'I drove to the customer today, log it', 'expect' => 'bookkeeping'],
+    ['msg' => 'show my mileage deduction', 'expect' => 'bookkeeping'],
+    ['msg' => 'how many business driving days do I have left?', 'expect' => 'bookkeeping'],
+    ['msg' => 'jeg kørte på arbejde i dag', 'expect' => 'bookkeeping'],
+    ['msg' => 'hvor meget kørselsfradrag har jeg?', 'expect' => 'bookkeeping'],
+    ['msg' => 'registrér min kørsel til kunden', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],

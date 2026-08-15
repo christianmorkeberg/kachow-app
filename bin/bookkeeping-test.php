@@ -24,6 +24,7 @@ use App\Data\Books;
 use App\Data\Cash;
 use App\Data\CashEntries;
 use App\Data\Income;
+use App\Data\Mileage;
 use App\Data\Moms;
 use App\Data\OwnerDraws;
 use App\Data\ProfitLoss;
@@ -83,6 +84,9 @@ $db->exec("CREATE TABLE cash_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
     occurred_at TEXT NOT NULL, direction TEXT NOT NULL, amount NUMERIC NOT NULL,
     category TEXT DEFAULT 'other', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$db->exec("CREATE TABLE mileage_trips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+    trip_date TEXT NOT NULL, km NUMERIC NOT NULL, note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 
 $U = 1;
 $income   = new Income($db);
@@ -90,7 +94,8 @@ $draws    = new OwnerDraws($db);
 $audit    = new BookkeepingAudit($db);
 $receipt  = new Receipts($db);
 $settings = new UserSettings($db);
-$booksObj = new Books($income, $receipt, $draws, $settings);
+$mileage  = new Mileage($settings, $db);
+$booksObj = new Books($income, $receipt, $draws, $settings, $mileage);
 
 echo "\n== 1. VAT derivation (25% moms), pure math ==\n";
 [$ex, $vat, $tot] = Income::deriveVat(null, null, 10000.0);          // total only
@@ -284,7 +289,7 @@ $cr = $receipt->create($U2, ['purchased_at' => Income::today(), 'vendor' => 'Sup
 $receipt->confirm($U2, $cr);
 $draws->add($U2, 3000.0);
 $cashEntries->add($U2, 'out', 2000.0, 'moms', 'Q moms');
-$cashObj = new Cash($income, $receipt, $draws, $cashEntries, $settings);
+$cashObj = new Cash($income, $receipt, $draws, $cashEntries, $settings, $mileage);
 $pos = $cashObj->position($U2);
 // expected = 0 + 12500 − (1250 + 3000 + 2000) = 6250
 check('expected balance = 6250', money($pos['expected']) === '6250.00', money($pos['expected']));
@@ -331,7 +336,7 @@ $pe1 = $receipt->create($U4, ['purchased_at' => Income::today(), 'vendor' => 'To
 $receipt->confirm($U4, $pe1);
 $pe2 = $receipt->create($U4, ['purchased_at' => Income::today(), 'vendor' => 'Train', 'total' => 500, 'vat' => 100, 'category' => 'Travel & Transport'], 'manual');
 $receipt->confirm($U4, $pe2);
-$plObj = new ProfitLoss($income, $receipt, $settings);
+$plObj = new ProfitLoss($income, $receipt, $settings, $mileage);
 $pl = $plObj->statement($U4, 'all', 0);
 check('P&L revenue (ex-VAT) = 20000', money($pl['revenue']) === '20000.00', money($pl['revenue']));
 check('P&L total expenses (ex-VAT) = 1400 (1000 + 400)', money($pl['expenses']) === '1400.00', money($pl['expenses']));
@@ -365,6 +370,34 @@ check('next invoice number = K-2026-002', ($income->card($income->get($U5, $invI
 // A generated invoice counts as booked revenue for that quarter's moms.
 $mQ = (new Moms($income, $receipt))->settlement($U5, 0); // may differ by run date; just assert it ran
 check('generated invoice flows into moms salgsmoms (all-time output VAT ≥ 2500)', $income->outputVat($U5, null, null) >= 2500.0, money($income->outputVat($U5, null, null)));
+
+echo "\n== 19. Mileage: 60-day rule, business vs commuter, P&L integration (U6) ==\n";
+$U6 = 6;
+// 62 consecutive driving days ending today, 100 km each. First 60 = business, last 2 = commuter.
+for ($d = 61; $d >= 0; $d--) {
+    $mileage->logTrip($U6, date('Y-m-d', strtotime("-{$d} days")), 100.0);
+}
+$mc = $mileage->card($U6, 0);
+check('60 business days, 2 commuter days', $mc['business']['days'] === 60 && $mc['commuter']['days'] === 2, json_encode([$mc['business']['days'], $mc['commuter']['days']]));
+// Business: 60×100 km = 6000 km (< 20000) × 3.79 = 22740.
+check('business deduction = 22740 (6000 km × 3.79)', money($mc['business']['amount']) === '22740.00', money($mc['business']['amount']));
+// Commuter befordringsfradrag: (100−24)=76 km × 2.23 = 169.48/day × 2 = 338.96.
+check('commuter estimate = 338.96 (befordringsfradrag)', money($mc['commuter']['amount']) === '338.96', money($mc['commuter']['amount']));
+check('60-day limit reached → commuting now', $mc['counter']['commuting_now'] === true && $mc['counter']['remaining'] === 0, json_encode($mc['counter']));
+check('businessDeduction(all) = 22740', money($mileage->businessDeduction($U6, null, null)) === '22740.00', money($mileage->businessDeduction($U6, null, null)));
+// P&L: revenue 30000, no receipts, mileage 22740 → profit 7260.
+$mi = $income->create($U6, ['issued_at' => Income::today(), 'amount_ex_vat' => 30000, 'vat' => 7500, 'total' => 37500], 'manual');
+$income->book($U6, $mi);
+$plM = $plObj->statement($U6, 'all', 0);
+check('P&L shows mileage line 22740', money($plM['mileage']) === '22740.00', money($plM['mileage']));
+check('P&L profit = 7260 (30000 − 0 − 22740)', money($plM['profit']) === '7260.00', money($plM['profit']));
+
+echo "\n== 20. Mileage two-tier (statens takst over 20,000 km), U7 ==\n";
+$U7 = 7;
+$mileage->logTrip($U7, Income::today(), 25000.0);   // one big day, business (day 1)
+$mc7 = $mileage->card($U7, 0);
+// 20000 × 3.79 + 5000 × 2.23 = 75800 + 11150 = 86950.
+check('two-tier: 20000×3.79 + 5000×2.23 = 86950', money($mc7['business']['amount']) === '86950.00', money($mc7['business']['amount']));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

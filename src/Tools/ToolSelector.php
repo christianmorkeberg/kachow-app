@@ -100,7 +100,7 @@ final class ToolSelector
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'get_books', 'get_moms',
             'get_cash', 'record_cash_movement', 'get_profit_loss',
-            'create_invoice', 'set_company_profile',
+            'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -295,6 +295,10 @@ final class ToolSelector
             'how are my finances', 'my finances', 'profit and loss', ' p&l', 'reserve', 'set aside',
             'resultatopgørelse', 'resultat', 'profit this', 'my profit', 'expenses by category', 'earn this',
             'am i in profit', 'net result', 'bundlinje', 'hvad er mit overskud', 'mit resultat',
+            // mileage / driving (kørsel)
+            'mileage', 'kørsel', 'koersel', 'kørselsfradrag', 'kørte', 'i drove', 'drove to', 'driving deduction',
+            'kilometer', 'km to the customer', 'business driving', 'erhvervskørsel', 'befordring', 'befordringsfradrag',
+            'drove today', 'log my driving', 'driving days', 'registrér kørsel', 'registrer kørsel', 'min kørsel',
             'mit regnskab', 'regnskabsoversigt', 'åbn regnskab', 'åbn bogføring', 'bogføringen',
             'overblik over økonomi', 'mine finanser', 'overskud', 'hensæt',
         ],

@@ -19,6 +19,7 @@ final class ProfitLoss
         private Income $income,
         private Receipts $receipts,
         private UserSettings $settings,
+        private Mileage $mileage,
     ) {
     }
 
@@ -40,7 +41,8 @@ final class ProfitLoss
             $expensesEx += $c['ex'];
         }
         $expensesEx = round($expensesEx, 2);
-        $profit     = round($revenue - $expensesEx, 2);
+        $mileage    = $this->mileage->businessDeduction($userId, $from, $to);  // business kørsel deduction
+        $profit     = round($revenue - $expensesEx - $mileage, 2);
 
         $pct        = $this->settings->reservePct($userId);
         $taxReserve = round(max(0.0, $profit) * $pct / 100, 2);
@@ -58,6 +60,7 @@ final class ProfitLoss
             'income_count'  => $inc['count'],
             'expenses'      => $expensesEx,
             'expense_categories' => $categories,
+            'mileage'       => $mileage,   // business driving deduction (ex-VAT, no cash)
             'profit'        => $profit,
             'tax_reserve'   => ['amount' => $taxReserve, 'pct' => $pct],
         ];

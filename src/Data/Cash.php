@@ -33,6 +33,7 @@ final class Cash
         private OwnerDraws $draws,
         private CashEntries $entries,
         private UserSettings $settings,
+        private Mileage $mileage,
     ) {
     }
 
@@ -65,7 +66,8 @@ final class Cash
         $refundDue  = round(max(0.0, -$momsNet), 2);  // expected inflow, not yet in the account
 
         $pct        = $this->settings->reservePct($userId);
-        $cumProfit  = round($allInc['ex'] - $allExp['ex'], 2);
+        $cumMileage = $this->mileage->businessDeduction($userId, null, null);   // business kørsel deduction
+        $cumProfit  = round($allInc['ex'] - $allExp['ex'] - $cumMileage, 2);
         $taxGross   = round(max(0.0, $cumProfit) * $pct / 100, 2);
         $taxReserve = round(max(0.0, $taxGross + $this->entries->net($userId, 'tax')), 2);
 

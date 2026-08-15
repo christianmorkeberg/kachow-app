@@ -91,7 +91,53 @@ final class UserSettings
             'label'       => 'Payment details',
             'description' => 'How clients pay you — e.g. "Reg 1234 Konto 5678901", an IBAN, or "MobilePay 12345". Shown on generated invoices.',
         ],
+        // Mileage (kørsel): the fixed round-trip distance + the yearly rates (statens
+        // takst for business driving, befordringsfradrag for commuting). Rates change
+        // yearly — defaults are the 2025 values.
+        'mileage_round_trip_km' => [
+            'default'     => '0',
+            'label'       => 'Round-trip distance (km)',
+            'description' => 'The round-trip distance in km from home to your customer, used when you log a driving day. A number.',
+        ],
+        'mileage_rate_high' => [
+            'default'     => '3.79',
+            'label'       => 'Business rate (first 20,000 km)',
+            'description' => 'Statens takst for business driving, first 20,000 km/year, kr/km (2025: 3.79).',
+        ],
+        'mileage_rate_low' => [
+            'default'     => '2.23',
+            'label'       => 'Business rate (over 20,000 km)',
+            'description' => 'Statens takst for business driving above 20,000 km/year, kr/km (2025: 2.23).',
+        ],
+        'commute_rate' => [
+            'default'     => '2.23',
+            'label'       => 'Commuter rate (25–120 km/day)',
+            'description' => 'Befordringsfradrag rate for 25–120 km/day, kr/km (2025: 2.23). First 24 km/day are not deductible.',
+        ],
+        'commute_rate_far' => [
+            'default'     => '1.12',
+            'label'       => 'Commuter rate (over 120 km/day)',
+            'description' => 'Befordringsfradrag rate above 120 km/day, kr/km (2025: 1.12).',
+        ],
     ];
+
+    /**
+     * Mileage config (distance + rates) as floats.
+     *
+     * @return array{round_trip:float, rate_high:float, rate_low:float, commute:float, commute_far:float}
+     */
+    public function mileageConfig(int $userId): array
+    {
+        $f = fn (string $k): float => (float) ($this->get($userId, $k) ?? '0');
+
+        return [
+            'round_trip'  => round($f('mileage_round_trip_km'), 2),
+            'rate_high'   => round($f('mileage_rate_high'), 2),
+            'rate_low'    => round($f('mileage_rate_low'), 2),
+            'commute'     => round($f('commute_rate'), 2),
+            'commute_far' => round($f('commute_rate_far'), 2),
+        ];
+    }
 
     /**
      * The seller/company profile for generated invoices.
