@@ -616,8 +616,10 @@ final class Income
     {
         $id    = (int) $r['id'];
         $lines = self::decodeInvoiceLines($r['line_items'] ?? null);
-        // A generated (private) invoice with line items has a printable document.
-        $isDoc = $lines !== [] && (string) ($r['source'] ?? '') === 'private';
+        // Any invoice-kind entry can be opened as a printable document (rendered on demand
+        // from its data). Generated ones also carry line items to list on the card.
+        $isInvoice = (string) ($r['kind'] ?? 'invoice') === 'invoice';
+        $isDoc     = $lines !== [];
 
         return [
             'kind'        => 'income',
@@ -643,7 +645,7 @@ final class Income
             'categories'  => self::CATEGORIES,
             'line_items'  => $lines,
             'is_invoice_doc' => $isDoc,
-            'invoice_url' => $isDoc ? '/api/invoice-view.php?id=' . $id : null,
+            'invoice_url' => $isInvoice ? '/api/invoice-view.php?id=' . $id : null,
         ];
     }
 
