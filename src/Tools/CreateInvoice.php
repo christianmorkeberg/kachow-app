@@ -36,8 +36,10 @@ final class CreateInvoice implements Tool
             . 'document. Use for "make/create/generate an invoice for …", "send X an invoice for …", "lav en '
             . 'faktura til …", "opret en faktura". Provide the customer and the line items (each a description, '
             . 'quantity and unit price EX-VAT). Do NOT use for public-sector clients (those use NemHandel — '
-            . 'record with add_income) or to log an invoice you already sent (add_income). The company/sender '
-            . 'details come from the saved company profile (set_company_profile).';
+            . 'record with add_income) or to log an invoice you already sent (add_income). Public bodies '
+            . 'include a kommune, region, ministry/state institution, or state-owned enterprise such as DSB; '
+            . 'if unsure whether the client is a public authority, ask the user before generating. The '
+            . 'company/sender details come from the saved company profile (set_company_profile).';
     }
 
     public function parameters(): array

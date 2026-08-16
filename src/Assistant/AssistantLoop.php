@@ -35,6 +35,11 @@ final class AssistantLoop
         . 'write everything around it in the user\'s language. '
         . 'Use the available tools when the user asks about, or wants to record, their workouts, '
         . 'calendar, or shared shopping lists. Do not invent data — call a tool to look things up. '
+        . 'You can CHAIN several tools across steps to accomplish a goal the user described at a high '
+        . 'level rather than spelled out step by step — e.g. read their work hours and THEN create an '
+        . 'invoice for those hours, or look something up and then act on the result. When a task needs '
+        . 'information from one area before you can act in another, fetch it first, then take the next '
+        . 'step; you do not need the user to name each tool. Still confirm before anything irreversible. '
         . 'CRITICAL: whenever the user asks you to save, note, remember, log, add, or update something '
         . '(in Danish OR English — e.g. "gem", "husk", "noter", "tilføj"), you MUST actually call the '
         . 'matching tool and only confirm once it succeeds. Never tell the user you saved/noted/added '
@@ -173,6 +178,11 @@ final class AssistantLoop
         private ?Memories $memories = null,
         private ?UserSettings $settings = null,
         private string $systemInstruction = self::DEFAULT_SYSTEM_INSTRUCTION,
+        // Wide-tools mode: skip keyword narrowing and hand the model the FULL toolset
+        // each turn, letting it select and chain freely (the image path already does
+        // this). Default off = current keyword-routed behaviour; flip to trial the
+        // "no router" architecture reversibly. See bin/wide-chain-test.php.
+        private bool $wideTools = false,
     ) {
     }
 
@@ -272,6 +282,11 @@ final class AssistantLoop
         // Include a little prior context so keyword-less follow-ups ("and tomorrow?")
         // keep the previous turn's domain tools available.
         $recent = $this->recentUserContext($contents);
+        // Wide-tools mode (runtime flag `wide_tools`, or the constructor override): skip
+        // keyword narrowing and hand the model the full toolset so it can compose across
+        // domains (e.g. read work hours, then create an invoice) in the loop.
+        $flags     = new AppFlags();
+        $wideTools = $this->wideTools || $flags->isOn('wide_tools', false);
         // Observability: log which groups matched (or the all-tools fallback) so
         // mis-routes are visible in production, not just guessed at.
         if ($hasImage) {
@@ -279,6 +294,10 @@ final class AssistantLoop
             // its content), so hand the model the full toolset — it decides what the
             // image implies (event, list item, reminder, expense…).
             $groups       = ['IMAGE (all tools)'];
+            $declarations = $this->tools->declarations();
+        } elseif ($wideTools) {
+            // No keyword narrowing: the full toolset is on the table (see above).
+            $groups       = ['ALL (wide)'];
             $declarations = $this->tools->declarations();
         } else {
             $groups       = ToolSelector::matchGroups($userMessage, $recent);
@@ -297,7 +316,7 @@ final class AssistantLoop
 
         // Always-on diagnostics for this turn (surfaced in developer mode + reports).
         // Thought-summary capture is extra (token cost), so it's behind a runtime flag.
-        $thoughtsOn = (new AppFlags())->isOn('diag_thoughts', false);
+        $thoughtsOn = $flags->isOn('diag_thoughts', false);
         $genConfig  = $thoughtsOn ? ['thinkingConfig' => ['includeThoughts' => true]] : null;
         $diag = [
             'routing'    => $groups === [] ? ['ALL (fallback)'] : $groups,

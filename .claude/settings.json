@@ -20,7 +20,10 @@
       "Bash(php -l kachow-web/index.php)",
       "Bash(php -l kachow-web/api/receipt.php)",
       "Bash(php -l kachow-app/src/Tools/GetBooks.php)",
-      "Bash(php kachow-app/bin/routing-test.php)"
+      "Bash(php kachow-app/bin/routing-test.php)",
+      "Bash(php -l bin/router-benchmark.php)",
+      "Bash(php bin/router-benchmark.php)",
+      "Bash(php -r \"echo 'openssl.cafile=['.ini_get\\('openssl.cafile'\\).\\\\\"]\\\\n\\\\\"; echo 'curl.cainfo=['.ini_get\\('curl.cainfo'\\).\\\\\"]\\\\n\\\\\";\")"
     ]
   }
 }
