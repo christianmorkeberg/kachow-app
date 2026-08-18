@@ -226,7 +226,8 @@ final class ToolSelector
             'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
-            // hours over a period / bar chart
+            // hours over a period / bar chart + "how much did I work" style totals
+            'how much did i work', 'how much have i worked', 'how much i worked', 'did i work', 'how many hours',
             'hours per', 'per day', 'per week', 'per month', 'each day', 'each week', 'each month',
             'this month', 'last month', 'per måned', 'per uge', 'denne måned', 'sidste måned', 'timer om',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)

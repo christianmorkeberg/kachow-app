@@ -23,9 +23,9 @@ final class ExportWorkLog implements Tool
 
     public function description(): string
     {
-        return 'Creates a CSV download of the user\'s work log for a period (columns: date, job, hours, '
-            . 'description). Returns a link — present it as a clickable download link. Use for "export my '
-            . 'work log", "download what I did at work this month".';
+        return 'Creates a CSV download of the user\'s work log for a period (columns: date, job, '
+            . 'description of what they did). Returns a link — present it as a clickable download link. '
+            . 'Use for "export my work log", "download what I did at work this month".';
     }
 
     public function parameters(): array

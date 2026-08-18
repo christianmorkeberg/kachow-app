@@ -23,10 +23,12 @@ final class GetWorkHours implements Tool
 
     public function description(): string
     {
-        return 'Reports time spent at work from clock in/out events, for a SINGLE day or right-now '
-            . 'status, WITH the individual clock in/out sessions. Use for "how long have I worked today", '
-            . '"when did I arrive", "am I still clocked in", the sessions on a specific date, or this '
-            . "week's sessions with their times. For an overview of hours ACROSS days — totals per "
+        return 'Reports time spent at work from clock in/out events, for a SINGLE day, this week, or '
+            . 'LAST week, WITH the individual clock in/out sessions. This is the authoritative source for '
+            . 'hours worked (the work log does NOT track hours). Use for "how long have I worked today", '
+            . '"how much did I work this week / last week", "when did I arrive", "am I still clocked in", '
+            . 'the sessions on a specific date, or this/last week\'s sessions with their times. For an '
+            . "overview of hours ACROSS days — totals per "
             . 'day/week/month, a whole week/month, or "how have I worked this week" — prefer '
             . 'get_work_summary, which draws a bar chart. The user may have more than one workplace; pass '
             . '"place" to limit to one, or omit for all (breaks time down per workplace). Summarise '
@@ -42,8 +44,9 @@ final class GetWorkHours implements Tool
             'properties' => [
                 'scope' => [
                     'type'        => 'string',
-                    'enum'        => ['today', 'yesterday', 'week'],
-                    'description' => 'Which period to summarise. Defaults to today.',
+                    'enum'        => ['today', 'yesterday', 'week', 'lastweek'],
+                    'description' => 'Which period to summarise: today, yesterday, this week, or last '
+                        . 'week (lastweek). Defaults to today.',
                 ],
                 'date' => [
                     'type'        => 'string',

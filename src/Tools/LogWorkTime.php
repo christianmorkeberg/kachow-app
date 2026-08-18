@@ -31,13 +31,13 @@ final class LogWorkTime implements Tool
     {
         return 'Records what the user did at work on a day (free-text), for their work log. Use when '
             . 'they describe what they worked on — e.g. "at work today I prepped the lecture", or when '
-            . 'answering the afternoon "what did you get done?" nudge. This saves the work-log DESCRIPTION; '
-            . 'it does NOT clock in/out hours (that is log_work_event). If the user gives BOTH what they '
-            . 'did and the times they worked in one message, call this for the description AND '
-            . 'log_work_event for the clock times — do not rely on one to cover the other. job is the '
-            . 'workplace name; if omitted it is inferred from that day\'s work-calendar event. hours is '
-            . 'OPTIONAL — do NOT ask for it; only include hours if the user states them. Defaults the day '
-            . 'to today.';
+            . 'answering the afternoon "what did you get done?" nudge. This saves ONLY the work-log '
+            . 'DESCRIPTION (the task) — it does NOT track hours. Hours worked come exclusively from the '
+            . 'clock (log_work_event to record times; get_work_hours / get_work_summary to report them); '
+            . 'never put an hours figure here. If the user gives BOTH what they did and the times they '
+            . 'worked in one message, call this for the description AND log_work_event for the clock '
+            . 'times — do not rely on one to cover the other. job is the workplace name; if omitted it is '
+            . 'inferred from that day\'s work-calendar event. Defaults the day to today.';
     }
 
     public function parameters(): array
@@ -47,7 +47,6 @@ final class LogWorkTime implements Tool
             'properties' => [
                 'description' => ['type' => 'string', 'description' => 'What they did, in their own words.'],
                 'job'         => ['type' => 'string', 'description' => 'Which job (the workplace name). Omit to infer from the work calendar.'],
-                'hours'       => ['type' => 'number', 'description' => 'Hours spent (optional).'],
                 'date'        => ['type' => 'string', 'description' => 'Local date YYYY-MM-DD. Defaults to today.'],
             ],
             'required' => ['description'],
@@ -61,8 +60,6 @@ final class LogWorkTime implements Tool
             return ['error' => 'Tell me what you did and I\'ll log it.'];
         }
         $date  = trim((string) ($arguments['date'] ?? '')) ?: WorkLog::today();
-        $hours = isset($arguments['hours']) && $arguments['hours'] !== '' && $arguments['hours'] !== null
-            ? (float) $arguments['hours'] : null;
 
         $job = trim((string) ($arguments['job'] ?? ''));
         if ($job === '') {
@@ -80,7 +77,7 @@ final class LogWorkTime implements Tool
             }
         }
 
-        $this->log->add($userId, $date, $job, $hours, $description);
+        $this->log->add($userId, $date, $job, $description);
 
         [$from, $to, $label] = WorkLog::resolveRange('this_week', null, null);
 
@@ -98,12 +95,11 @@ final class LogWorkTime implements Tool
             'logged'         => true,
             'job'            => $job,
             'date'           => $date,
-            'hours'          => $hours,
             'recent_entries' => $recentEntries,
             'followup_hint'  => 'You MAY ask ONE short, natural follow-up about the work itself, grounded '
                 . 'in recent_entries when something connects (e.g. whether an ongoing task from a previous '
                 . 'day got finished). Keep it to a single light question, skip it if nothing stands out, '
-                . 'and never ask about hours.',
+                . 'and never ask about hours (hours are tracked by the clock, not here).',
             '_render'        => $this->log->card($userId, $from, $to, 'Work log · this week'),
         ];
     }

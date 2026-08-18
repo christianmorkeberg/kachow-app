@@ -188,6 +188,9 @@ $cases = [
     ['msg' => 'show my work hours per day this week', 'expect' => 'worktime'],
     ['msg' => 'how many hours did I work each month?', 'expect' => 'worktime'],
     ['msg' => 'vis mine arbejdstimer per uge', 'expect' => 'worktime'],
+    // "how much did I work" totals must hit the CLOCK tools, not the work log (report #16)
+    ['msg' => 'how much did I work last week?', 'expect' => 'worktime'],
+    ['msg' => 'how much have I worked this week', 'expect' => 'worktime'],
 
     // ---- weather ----
     ['msg' => "what's the weather tomorrow?", 'expect' => 'weather'],

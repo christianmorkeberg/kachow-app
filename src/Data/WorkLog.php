@@ -11,9 +11,10 @@ use PDO;
 
 /**
  * Per-user work log: free-text "what I did" entries, tagged with the job (the first
- * word of the event in the user's work calendar — name is per-user, default "Arbejde")
- * and optional hours the user states. Distinct from work_events (clock in/out). All
- * dates are local (Europe/Copenhagen) YYYY-MM-DD.
+ * word of the event in the user's work calendar — name is per-user, default "Arbejde").
+ * Hours are NOT tracked here — they come from work_events (the clock in/out log); mixing
+ * the two caused a "what I did" note to masquerade as an hours total. All dates are local
+ * (Europe/Copenhagen) YYYY-MM-DD.
  */
 final class WorkLog
 {
@@ -44,17 +45,18 @@ final class WorkLog
         return (new DateTimeImmutable('now', new DateTimeZone(self::LOCAL_TZ)))->format('Y-m-d');
     }
 
-    public function add(int $userId, string $date, string $job, ?float $hours, string $description): int
+    public function add(int $userId, string $date, string $job, string $description): int
     {
+        // The work log is WHAT was done, not hours — hours live in work_events (the clock).
+        // The legacy `hours` column is left in place (unused) to avoid a migration.
         $stmt = $this->db->prepare(
-            'INSERT INTO work_log (user_id, log_date, job, hours, description)
-             VALUES (:u, :d, :j, :h, :desc)'
+            'INSERT INTO work_log (user_id, log_date, job, description)
+             VALUES (:u, :d, :j, :desc)'
         );
         $stmt->execute([
             ':u'    => $userId,
             ':d'    => $date,
             ':j'    => mb_substr(trim($job), 0, 64),
-            ':h'    => $hours,
             ':desc' => trim($description),
         ]);
 
@@ -72,11 +74,11 @@ final class WorkLog
     /**
      * Entries in a date range (inclusive), newest first, optionally one job.
      *
-     * @return array<int, array{id:int, date:string, job:string, hours:?float, description:string}>
+     * @return array<int, array{id:int, date:string, job:string, description:string}>
      */
     public function listForUser(int $userId, string $from, string $to, ?string $job = null): array
     {
-        $sql    = 'SELECT id, log_date, job, hours, description FROM work_log
+        $sql    = 'SELECT id, log_date, job, description FROM work_log
                    WHERE user_id = :u AND log_date BETWEEN :from AND :to';
         $params = [':u' => $userId, ':from' => $from, ':to' => $to];
         if ($job !== null && $job !== '') {
@@ -94,7 +96,6 @@ final class WorkLog
                 'id'          => (int) $r['id'],
                 'date'        => (string) $r['log_date'],
                 'job'         => (string) $r['job'],
-                'hours'       => $r['hours'] !== null ? (float) $r['hours'] : null,
                 'description' => (string) $r['description'],
             ];
         }
@@ -116,34 +117,28 @@ final class WorkLog
     /**
      * Summary for a range: per-job hour totals + entry count, plus the entries.
      *
-     * @return array{from:string, to:string, count:int, total_hours:float,
-     *   by_job:array<int,array{job:string, hours:float, entries:int}>,
-     *   items:array<int,array{id:int, date:string, job:string, hours:?float, description:string}>}
+     * @return array{from:string, to:string, count:int,
+     *   by_job:array<int,array{job:string, entries:int}>,
+     *   items:array<int,array{id:int, date:string, job:string, description:string}>}
      */
     public function summary(int $userId, string $from, string $to, ?string $job = null): array
     {
-        $items    = $this->listForUser($userId, $from, $to, $job);
-        $byJob    = [];
-        $total    = 0.0;
+        $items = $this->listForUser($userId, $from, $to, $job);
+        $byJob = [];
         foreach ($items as $it) {
             $j = $it['job'];
             if (!isset($byJob[$j])) {
-                $byJob[$j] = ['job' => $j, 'hours' => 0.0, 'entries' => 0];
+                $byJob[$j] = ['job' => $j, 'entries' => 0];
             }
             $byJob[$j]['entries']++;
-            if ($it['hours'] !== null) {
-                $byJob[$j]['hours'] += $it['hours'];
-                $total += $it['hours'];
-            }
         }
 
         return [
-            'from'        => $from,
-            'to'          => $to,
-            'count'       => count($items),
-            'total_hours' => round($total, 2),
-            'by_job'      => array_values($byJob),
-            'items'       => $items,
+            'from'    => $from,
+            'to'      => $to,
+            'count'   => count($items),
+            'by_job'  => array_values($byJob),
+            'items'   => $items,
         ];
     }
 
@@ -159,7 +154,6 @@ final class WorkLog
         return [
             'kind'        => 'work_log',
             'title'       => $title,
-            'total_hours' => $s['total_hours'],
             'by_job'      => $s['by_job'],
             'items'       => $s['items'],
         ];

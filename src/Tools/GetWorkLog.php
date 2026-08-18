@@ -23,9 +23,11 @@ final class GetWorkLog implements Tool
 
     public function description(): string
     {
-        return 'Shows the user\'s work log for a period — what they did and hours per job (workplace). '
-            . 'Use for "what did I do at work this week", "my work log last month". Renders a card, so '
-            . 'give a short summary (e.g. total hours per job) rather than listing every entry.';
+        return 'Shows the user\'s work log for a period — WHAT they did at each job (workplace), as a '
+            . 'list of task notes. Use for "what did I do at work this week", "my work log last month". '
+            . 'This does NOT report hours worked — for how much/how long they worked (today, this week, '
+            . 'last week, per day/month) use get_work_hours or get_work_summary (the clock). Renders a '
+            . 'card, so give a short summary of the tasks rather than listing every entry.';
     }
 
     public function parameters(): array
@@ -59,11 +61,12 @@ final class GetWorkLog implements Tool
         $title   = 'Work log · ' . $label . ($job !== null ? ' · ' . $job : '');
 
         return [
-            'count'       => $summary['count'],
-            'total_hours' => $summary['total_hours'],
-            'by_job'      => $summary['by_job'],
-            'items'       => $summary['items'],
-            '_render'     => $this->log->card($userId, $from, $to, $title, $job),
+            'count'   => $summary['count'],
+            'by_job'  => $summary['by_job'],
+            'items'   => $summary['items'],
+            'note'    => 'This is what the user DID at work (tasks), not hours. If they asked how much/'
+                . 'how long they worked, use get_work_hours or get_work_summary instead.',
+            '_render' => $this->log->card($userId, $from, $to, $title, $job),
         ];
     }
 }
