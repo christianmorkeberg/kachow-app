@@ -152,7 +152,10 @@ final class MapDistance
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 15,
             CURLOPT_CONNECTTIMEOUT => 8,
-            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            // ORS directions serves application/geo+json — a narrow Accept: application/json
+            // gets a 406 Not Acceptable, so accept both (+ a User-Agent some WAFs require).
+            CURLOPT_USERAGENT      => 'Kachow/1.0 (+https://assistant.kachow.dk)',
+            CURLOPT_HTTPHEADER     => ['Accept: application/json, application/geo+json'],
         ]);
         $body = curl_exec($ch);
         if ($body === false) {
