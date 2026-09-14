@@ -43,8 +43,12 @@ final class GetMileage implements Tool
             'business_deduction' => $card['business']['amount'],
             'business_days'      => $card['business']['days'],
             'commuter_estimate'  => $card['commuter']['amount'],
-            'days_remaining'     => $card['counter']['remaining'],
-            'commuting_now'      => $card['counter']['commuting_now'],
+            'destinations'       => array_map(static fn (array $d): array => [
+                'name'          => $d['name'],
+                'type'          => $d['type'],
+                'days_remaining' => $d['counter']['remaining'] ?? null,
+                'commuting_now' => $d['counter']['commuting_now'] ?? null,
+            ], $card['destinations']),
             '_render'            => $card,
         ];
     }

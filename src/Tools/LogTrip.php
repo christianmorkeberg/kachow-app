@@ -7,9 +7,9 @@ namespace App\Tools;
 use App\Data\Mileage;
 
 /**
- * Tool: log a business driving day (kørsel) to the customer. Distance defaults to the
- * saved round-trip distance. The 60-day rule then classifies it (business vs commuter)
- * and it flows into the mileage deduction. Renders the mileage card.
+ * Tool: log a driving day (kørsel) to a destination. Distance defaults to that
+ * destination's saved round-trip distance. The 60-day rule then classifies the day
+ * (business vs commuter) and it flows into the mileage deduction. Renders the mileage card.
  */
 final class LogTrip implements Tool
 {
@@ -24,11 +24,12 @@ final class LogTrip implements Tool
 
     public function description(): string
     {
-        return 'Logs a driving day to your customer for the mileage deduction (kørsel). Use for "I drove to '
-            . 'the customer today", "log my driving for today", "jeg kørte på arbejde i dag", "registrér min '
-            . 'kørsel". Distance defaults to the saved round-trip distance (set it with update_setting '
-            . 'mileage_round_trip_km if not set). Optionally give a date, km (to override), or note. The 60-day '
-            . 'rule decides whether it counts as business driving or commuting.';
+        return 'Logs a driving day for the mileage deduction (kørsel). Use for "I drove to the customer today", '
+            . '"log my driving", "jeg kørte på arbejde i dag", "registrér min kørsel". Pass "destination" with '
+            . 'the place name if the user has more than one (e.g. a customer vs DTU); omit it to use their default. '
+            . 'Distance defaults to that destination\'s saved round-trip distance. Optionally give a date, km (to '
+            . 'override), or note. Business destinations follow the 60-day rule (business → commuting); commute '
+            . 'destinations (a fixed workplace like DTU) always count as befordringsfradrag.';
     }
 
     public function parameters(): array
@@ -36,9 +37,10 @@ final class LogTrip implements Tool
         return [
             'type'       => 'object',
             'properties' => [
-                'date' => ['type' => 'string', 'description' => 'Date YYYY-MM-DD. Omit for today.'],
-                'km'   => ['type' => 'number', 'description' => 'Round-trip km, if different from the saved default.'],
-                'note' => ['type' => 'string', 'description' => 'Optional note.'],
+                'destination' => ['type' => 'string', 'description' => 'Destination name, if the user has more than one (e.g. "DTU" or a customer). Omit for the default.'],
+                'date'        => ['type' => 'string', 'description' => 'Date YYYY-MM-DD. Omit for today.'],
+                'km'          => ['type' => 'number', 'description' => 'Round-trip km, if different from the destination default.'],
+                'note'        => ['type' => 'string', 'description' => 'Optional note.'],
             ],
             'required' => [],
         ];
@@ -46,22 +48,39 @@ final class LogTrip implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
+        $destId  = null;
+        $destName = isset($arguments['destination']) ? trim((string) $arguments['destination']) : '';
+        $unmatched = false;
+        if ($destName !== '') {
+            $destId = $this->mileage->findDestinationByName($userId, $destName);
+            $unmatched = $destId === null;
+        }
+
         $km = isset($arguments['km']) && $arguments['km'] !== '' ? (float) $arguments['km'] : null;
         $this->mileage->logTrip(
             $userId,
+            $destId,
             isset($arguments['date']) ? (string) $arguments['date'] : null,
             $km,
             isset($arguments['note']) ? (string) $arguments['note'] : null
         );
         $card = $this->mileage->card($userId, 0);
 
-        return [
-            'logged'            => true,
+        $result = [
+            'logged'             => true,
             'business_deduction' => $card['business']['amount'],
-            'business_days_used' => $card['counter']['business_used'],
-            'days_remaining'    => $card['counter']['remaining'],
-            'commuting_now'     => $card['counter']['commuting_now'],
-            '_render'           => $card,
+            'destinations'       => array_map(static fn (array $d): array => [
+                'name'      => $d['name'],
+                'type'      => $d['type'],
+                'remaining' => $d['counter']['remaining'] ?? null,
+            ], $card['destinations']),
+            '_render'            => $card,
         ];
+        if ($unmatched) {
+            $result['note'] = 'No destination named "' . $destName . '" — logged to the default. '
+                . 'The user can add it from the mileage card.';
+        }
+
+        return $result;
     }
 }

@@ -97,7 +97,9 @@ final class UserSettings
         'mileage_round_trip_km' => [
             'default'     => '0',
             'label'       => 'Round-trip distance (km)',
-            'description' => 'The round-trip distance in km from home to your customer, used when you log a driving day. A number.',
+            'description' => 'Legacy fallback round-trip distance in km, used only when a driving day is logged '
+                . 'without a destination. Each mileage destination now carries its own distance — set those on '
+                . 'the mileage card instead. A number.',
         ],
         'mileage_rate_high' => [
             'default'     => '3.79',

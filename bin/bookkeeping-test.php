@@ -373,9 +373,10 @@ check('generated invoice flows into moms salgsmoms (all-time output VAT ≥ 2500
 
 echo "\n== 19. Mileage: 60-day rule, business vs commuter, P&L integration (U6) ==\n";
 $U6 = 6;
+$destU6 = $mileage->addDestination($U6, 'Kunde', Mileage::TYPE_BUSINESS, 100.0);
 // 62 consecutive driving days ending today, 100 km each. First 60 = business, last 2 = commuter.
 for ($d = 61; $d >= 0; $d--) {
-    $mileage->logTrip($U6, date('Y-m-d', strtotime("-{$d} days")), 100.0);
+    $mileage->logTrip($U6, $destU6, date('Y-m-d', strtotime("-{$d} days")), 100.0);
 }
 $mc = $mileage->card($U6, 0);
 check('60 business days, 2 commuter days', $mc['business']['days'] === 60 && $mc['commuter']['days'] === 2, json_encode([$mc['business']['days'], $mc['commuter']['days']]));
@@ -383,7 +384,9 @@ check('60 business days, 2 commuter days', $mc['business']['days'] === 60 && $mc
 check('business deduction = 22740 (6000 km × 3.79)', money($mc['business']['amount']) === '22740.00', money($mc['business']['amount']));
 // Commuter befordringsfradrag: (100−24)=76 km × 2.23 = 169.48/day × 2 = 338.96.
 check('commuter estimate = 338.96 (befordringsfradrag)', money($mc['commuter']['amount']) === '338.96', money($mc['commuter']['amount']));
-check('60-day limit reached → commuting now', $mc['counter']['commuting_now'] === true && $mc['counter']['remaining'] === 0, json_encode($mc['counter']));
+$ctrU6 = null;
+foreach ($mc['destinations'] as $dd) { if ($dd['id'] === $destU6) { $ctrU6 = $dd['counter']; } }
+check('60-day limit reached → commuting now', $ctrU6 !== null && $ctrU6['commuting_now'] === true && $ctrU6['remaining'] === 0, json_encode($ctrU6));
 check('businessDeduction(all) = 22740', money($mileage->businessDeduction($U6, null, null)) === '22740.00', money($mileage->businessDeduction($U6, null, null)));
 // P&L: revenue 30000, no receipts, mileage 22740 → profit 7260.
 $mi = $income->create($U6, ['issued_at' => Income::today(), 'amount_ex_vat' => 30000, 'vat' => 7500, 'total' => 37500], 'manual');
@@ -394,10 +397,18 @@ check('P&L profit = 7260 (30000 − 0 − 22740)', money($plM['profit']) === '72
 
 echo "\n== 20. Mileage two-tier (statens takst over 20,000 km), U7 ==\n";
 $U7 = 7;
-$mileage->logTrip($U7, Income::today(), 25000.0);   // one big day, business (day 1)
+$destU7 = $mileage->addDestination($U7, 'Kunde', Mileage::TYPE_BUSINESS, 0.0);
+$mileage->logTrip($U7, $destU7, Income::today(), 25000.0);   // one big day, business (day 1)
 $mc7 = $mileage->card($U7, 0);
 // 20000 × 3.79 + 5000 × 2.23 = 75800 + 11150 = 86950.
 check('two-tier: 20000×3.79 + 5000×2.23 = 86950', money($mc7['business']['amount']) === '86950.00', money($mc7['business']['amount']));
+
+// A commute destination (e.g. DTU) for the same user is befordringsfradrag only — never in the P&L.
+$dtuU7 = $mileage->addDestination($U7, 'DTU', Mileage::TYPE_COMMUTE, 60.0);
+$mileage->logTrip($U7, $dtuU7, Income::today(), 60.0);
+check('commute dest adds 0 to businessDeduction', money($mileage->businessDeduction($U7, null, null)) === '86950.00', money($mileage->businessDeduction($U7, null, null)));
+$mc7b = $mileage->card($U7, 0);
+check('commute dest shows as a commuter day', $mc7b['commuter']['days'] === 1, json_encode($mc7b['commuter']['days']));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

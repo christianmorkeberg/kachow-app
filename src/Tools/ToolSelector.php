@@ -300,6 +300,10 @@ final class ToolSelector
             'mileage', 'kørsel', 'koersel', 'kørselsfradrag', 'kørte', 'i drove', 'drove to', 'driving deduction',
             'kilometer', 'km to the customer', 'business driving', 'erhvervskørsel', 'befordring', 'befordringsfradrag',
             'drove today', 'log my driving', 'driving days', 'registrér kørsel', 'registrer kørsel', 'min kørsel',
+            // mileage destinations + commuting (per-place: customer vs DTU)
+            'dtu', 'destination', 'køredestination', 'commute', 'commuting', 'pendling', 'pendler', 'workplace',
+            'arbejdssted', 'add destination', 'new destination', 'ny destination', 'tilføj destination',
+            'distance to', 'afstand til', 'drove to dtu', 'kørte til dtu',
             'mit regnskab', 'regnskabsoversigt', 'åbn regnskab', 'åbn bogføring', 'bogføringen',
             'overblik over økonomi', 'mine finanser', 'overskud', 'hensæt',
         ],

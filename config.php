@@ -13,6 +13,7 @@ declare(strict_types=1);
  * .env lives in this directory (outside the webroot) and is never committed.
  * After this runs, $_ENV holds DB_HOST, DB_NAME, DB_USER, DB_PASS,
  * APP_ENCRYPTION_KEY, GEMINI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET.
+ * Optional: ORS_API_KEY (OpenRouteService) enables the mileage address→distance lookup.
  */
 
 use Dotenv\Dotenv;
