@@ -91,6 +91,12 @@ final class UserSettings
             'label'       => 'Payment details',
             'description' => 'How clients pay you — e.g. "Reg 1234 Konto 5678901", an IBAN, or "MobilePay 12345". Shown on generated invoices.',
         ],
+        'home_address' => [
+            'default'     => '',
+            'label'       => 'Home address',
+            'description' => 'Your home address (street, postcode, city). Used as the starting point when the '
+                . 'assistant looks up a driving distance, e.g. "log home to Middelfart station". A free-text address.',
+        ],
         // Mileage (kørsel): the fixed round-trip distance + the yearly rates (statens
         // takst for business driving, befordringsfradrag for commuting). Rates change
         // yearly — defaults are the 2025 values.

@@ -38,6 +38,7 @@ use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Email\EmailService;
 use App\Mail\Mailer;
+use App\Maps\MapDistance;
 use App\Music\Discogs;
 use App\Receipts\ReceiptStorage;
 use App\Weather\Dmi;
@@ -163,7 +164,8 @@ final class ToolRegistry
         $registry->register(new MarkInvoicePaid($income, $bookAudit));
         $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit));
         $registry->register(new GetOwnerDraws($ownerDraws));
-        $mileage = new Mileage($userSettings);
+        $mileage     = new Mileage($userSettings);
+        $mapDistance = new MapDistance();
         $registry->register(new GetBooks(new Books($income, $receipts, $ownerDraws, $userSettings, $mileage)));
         $registry->register(new GetMoms(new Moms($income, $receipts)));
         $cashEntries = new CashEntries();
@@ -171,8 +173,9 @@ final class ToolRegistry
         $registry->register(new GetCash($cash));
         $registry->register(new RecordCashMovement($cashEntries, $cash));
         $registry->register(new GetProfitLoss(new ProfitLoss($income, $receipts, $userSettings, $mileage)));
-        $registry->register(new LogTrip($mileage));
+        $registry->register(new LogTrip($mileage, $mapDistance, $userSettings));
         $registry->register(new GetMileage($mileage));
+        $registry->register(new GetDrivingDistance($mapDistance, $userSettings));
         $registry->register(new CreateInvoice($income, $userSettings, $bookAudit));
         $registry->register(new SetCompanyProfile($userSettings));
         $registry->register(new GetEmails($email));
