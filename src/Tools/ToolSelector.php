@@ -22,9 +22,10 @@ final class ToolSelector
 {
     /**
      * Tools offered on EVERY request, even when the message narrows to one domain,
-     * so the assistant can proactively capture a personal fact in any conversation.
+     * so the assistant can proactively capture a personal fact in any conversation, and
+     * chart whatever domain's data the turn fetched (show_chart).
      */
-    private const ALWAYS = ['remember_about_me'];
+    private const ALWAYS = ['remember_about_me', 'show_chart'];
 
     /**
      * Groups sent when NOTHING matched (a keyword-less / ambiguous turn). Bounding the
@@ -329,6 +330,8 @@ final class ToolSelector
             // Danish (menstruation/-scyklus, periode, cyklus, ægløsning, frugtbar, mensen)
             'menstruation', 'menstruationscyklus', 'periode', 'cyklus', 'ægløsning', 'frugtbar',
             'frugtbarhed', 'mensen', 'min menstruation', 'min periode', 'ægløsn',
+            // "still going" / bleeding (report #24) — Winter season names too
+            'bleeding', 'still bleeding', 'bløder', 'blødning', 'winter', 'vinter', 'in spring',
             // mood/energy day logging (ID 4)
             'mood', 'my energy', 'energy level', 'energy is', 'how i feel', 'feel today', 'exhausted',
             'drained', 'humør', 'humor', 'energi', 'drænet', 'jeg føler',

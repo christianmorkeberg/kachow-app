@@ -528,14 +528,45 @@ final class AssistantLoop
             $contents[] = ['role' => 'user', 'parts' => $responseParts];
         }
 
+        // Step limit reached (report #22: 8 rounds of single-day lookups, then a bare apology
+        // that threw away everything fetched). One last call with tools switched OFF, so the
+        // model answers from the results it already has and says what's missing.
+        $fallback = null;
+        $leftMs   = (int) (($this->turnDeadline - microtime(true)) * 1000);
+        if ($chosenModel !== null && $leftMs >= self::MIN_CALL_MS) {
+            $g0 = microtime(true);
+            try {
+                $response = $this->gemini->generate(
+                    $contents,
+                    $declarations,
+                    $system . "\n\nSTEP LIMIT REACHED: do not call any more tools. Answer the user now from "
+                        . 'the tool results above. If they are not enough for a complete answer, give what you '
+                        . 'have and say plainly what is missing (and how to ask for it more directly).',
+                    $chosenModel,
+                    $genConfig,
+                    min((int) (self::envSeconds('GEMINI_TIMEOUT_S', self::CALL_TIMEOUT_S) * 1000), $leftMs),
+                    'NONE',
+                );
+                $geminiCalls++;
+                $text = trim(GeminiClient::extractText($response));
+                if ($text !== '') {
+                    [$fallback, $this->lastSuggestions] = $this->extractSuggestions($text);
+                    $this->lastDiagnostics['step_limit'] = 'answered without tools';
+                }
+            } catch (Throwable $e) {
+                error_log('step-limit final answer failed: ' . $e->getMessage());
+            }
+            $geminiMs += (microtime(true) - $g0) * 1000;
+        }
+        $fallback ??= "Sorry — I couldn't complete that in a reasonable number of steps.";
+
         $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
-        $fallback = "Sorry — I couldn't complete that in a reasonable number of steps.";
         $this->lastAssistantMessageId = $this->conversations->addMessage(
             $conversationId,
             'assistant',
             $fallback,
             null,
-            null,
+            $this->lastRenderJson(),
             $this->diagnosticsJson()
         );
 

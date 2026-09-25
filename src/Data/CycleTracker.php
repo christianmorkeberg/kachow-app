@@ -100,6 +100,43 @@ final class CycleTracker
         return (int) $sel->fetchColumn();
     }
 
+    /** How long after its start a period can still be extended as "still going" (days). */
+    private const MAX_ONGOING_DAYS = 14;
+
+    /**
+     * Updates the CURRENT (most recent) period's end without starting a new one:
+     *   - $extendOnly = true  → "still bleeding today": end becomes at least $date, so the
+     *     period (and the Winter phase) runs through that day (report #24: day 7 of a heavy
+     *     period showed Spring because the phase used the typical length, and the only
+     *     tool the model had created or ignored periods instead of extending this one);
+     *   - $extendOnly = false → "it ended on X": end is set to exactly $date.
+     * Returns the updated period [start, end], or null if there's no period started within
+     * MAX_ONGOING_DAYS before $date (then it's a new period, or the start was never logged).
+     *
+     * @return array{start:string, end:string}|null
+     */
+    public function setCurrentPeriodEnd(int $userId, ?string $date = null, bool $extendOnly = true): ?array
+    {
+        $day  = $this->normalizeDate($date) ?? $this->today()->format('Y-m-d');
+        $stmt = $this->db->prepare(
+            'SELECT id, start_date, end_date FROM cycle_periods
+             WHERE user_id = :u AND start_date <= :d ORDER BY start_date DESC LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId, ':d' => $day]);
+        $r = $stmt->fetch();
+        if ($r === false || $this->daysBetween((string) $r['start_date'], $day) > self::MAX_ONGOING_DAYS) {
+            return null;
+        }
+        $end = $day;
+        if ($extendOnly && $r['end_date'] !== null && (string) $r['end_date'] > $day) {
+            $end = (string) $r['end_date'];
+        }
+        $up = $this->db->prepare('UPDATE cycle_periods SET end_date = :e WHERE id = :id AND user_id = :u');
+        $up->execute([':e' => $end, ':id' => (int) $r['id'], ':u' => $userId]);
+
+        return ['start' => (string) $r['start_date'], 'end' => $end];
+    }
+
     /** Removes a logged period by id, owner-scoped. Returns true if a row was deleted. */
     public function remove(int $userId, int $id): bool
     {
@@ -190,7 +227,19 @@ final class CycleTracker
         $fertileFrom = $ovulation->modify('-' . self::FERTILE_BEFORE . ' days');
         $fertileTo   = $ovulation->modify('+' . self::FERTILE_AFTER . ' days');
 
-        $phase = $this->phaseFor($today, $cycleDay, $periodLen, $ovulation, $fertileFrom, $fertileTo);
+        // The CURRENT period's own length wins over the typical one once its end is logged:
+        // "still going today" extends it (Winter continues), "ended on day 4" shortens it.
+        $currentLen = $periodLen;
+        if ($rows[0]['end_date'] !== null) {
+            $currentLen = max(1, min(
+                $this->daysBetween((string) $rows[0]['start_date'], (string) $rows[0]['end_date']) + 1,
+                $cycleLen - 1
+            ));
+        }
+        $ongoing = $rows[0]['end_date'] !== null && (string) $rows[0]['end_date'] >= $today->format('Y-m-d')
+            && $cycleDay <= $currentLen;
+
+        $phase = $this->phaseFor($today, $cycleDay, $currentLen, $ovulation, $fertileFrom, $fertileTo);
         $inFertile = $today >= $fertileFrom && $today <= $fertileTo;
 
         return [
@@ -198,7 +247,9 @@ final class CycleTracker
             'predicted'     => $predicted,
             'cycle_day'     => max(1, $cycleDay),
             'cycle_length'  => $cycleLen,
-            'period_length' => $periodLen,
+            'period_length' => $currentLen,  // this cycle's (drives the card ring)
+            'typical_period_length' => $periodLen,
+            'period_ongoing' => $ongoing,     // the user said it's still going (through today)
             'phase'         => $phase,
             'phase_label'   => self::phaseLabel($phase),
             'last_start'    => $lastStart->format('Y-m-d'),

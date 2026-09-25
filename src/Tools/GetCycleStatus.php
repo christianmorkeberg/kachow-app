@@ -30,7 +30,10 @@ final class GetCycleStatus implements Tool
             . 'dag i cyklussen er jeg på?". Predictions are ESTIMATES for planning, not contraception. '
             . 'The app frames phases as inner seasons (Winter=menstrual, Spring=follicular, Summer='
             . 'ovulation, Autumn=luteal) — you may name the season, but write it plainly and confidently; '
-            . 'never add placeholder characters like "??". Shows the cycle card.';
+            . 'never add placeholder characters like "??". Shows the cycle card. Winter lasts as long as '
+            . 'the CURRENT period does: if the user says it is still going (or the phase looks wrong because '
+            . 'of that), call log_period with still_ongoing=true — it adjusts the card; never tell them the '
+            . 'app can\'t adapt.';
     }
 
     public function parameters(): array

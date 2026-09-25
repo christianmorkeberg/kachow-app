@@ -28,7 +28,8 @@ final class LogCycleDay implements Tool
             . 'drained" ≈ energy 1, "great/loads of energy" ≈ 5; "awful mood" ≈ mood 1, "really good '
             . 'mood" ≈ 5. Use for "my energy is low today", "I feel great", "log my mood as 4", Danish '
             . '"mit humør er lavt i dag", "jeg har meget energi", "jeg er helt drænet". Log only the '
-            . 'value(s) the user actually mentions. Shows the cycle card.';
+            . 'value(s) the user actually mentions (a note alone is fine too). Shows the cycle card. This '
+            . 'does NOT change the period or phase — for "still bleeding" use log_period still_ongoing.';
     }
 
     public function parameters(): array
@@ -50,8 +51,9 @@ final class LogCycleDay implements Tool
         $mood   = isset($arguments['mood']) && $arguments['mood'] !== '' ? (int) $arguments['mood'] : null;
         $energy = isset($arguments['energy']) && $arguments['energy'] !== '' ? (int) $arguments['energy'] : null;
 
-        if ($mood === null && $energy === null) {
-            return ['error' => 'Tell me a mood or energy level (1–5) to log.'];
+        $note = trim((string) ($arguments['note'] ?? ''));
+        if ($mood === null && $energy === null && $note === '') {
+            return ['error' => 'Tell me a mood or energy level (1–5), or a note, to log.'];
         }
 
         $this->cycle->logDay(

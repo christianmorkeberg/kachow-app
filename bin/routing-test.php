@@ -32,6 +32,8 @@ $cases = [
     ['msg' => 'my period started today', 'expect' => 'cycle'],
     ['msg' => 'I got my period yesterday', 'expect' => 'cycle'],
     ['msg' => 'log my period from 12 July', 'expect' => 'cycle'],
+    ['msg' => 'jeg bløder stadig meget', 'expect' => 'cycle'],
+    ['msg' => "I'm still bleeding, adjust it", 'expect' => 'cycle'],
     ['msg' => 'remove the last period I logged', 'expect' => 'cycle'],
     ['msg' => 'min menstruation startede i dag', 'expect' => 'cycle'],
     ['msg' => 'hvornår kommer min næste menstruation?', 'expect' => 'cycle'],

@@ -143,6 +143,7 @@ final class ToolRegistry
         $registry->register(new GetWeatherForecast($weatherService));
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));
+        $registry->register(new ShowChart());
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));

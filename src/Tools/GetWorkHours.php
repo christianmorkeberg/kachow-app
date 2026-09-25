@@ -67,7 +67,7 @@ final class GetWorkHours implements Tool
                 ],
                 'place' => [
                     'type'        => 'string',
-                    'description' => 'Limit to one workplace by its label (e.g. "Office"). Omit for all.',
+                    'description' => 'Limit to one workplace (prefix match: "Office" also covers "Office North"). Omit for all.',
                 ],
             ],
             'required' => [],
@@ -97,7 +97,7 @@ final class GetWorkHours implements Tool
         $summary = $this->events->summary($userId, $scope, $date, $place, $toDate);
 
         // The card carries the detail; give the model the numbers to talk about.
-        return [
+        $result = [
             'range'         => $summary['range_label'],
             'total'         => $summary['total_label'],
             'total_minutes' => $summary['total_minutes'],
@@ -108,5 +108,11 @@ final class GetWorkHours implements Tool
             'needs_fix'     => $summary['needs_fix'],
             '_render'       => $summary['card'],
         ];
+        if ($summary['sessions'] === [] && $place !== null && trim($place) !== '') {
+            $result['known_places'] = $this->events->knownPlaces($userId);
+            $result['hint'] = 'No sessions matched that workplace — check known_places and retry with a real label.';
+        }
+
+        return $result;
     }
 }

@@ -82,6 +82,8 @@ final class GeminiClient
      * @param string|null                       $model                Override; defaults to the primary.
      * @param int|null                          $timeoutMs            Cap on this call's wall time
      *                                                                (null = the 60s default).
+     * @param string|null                       $functionCallingMode  'NONE' forces a text answer
+     *                                                                (tools stay declared).
      *
      * @throws RateLimitException on HTTP 429 (quota) or 503 (overloaded).
      * @throws GeminiTimeoutException when the call doesn't answer within $timeoutMs.
@@ -93,6 +95,7 @@ final class GeminiClient
         ?string $model = null,
         ?array $generationConfig = null,
         ?int $timeoutMs = null,
+        ?string $functionCallingMode = null,
     ): array {
         $model ??= $this->models[0];
 
@@ -116,6 +119,9 @@ final class GeminiClient
         }
         if ($functionDeclarations !== []) {
             $payload['tools'] = [['function_declarations' => $functionDeclarations]];
+            if ($functionCallingMode !== null) {
+                $payload['tool_config'] = ['function_calling_config' => ['mode' => $functionCallingMode]];
+            }
         }
 
         $url = self::BASE . '/models/' . rawurlencode($model) . ':generateContent';
