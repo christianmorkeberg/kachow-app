@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Database;
+use App\Support\GroceryCategories;
 use PDO;
 
 /**
@@ -207,10 +208,20 @@ final class ShoppingLists
 
         $items = [];
         foreach ($this->items($listId) as $i) {
-            $items[] = ['id' => (int) $i['id'], 'label' => (string) $i['item'], 'done' => (bool) $i['checked']];
+            $items[] = [
+                'id'       => (int) $i['id'],
+                'label'    => (string) $i['item'],
+                'done'     => (bool) $i['checked'],
+                'category' => GroceryCategories::categorize((string) $i['item']),
+            ];
         }
 
-        return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items];
+        // Aisle groups in store-walk order (only the ones in use), for the grouped card.
+        $used   = array_unique(array_column($items, 'category'));
+        usort($used, static fn (string $a, string $b): int => GroceryCategories::order($a) <=> GroceryCategories::order($b));
+        $groups = array_map(static fn (string $k): array => ['key' => $k] + GroceryCategories::CATEGORIES[$k], $used);
+
+        return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items, 'groups' => $groups];
     }
 
     /**
