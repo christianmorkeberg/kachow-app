@@ -33,7 +33,8 @@ final class GetWorkoutHistory implements Tool
             . '1-rep max, or null if never tested at 1 rep), and `est_1rm` (best Epley estimate with its '
             . 'source set). For 1RM / PR / percentage questions, USE these computed records verbatim — do '
             . 'NOT re-derive maxes or 1RMs from the raw sets yourself. "Real 1RM" = tested_1rm; '
-            . '"estimated 1RM" = est_1rm.';
+            . '"estimated 1RM" = est_1rm. When asked for a PR/max, always report BOTH (tested/realised and '
+            . 'estimated), and say plainly when tested_1rm is null.';
     }
 
     public function parameters(): array
