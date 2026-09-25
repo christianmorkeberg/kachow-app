@@ -229,9 +229,9 @@ final class WorkEvents
 
     /**
      * Summarises worked time over a scope ('today' | 'yesterday' | 'week' |
-     * 'lastweek') or an
-     * explicit local date (YYYY-MM-DD). Returns totals, the sessions overlapping
-     * the range, any forgotten clock-outs to fix, and a renderable card.
+     * 'lastweek' | 'month' | 'lastmonth'), an explicit local date (YYYY-MM-DD), or an
+     * inclusive local date RANGE ($date … $toDate). Returns totals, the sessions
+     * overlapping the range, any forgotten clock-outs to fix, and a renderable card.
      *
      * @return array{
      *   scope:string, range_label:string, total_minutes:int, total_label:string,
@@ -239,11 +239,11 @@ final class WorkEvents
      *   needs_fix:array<int,array<string,mixed>>, card:array<string,mixed>
      * }
      */
-    public function summary(int $userId, string $scope = 'today', ?string $date = null, ?string $place = null): array
+    public function summary(int $userId, string $scope = 'today', ?string $date = null, ?string $place = null, ?string $toDate = null): array
     {
         $tz  = new DateTimeZone(self::LOCAL_TZ);
         $utc = new DateTimeZone('UTC');
-        [$startLocal, $endLocal, $rangeLabel, $scopeLabel] = $this->rangeFor($scope, $date, $tz);
+        [$startLocal, $endLocal, $rangeLabel, $scopeLabel] = $this->rangeFor($scope, $date, $tz, $toDate);
 
         $fromUtc = $startLocal->setTimezone($utc);
         $toUtc   = $endLocal->setTimezone($utc);
@@ -263,7 +263,7 @@ final class WorkEvents
         $perLoc          = []; // locKey => ['place'=>label, 'minutes'=>int]
 
         foreach ($sessions as $s) {
-            if ($filterKey !== null && $this->locKey($s['location']) !== $filterKey) {
+            if ($filterKey !== null && !$this->placeMatches($s['location'], $filterKey)) {
                 continue;
             }
             $in  = new DateTimeImmutable($s['in'], $utc);
@@ -373,13 +373,30 @@ final class WorkEvents
      *
      * @return array<string, mixed>
      */
-    public function breakdown(int $userId, string $mode = 'week'): array
-    {
-        $mode = in_array($mode, self::CHART_MODES, true) ? $mode : 'week';
-        $tz   = new DateTimeZone(self::LOCAL_TZ);
-        $utc  = new DateTimeZone('UTC');
+    public function breakdown(
+        int $userId,
+        string $mode = 'week',
+        ?string $from = null,
+        ?string $to = null,
+        ?string $bucket = null,
+        ?string $place = null,
+    ): array {
+        $tz  = new DateTimeZone(self::LOCAL_TZ);
+        $utc = new DateTimeZone('UTC');
 
-        [$buckets, $title, $rangeLabel, $bucketWord] = $this->chartBuckets($mode, $tz);
+        // A custom range ("1 Sep – today", "this year by month") — report #23: the chart only
+        // knew four fixed periods, so anything else was "not possible".
+        if ($from !== null && $from !== '' && $to !== null && $to !== '') {
+            $mode = 'custom';
+            [$buckets, $title, $rangeLabel, $bucketWord] = $this->customBuckets($from, $to, $bucket, $tz);
+        } else {
+            $mode = in_array($mode, self::CHART_MODES, true) ? $mode : 'week';
+            [$buckets, $title, $rangeLabel, $bucketWord] = $this->chartBuckets($mode, $tz);
+        }
+        $filterKey = ($place !== null && trim($place) !== '') ? $this->locKey($place) : null;
+        if ($filterKey !== null) {
+            $title .= ' · ' . trim((string) $place);
+        }
 
         $spanStart = $buckets[0]['start']->setTimezone($utc);
         $spanEnd   = $buckets[count($buckets) - 1]['end']->setTimezone($utc);
@@ -392,6 +409,7 @@ final class WorkEvents
         // Precompute each bucket's UTC window once.
         foreach ($buckets as $i => $b) {
             $buckets[$i]['minutes'] = 0;
+            $buckets[$i]['byLoc']   = [];
             $buckets[$i]['ongoing'] = false;
             $buckets[$i]['from_ts'] = $b['start']->setTimezone($utc)->getTimestamp();
             $buckets[$i]['to_ts']   = $b['end']->setTimezone($utc)->getTimestamp();
@@ -401,6 +419,9 @@ final class WorkEvents
         $totalMinutes = 0;
 
         foreach ($sessions as $s) {
+            if ($filterKey !== null && !$this->placeMatches($s['location'], $filterKey)) {
+                continue;
+            }
             $in  = new DateTimeImmutable($s['in'], $utc);
             $out = $s['out'] !== null ? new DateTimeImmutable($s['out'], $utc) : null;
 
@@ -435,16 +456,9 @@ final class WorkEvents
                 $k          = $this->locKey($s['location']);
                 $perLoc[$k] ??= ['place' => $s['location'], 'minutes' => 0];
                 $perLoc[$k]['minutes'] += $mins;
+                $buckets[$i]['byLoc'][$k] = ($buckets[$i]['byLoc'][$k] ?? 0) + $mins;
             }
         }
-
-        $bars = array_map(static fn (array $b): array => [
-            'label'   => $b['label'],
-            'sub'     => $b['sub'],
-            'minutes' => $b['minutes'],
-            'total'   => self::fmtDuration($b['minutes']),
-            'ongoing' => $b['ongoing'],
-        ], $buckets);
 
         $places = [];
         foreach ($perLoc as $row) {
@@ -455,6 +469,24 @@ final class WorkEvents
         usort($places, static fn (array $a, array $b): int => $b['minutes'] <=> $a['minutes']);
         $labelled   = array_filter($places, static fn (array $p): bool => trim((string) $p['place']) !== '');
         $multiPlace = count($labelled) > 1;
+
+        // Bars; with several workplaces each bar also carries its per-place split (in the
+        // order of `places`) so the card can stack them — "office vs client per week" at a glance.
+        $placeKeys = array_map(fn (array $p): string => $this->locKey($p['place']), $places);
+        $bars = array_map(static function (array $b) use ($multiPlace, $placeKeys): array {
+            $bar = [
+                'label'   => $b['label'],
+                'sub'     => $b['sub'],
+                'minutes' => $b['minutes'],
+                'total'   => self::fmtDuration($b['minutes']),
+                'ongoing' => $b['ongoing'],
+            ];
+            if ($multiPlace) {
+                $bar['split'] = array_map(static fn (string $k): int => (int) ($b['byLoc'][$k] ?? 0), $placeKeys);
+            }
+
+            return $bar;
+        }, $buckets);
 
         $active  = count(array_filter($buckets, static fn (array $b): bool => $b['minutes'] > 0));
         $avgMin  = $active > 0 ? (int) round($totalMinutes / $active) : 0;
@@ -479,8 +511,64 @@ final class WorkEvents
             'places'        => $multiPlace
                 ? array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total']], $places)
                 : [],
+            'places_all'    => $places, // incl. minutes, for the model
+            'stacked'       => $multiPlace,
+            'filter'        => ['from' => $mode === 'custom' ? $from : null, 'to' => $mode === 'custom' ? $to : null,
+                'bucket' => $mode === 'custom' ? $bucketWord : null, 'place' => $filterKey !== null ? trim((string) $place) : null],
             'has_data'      => $totalMinutes > 0,
         ];
+    }
+
+    /**
+     * Buckets for a custom inclusive local date range. $bucket 'day'|'week'|'month', or
+     * auto: ≤ 31 days → days, ≤ ~26 weeks → weeks, else months. Capped at 400 days / 60 bars.
+     *
+     * @return array{0: array<int, array{start:DateTimeImmutable, end:DateTimeImmutable, label:string, sub:string}>, 1:string, 2:string, 3:string}
+     */
+    private function customBuckets(string $from, string $to, ?string $bucket, DateTimeZone $tz): array
+    {
+        $a = (new DateTimeImmutable($from, $tz))->setTime(0, 0);
+        $b = (new DateTimeImmutable($to, $tz))->setTime(0, 0);
+        if ($b < $a) {
+            [$a, $b] = [$b, $a];
+        }
+        if ($this->daysBetweenLocal($a, $b) > 400) {
+            $a = $b->modify('-400 days');
+        }
+        $endEx = $b->modify('+1 day');
+        $days  = $this->daysBetweenLocal($a, $endEx);
+
+        if (!in_array($bucket, ['day', 'week', 'month'], true)) {
+            $bucket = $days <= 31 ? 'day' : ($days <= 183 ? 'week' : 'month');
+        }
+        if ($bucket === 'day' && $days > 60) {
+            $bucket = 'week';
+        }
+
+        $buckets = [];
+        if ($bucket === 'day') {
+            for ($d = $a; $d < $endEx; $d = $d->modify('+1 day')) {
+                $buckets[] = ['start' => $d, 'end' => $d->modify('+1 day'), 'label' => $d->format($days <= 7 ? 'D' : 'j'), 'sub' => $d->format('D j M')];
+            }
+        } elseif ($bucket === 'week') {
+            $dow = (int) $a->format('N');
+            for ($w = $a->modify('-' . ($dow - 1) . ' days'); $w < $endEx; $w = $w->modify('+7 days')) {
+                $buckets[] = ['start' => max($w, $a), 'end' => min($w->modify('+7 days'), $endEx), 'label' => 'W' . $w->format('W'), 'sub' => $w->format('j M')];
+            }
+        } else {
+            for ($m = $a->modify('first day of this month'); $m < $endEx; $m = $m->modify('+1 month')) {
+                $buckets[] = ['start' => max($m, $a), 'end' => min($m->modify('+1 month'), $endEx), 'label' => $m->format('M'), 'sub' => $m->format('Y')];
+            }
+        }
+
+        $range = $a->format('j M') . ' – ' . $b->format($a->format('Y') === $b->format('Y') ? 'j M' : 'j M Y');
+
+        return [$buckets, $range, $range, $bucket];
+    }
+
+    private function daysBetweenLocal(DateTimeImmutable $a, DateTimeImmutable $b): int
+    {
+        return (int) round(($b->getTimestamp() - $a->getTimestamp()) / 86400);
     }
 
     /**
@@ -564,7 +652,41 @@ final class WorkEvents
 
     private function locKey(?string $s): string
     {
-        return strtolower(trim((string) $s));
+        return mb_strtolower(trim((string) $s));
+    }
+
+    /**
+     * Whether a session's place label matches a place filter. Exact, or the label starts with
+     * the filter as a whole word — so "Office" covers "Office", "Office North" and "Office South"
+     * (report #23: asking for one employer found nothing because each site has its own label).
+     * A more specific filter ("Office North") never matches the broader label ("Office").
+     */
+    private function placeMatches(?string $location, string $filterKey): bool
+    {
+        $loc = $this->locKey($location);
+        if ($loc === $filterKey) {
+            return true;
+        }
+
+        return $filterKey !== '' && str_starts_with($loc, $filterKey)
+            && preg_match('/^[\s\-·,\/(]/u', mb_substr($loc, mb_strlen($filterKey))) === 1;
+    }
+
+    /**
+     * The distinct workplace labels used in the last ~year — returned to the model when a
+     * place filter matched nothing, so it can retry with a real label instead of giving up.
+     *
+     * @return list<string>
+     */
+    public function knownPlaces(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT DISTINCT location FROM work_events
+             WHERE user_id = :u AND location IS NOT NULL AND location <> \'\' AND occurred_at >= :from'
+        );
+        $stmt->execute([':u' => $userId, ':from' => gmdate('Y-m-d H:i:s', time() - 400 * 86400)]);
+
+        return array_values(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
     }
 
     /**
@@ -635,9 +757,21 @@ final class WorkEvents
      * @return array{0:DateTimeImmutable,1:DateTimeImmutable,2:string,3:string}
      *         [startLocal, endLocal, rangeLabel, scopeLabel]
      */
-    private function rangeFor(string $scope, ?string $date, DateTimeZone $tz): array
+    private function rangeFor(string $scope, ?string $date, DateTimeZone $tz, ?string $toDate = null): array
     {
         $now = new DateTimeImmutable('now', $tz);
+
+        // Inclusive local date range, e.g. "1 Sep to today" (report #21: without it the
+        // model probed single days and silently missed some).
+        if ($date !== null && $date !== '' && $toDate !== null && $toDate !== '' && $toDate !== $date) {
+            $a = (new DateTimeImmutable($date, $tz))->setTime(0, 0);
+            $b = (new DateTimeImmutable($toDate, $tz))->setTime(0, 0);
+            if ($b < $a) {
+                [$a, $b] = [$b, $a];
+            }
+            $label = $a->format('j M') . ' – ' . $b->format($a->format('Y') === $b->format('Y') ? 'j M' : 'j M Y');
+            return [$a, $b->modify('+1 day'), $label, $label];
+        }
 
         if ($date !== null && $date !== '') {
             $d = (new DateTimeImmutable($date, $tz))->setTime(0, 0);
@@ -651,6 +785,15 @@ final class WorkEvents
             $end     = $start->modify('+7 days');
             $label   = $scope === 'lastweek' ? 'Last week' : 'This week';
             return [$start, $end, $start->format('j M') . ' – ' . $end->modify('-1 day')->format('j M'), $label];
+        }
+
+        if ($scope === 'month' || $scope === 'lastmonth') {
+            $start = $now->setTime(0, 0)->modify('first day of this month');
+            if ($scope === 'lastmonth') {
+                $start = $start->modify('-1 month');
+            }
+            $end = $start->modify('+1 month');
+            return [$start, $end, $start->format('F Y'), $scope === 'lastmonth' ? 'Last month' : 'This month'];
         }
 
         if ($scope === 'yesterday') {

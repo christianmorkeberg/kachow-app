@@ -143,15 +143,16 @@ final class ToolRegistry
         $registry->register(new GetWeatherForecast($weatherService));
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));
+        $registry->register(new ShowChart());
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
         $registry->register(new LogWorkTime($workLog, $calendar, $userSettings));
         $registry->register(new GetWorkLog($workLog));
         $registry->register(new ExportWorkLog($workLog));
-        $registry->register(new NoteDevIdea($devIdeas));
-        $registry->register(new ListDevIdeas($devIdeas));
-        $registry->register(new RemoveDevIdea($devIdeas));
+        $registry->register(new NoteDevIdea($devIdeas, $users));
+        $registry->register(new ListDevIdeas($devIdeas, $users));
+        $registry->register(new RemoveDevIdea($devIdeas, $users));
         $registry->register(new AddExpense($receipts));
         $registry->register(new UpdateReceipt($receipts));
         $registry->register(new DeleteReceipt($receipts, $receiptStorage));
@@ -175,6 +176,8 @@ final class ToolRegistry
         $registry->register(new GetProfitLoss(new ProfitLoss($income, $receipts, $userSettings, $mileage)));
         $registry->register(new LogTrip($mileage, $mapDistance, $userSettings));
         $registry->register(new GetMileage($mileage));
+        $registry->register(new UpdateTrip($mileage));
+        $registry->register(new DeleteTrip($mileage));
         $registry->register(new GetDrivingDistance($mapDistance, $userSettings));
         $registry->register(new CreateInvoice($income, $userSettings, $bookAudit));
         $registry->register(new SetCompanyProfile($userSettings));

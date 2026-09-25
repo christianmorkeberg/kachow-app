@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\DevIdeas;
+use App\Data\Users;
 
 /**
  * Tool: remove an idea from the dev backlog (e.g. once it's built or dropped).
  */
 final class RemoveDevIdea implements Tool
 {
-    public function __construct(private DevIdeas $ideas)
+    public function __construct(private DevIdeas $ideas, private Users $users)
     {
     }
 
@@ -23,7 +24,8 @@ final class RemoveDevIdea implements Tool
     public function description(): string
     {
         return 'Removes an idea from the dev backlog by its id (get the id from list_dev_ideas). '
-            . 'Use when the user says an idea is done, built, or no longer wanted.';
+            . 'Use when the user says an idea is done, built, or no longer wanted. The developer (admin) '
+            . 'can remove any idea on the shared backlog; others only ideas they suggested.';
     }
 
     public function parameters(): array
@@ -44,7 +46,11 @@ final class RemoveDevIdea implements Tool
             return ['error' => 'A valid idea id is required (from list_dev_ideas).'];
         }
 
-        return $this->ideas->delete($userId, $id)
+        $removed = $this->users->isAdmin($userId)
+            ? $this->ideas->deleteAny($id)
+            : $this->ideas->delete($userId, $id);
+
+        return $removed
             ? ['removed' => true]
             : ['removed' => false, 'error' => 'No such idea (it may already be gone).'];
     }

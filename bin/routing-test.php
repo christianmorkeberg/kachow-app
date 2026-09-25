@@ -32,6 +32,8 @@ $cases = [
     ['msg' => 'my period started today', 'expect' => 'cycle'],
     ['msg' => 'I got my period yesterday', 'expect' => 'cycle'],
     ['msg' => 'log my period from 12 July', 'expect' => 'cycle'],
+    ['msg' => 'jeg bløder stadig meget', 'expect' => 'cycle'],
+    ['msg' => "I'm still bleeding, adjust it", 'expect' => 'cycle'],
     ['msg' => 'remove the last period I logged', 'expect' => 'cycle'],
     ['msg' => 'min menstruation startede i dag', 'expect' => 'cycle'],
     ['msg' => 'hvornår kommer min næste menstruation?', 'expect' => 'cycle'],
@@ -175,6 +177,10 @@ $cases = [
     ['msg' => 'jeg kørte på arbejde i dag', 'expect' => 'bookkeeping'],
     ['msg' => 'hvor meget kørselsfradrag har jeg?', 'expect' => 'bookkeeping'],
     ['msg' => 'registrér min kørsel til kunden', 'expect' => 'bookkeeping'],
+    // correcting / deleting logged trips (report #20)
+    ['msg' => 'der ligger to ture for i dag, slet den ene', 'expect' => 'bookkeeping'],
+    ['msg' => 'delete the duplicate trip from today', 'expect' => 'bookkeeping'],
+    ['msg' => 'ret turen i fredags, det var pendling', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],

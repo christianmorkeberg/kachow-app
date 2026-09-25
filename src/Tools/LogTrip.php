@@ -37,7 +37,10 @@ final class LogTrip implements Tool
             . 'else the destination\'s saved round-trip distance. Pass "destination" with the place name if the '
             . 'user has more than one (e.g. a customer vs DTU); omit to use their default. "from" defaults to the '
             . 'user\'s home address. Optionally give a date or note. Business destinations follow the 60-day rule; '
-            . 'commute destinations (a fixed workplace like DTU) always count as befordringsfradrag.';
+            . 'commute destinations (a fixed workplace like DTU) always count as befordringsfradrag. Only for a '
+            . 'NEW driving day: to fix an already-logged trip (wrong destination, date or km) use update_trip, '
+            . 'and to remove one use delete_trip — logging again would create a duplicate. The result lists '
+            . 'all trips on that date (`trips_that_day`); if there are now two, point it out.';
     }
 
     public function parameters(): array
@@ -92,7 +95,7 @@ final class LogTrip implements Tool
             }
         }
 
-        $this->mileage->logTrip(
+        $tripId = $this->mileage->logTrip(
             $userId,
             $destId,
             isset($arguments['date']) ? (string) $arguments['date'] : null,
@@ -100,9 +103,12 @@ final class LogTrip implements Tool
             $note
         );
         $card = $this->mileage->card($userId, 0);
+        $trip = $this->mileage->findTrip($userId, $tripId);
 
         $result = [
             'logged'             => true,
+            'trip_id'            => $tripId,
+            'trips_that_day'     => $trip !== null ? Mileage::tripsForModel($card, 50, $trip['date']) : [],
             'business_deduction' => $card['business']['amount'],
             'destinations'       => array_map(static fn (array $d): array => [
                 'name'      => $d['name'],

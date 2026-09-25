@@ -28,14 +28,18 @@ final class GetWorkSummary implements Tool
 
     public function description(): string
     {
-        return 'Shows a bar chart of worked hours over a period: daily bars for this week (period '
-            . '"week"), weekly bars for the last 4 or 12 weeks, or monthly bars for the last year. This '
-            . 'is the DEFAULT for any whole-week or multi-day hours question, including "how have I '
-            . 'worked this week", "how were my hours this week", "hours per day this week", "how much did '
-            . 'I work each month", "are my hours increasing", Danish "hvordan har jeg arbejdet i denne '
-            . 'uge", "arbejdstimer per uge/måned". The card carries the bars, so summarise (total, '
-            . 'average per day/week/month, busiest period) rather than reading every bar. Only for a '
-            . 'single day, clock-status, or the individual session times use get_work_hours instead.';
+        return 'Draws a bar chart of worked hours (from the clock) over ANY period, bucketed per day, week '
+            . 'or month, optionally for one workplace, with bars STACKED per workplace when there are '
+            . 'several. Presets: "week" (daily bars, current week), "4w"/"12w" (weekly), "year" (monthly). '
+            . 'For anything else pass from/to (YYYY-MM-DD, inclusive) and optionally bucket (day/week/'
+            . 'month; auto if omitted) — e.g. "this month per day", "since August per week", "hours at the '
+            . 'office this month", "office vs client per week", Danish "hvor meget har jeg arbejdet hos X denne måned", '
+            . '"vis mine timer per uge siden august". place matches by prefix: "Office" covers every site '
+            . 'labelled "Office …" ("Office North", "Office South"). This is the DEFAULT for any whole-week or multi-day hours question. '
+            . 'The result gives total, per-bucket and per-workplace totals (by_place) — answer from those '
+            . 'in ONE call; never tell the user a split or period is impossible. Summarise (total, average, '
+            . 'busiest) rather than reading every bar. For a single day, clock status or individual session '
+            . 'times use get_work_hours.';
     }
 
     public function parameters(): array
@@ -46,9 +50,17 @@ final class GetWorkSummary implements Tool
                 'period' => [
                     'type'        => 'string',
                     'enum'        => WorkEvents::CHART_MODES,
-                    'description' => 'Bucketing: "week" (daily bars, current week), "4w" or "12w" (weekly '
-                        . 'bars), "year" (monthly bars). Default "week".',
+                    'description' => 'Preset: "week" (daily bars, current week), "4w" or "12w" (weekly '
+                        . 'bars), "year" (monthly bars). Default "week". Ignored when from/to are given.',
                 ],
+                'from'   => ['type' => 'string', 'description' => 'Custom range start, YYYY-MM-DD (inclusive). Use with "to".'],
+                'to'     => ['type' => 'string', 'description' => 'Custom range end, YYYY-MM-DD (inclusive; "until today" = today).'],
+                'bucket' => [
+                    'type'        => 'string',
+                    'enum'        => ['day', 'week', 'month'],
+                    'description' => 'Bar size for a custom range. Omit for automatic.',
+                ],
+                'place'  => ['type' => 'string', 'description' => 'Only this workplace (prefix match: "Office" = "Office North", "Office South", …). Omit for all, stacked per place.'],
             ],
             'required' => [],
         ];
@@ -59,7 +71,28 @@ final class GetWorkSummary implements Tool
         $period = isset($arguments['period']) && $arguments['period'] !== ''
             ? (string) $arguments['period'] : 'week';
 
-        $card = $this->events->breakdown($userId, $period);
+        $from   = trim((string) ($arguments['from'] ?? ''));
+        $to     = trim((string) ($arguments['to'] ?? ''));
+        if ($from !== '' && $to === '') {
+            $to = (new \DateTimeImmutable('now', new \DateTimeZone(WorkEvents::LOCAL_TZ)))->format('Y-m-d');
+        }
+        foreach ([$from, $to] as $d) {
+            if ($d !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
+                return ['error' => 'Dates must be YYYY-MM-DD (got "' . $d . '").'];
+            }
+        }
+        $place = isset($arguments['place']) ? trim((string) $arguments['place']) : null;
+
+        $card = $this->events->breakdown(
+            $userId,
+            $period,
+            $from !== '' ? $from : null,
+            $to !== '' ? $to : null,
+            isset($arguments['bucket']) ? (string) $arguments['bucket'] : null,
+            $place,
+        );
+        $placesAll = $card['places_all'];
+        unset($card['places_all']);
 
         // Compact bucket list + busiest bucket for the model to talk about.
         $byBucket = [];
@@ -71,7 +104,7 @@ final class GetWorkSummary implements Tool
             }
         }
 
-        return [
+        $result = [
             'range'         => $card['range'],
             'total'         => $card['total'],
             'total_minutes' => $card['total_minutes'],
@@ -80,8 +113,15 @@ final class GetWorkSummary implements Tool
                 ? ($busiest['label'] . ' (' . $busiest['total'] . ')')
                 : null,
             'by_bucket'     => $byBucket,
+            'by_place'      => array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total']], $placesAll),
             'has_data'      => $card['has_data'],
             '_render'       => $card,
         ];
+        if (!$card['has_data'] && $place !== null && $place !== '') {
+            $result['known_places'] = $this->events->knownPlaces($userId);
+            $result['hint'] = 'No hours matched that workplace — check known_places and retry with a real label.';
+        }
+
+        return $result;
     }
 }

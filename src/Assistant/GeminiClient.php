@@ -17,7 +17,7 @@ final class GeminiClient
 {
     private const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-    /** @var callable(string,array,array):array{0:int,1:string} */
+    /** @var callable(string,array,array,?int):array{0:int,1:string} (4th arg: timeout ms) */
     private $transport;
 
     /** @var list<string> Ordered model chain: primary first, then fallbacks. */
@@ -80,8 +80,13 @@ final class GeminiClient
      * @param array<int, array<string, mixed>> $contents             Gemini "contents"
      * @param array<int, array<string, mixed>> $functionDeclarations  from ToolRegistry::declarations()
      * @param string|null                       $model                Override; defaults to the primary.
+     * @param int|null                          $timeoutMs            Cap on this call's wall time
+     *                                                                (null = the 60s default).
+     * @param string|null                       $functionCallingMode  'NONE' forces a text answer
+     *                                                                (tools stay declared).
      *
      * @throws RateLimitException on HTTP 429 (quota) or 503 (overloaded).
+     * @throws GeminiTimeoutException when the call doesn't answer within $timeoutMs.
      */
     public function generate(
         array $contents,
@@ -89,6 +94,8 @@ final class GeminiClient
         ?string $systemInstruction = null,
         ?string $model = null,
         ?array $generationConfig = null,
+        ?int $timeoutMs = null,
+        ?string $functionCallingMode = null,
     ): array {
         $model ??= $this->models[0];
 
@@ -112,6 +119,9 @@ final class GeminiClient
         }
         if ($functionDeclarations !== []) {
             $payload['tools'] = [['function_declarations' => $functionDeclarations]];
+            if ($functionCallingMode !== null) {
+                $payload['tool_config'] = ['function_calling_config' => ['mode' => $functionCallingMode]];
+            }
         }
 
         $url = self::BASE . '/models/' . rawurlencode($model) . ':generateContent';
@@ -120,7 +130,7 @@ final class GeminiClient
             'x-goog-api-key: ' . $this->apiKey,
         ];
 
-        [$status, $body] = ($this->transport)($url, $payload, $headers);
+        [$status, $body] = ($this->transport)($url, $payload, $headers, $timeoutMs);
 
         $decoded = json_decode($body, true);
         if ($status === 429 || $status === 503) {
@@ -259,21 +269,29 @@ final class GeminiClient
     /**
      * @return array{0:int,1:string} [statusCode, body]
      */
-    private function curlTransport(string $url, array $payload, array $headers): array
+    private function curlTransport(string $url, array $payload, array $headers, ?int $timeoutMs = null): array
     {
+        $timeoutMs ??= 60000;
         $ch = curl_init($url);
         curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_POST              => true,
+            CURLOPT_POSTFIELDS        => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER        => $headers,
+            CURLOPT_RETURNTRANSFER    => true,
+            CURLOPT_CONNECTTIMEOUT_MS => min(5000, $timeoutMs),
+            CURLOPT_TIMEOUT_MS        => $timeoutMs,
+            CURLOPT_NOSIGNAL          => true, // sub-second timeouts on some builds need this
         ]);
 
         $body = curl_exec($ch);
         if ($body === false) {
+            $errno = curl_errno($ch);
             $error = curl_error($ch);
             curl_close($ch);
+            if ($errno === CURLE_OPERATION_TIMEDOUT) {
+                error_log(sprintf('timing gemini: TIMEOUT after %dms', $timeoutMs));
+                throw new GeminiTimeoutException('Gemini did not answer within ' . $timeoutMs . 'ms: ' . $error);
+            }
             throw new RuntimeException('Gemini request failed: ' . $error);
         }
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);

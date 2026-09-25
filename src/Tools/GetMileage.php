@@ -27,7 +27,10 @@ final class GetMileage implements Tool
             . 'first 60 days at your customer) and, separately, the commuter befordringsfradrag estimate for '
             . 'day 61+, with a "X of 60 business days used" counter. Use for "show my mileage", "how much '
             . 'driving deduction do I have", "kørselsfradrag", "min kørsel", "how many driving days left". '
-            . 'Business driving lowers your profit + tax reserve; the commuter part is a personal-return figure.';
+            . 'Business driving lowers your profit + tax reserve; the commuter part is a personal-return figure. '
+            . 'The result also lists the most recent logged `trips` (id, date, destination, counted_as, km) — '
+            . 'use them to answer "what did I log" and to find the id for update_trip / delete_trip when the '
+            . 'user says a trip is wrong or doubled.';
     }
 
     public function parameters(): array
@@ -49,6 +52,7 @@ final class GetMileage implements Tool
                 'days_remaining' => $d['counter']['remaining'] ?? null,
                 'commuting_now' => $d['counter']['commuting_now'] ?? null,
             ], $card['destinations']),
+            'trips'              => Mileage::tripsForModel($card),
             '_render'            => $card,
         ];
     }

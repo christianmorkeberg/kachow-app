@@ -62,6 +62,7 @@ final class GetConnectedCycle implements Tool
         return [
             'person'      => $access['person'],
             'phase'       => $card['phase_label'],
+            'season'      => $card['season_label'] ?? null,
             'next_period' => $card['next_period'],
             'days_until'  => $card['days_until'],
             'in_fertile'  => $card['in_fertile'],

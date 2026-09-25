@@ -16,6 +16,15 @@ use DateTimeZone;
  */
 final class LogWorkEvent implements Tool
 {
+    /**
+     * Local dates logged so far by this instance. The registry is built per request (one
+     * turn), so this spans the calls of the current turn: "Tue+Wed at A, Thu+Fri at B" is
+     * four calls, and the card must show all of them — not just the last day (report #18).
+     *
+     * @var array<string, true>
+     */
+    private array $touchedDates = [];
+
     public function __construct(private WorkEvents $events)
     {
     }
@@ -35,7 +44,8 @@ final class LogWorkEvent implements Tool
             . 'kind="in", "at" to the start and "out_at" to the end — do NOT make two separate calls. '
             . 'Otherwise, to close an ongoing session, log a single "out" at the time they left. If the '
             . 'user has multiple workplaces, pass "place" (the same label) so it pairs with the right '
-            . 'session. The result shows that day\'s card so you can confirm in one step — trust it, '
+            . 'session. The result shows that day\'s card (after several calls in one turn: a card covering all '
+            . 'the days logged) so you can confirm in one step — trust it, '
             . 'don\'t re-check. IMPORTANT: this records only the CLOCK TIMES. If the user ALSO describes '
             . 'WHAT they worked on (not just the hours), you MUST additionally call log_work_time to save '
             . 'that description to their work log — logging the hours here does NOT save any work-log note, '
@@ -122,11 +132,11 @@ final class LogWorkEvent implements Tool
             $summary = $this->events->summary($userId, 'today', $day);
 
             return [
+                '_render'    => $this->cardForTurn($userId, $day, $summary['card']),
                 'recorded'   => true,
                 'session'    => true,
                 'day'        => $summary['range_label'],
                 'day_total'  => $summary['total_label'],
-                '_render'    => $summary['card'],
             ];
         }
 
@@ -152,6 +162,7 @@ final class LogWorkEvent implements Tool
         $summary = $this->events->summary($userId, 'today', $day);
 
         return [
+            '_render'       => $this->cardForTurn($userId, $day, $summary['card']),
             'recorded'      => $res['status'] === 'ok',
             'duplicate'     => $res['status'] === 'duplicate',
             'kind'          => $res['kind'],
@@ -159,8 +170,27 @@ final class LogWorkEvent implements Tool
             'day'           => $summary['range_label'],
             'day_total'     => $summary['total_label'],
             'clocked_in'    => $summary['ongoing'],
-            '_render'       => $summary['card'],
         ];
+    }
+
+    /**
+     * The card to show after logging $day: that day's card on the first call of a turn,
+     * or — once several days were logged — one card spanning the first to the last of
+     * them, so every session (and the per-workplace split) is visible.
+     *
+     * @param array<string, mixed> $dayCard
+     * @return array<string, mixed>
+     */
+    private function cardForTurn(int $userId, string $day, array $dayCard): array
+    {
+        $this->touchedDates[$day] = true;
+        if (count($this->touchedDates) < 2) {
+            return $dayCard;
+        }
+        $days = array_keys($this->touchedDates);
+        sort($days);
+
+        return $this->events->summary($userId, 'today', $days[0], null, $days[count($days) - 1])['card'];
     }
 
     /** Local (Europe/Copenhagen) calendar date 'Y-m-d' for a UTC instant, or today. */

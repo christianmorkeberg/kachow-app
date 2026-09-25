@@ -29,8 +29,16 @@ final class GetCycleStatus implements Tool
             . 'am I on?", "am I fertile now?", Danish "hvornår kommer min næste menstruation?", "hvilken '
             . 'dag i cyklussen er jeg på?". Predictions are ESTIMATES for planning, not contraception. '
             . 'The app frames phases as inner seasons (Winter=menstrual, Spring=follicular, Summer='
-            . 'ovulation, Autumn=luteal) — you may name the season, but write it plainly and confidently; '
-            . 'never add placeholder characters like "??". Shows the cycle card.';
+            . 'ovulation, Autumn=luteal), with boundaries from Momkind\'s guide (Ida Axholm): Winter = the '
+            . 'period; Spring = after it until ovulation (varies in length); Summer = the ~3 days up to and '
+            . 'including ovulation (short); Autumn = from the day after ovulation to the next period (the same '
+            . 'length each cycle for a given person). The result lists this cycle\'s `seasons` with days and '
+            . 'dates and a `season_note` — answer duration/"which season" questions from those, not general '
+            . 'knowledge. You may name the season, but write it plainly and confidently; '
+            . 'never add placeholder characters like "??". Shows the cycle card. Winter lasts as long as '
+            . 'the CURRENT period does: if the user says it is still going (or the phase looks wrong because '
+            . 'of that), call log_period with still_ongoing=true — it adjusts the card; never tell them the '
+            . 'app can\'t adapt.';
     }
 
     public function parameters(): array
@@ -65,6 +73,12 @@ final class GetCycleStatus implements Tool
             'fertile_to'   => $card['fertile_to'],
             'in_fertile'   => $card['in_fertile'],
             'predicted'    => $card['predicted'],
+            'season_note'  => $card['season_note'] ?? null,
+            // This cycle's seasons (days + dates) — answer "how long is my autumn" from these.
+            'seasons'      => array_map(static fn (array $x): array => [
+                'season' => $x['label'], 'days' => $x['days'], 'from' => $x['from'], 'to' => $x['to'],
+            ], $card['seasons'] ?? []),
+            'season_source' => \App\Data\CycleTracker::SEASON_SOURCE['url'],
             'disclaimer'   => 'Estimate for planning only — not a reliable form of contraception.',
             '_render'      => $card,
         ];

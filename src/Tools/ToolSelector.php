@@ -22,9 +22,10 @@ final class ToolSelector
 {
     /**
      * Tools offered on EVERY request, even when the message narrows to one domain,
-     * so the assistant can proactively capture a personal fact in any conversation.
+     * so the assistant can proactively capture a personal fact in any conversation, and
+     * chart whatever domain's data the turn fetched (show_chart).
      */
-    private const ALWAYS = ['remember_about_me'];
+    private const ALWAYS = ['remember_about_me', 'show_chart'];
 
     /**
      * Groups sent when NOTHING matched (a keyword-less / ambiguous turn). Bounding the
@@ -100,7 +101,7 @@ final class ToolSelector
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'get_books', 'get_moms',
             'get_cash', 'record_cash_movement', 'get_profit_loss',
-            'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'get_driving_distance',
+            'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'update_trip', 'delete_trip', 'get_driving_distance',
         ],
         'email' => [
             'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
@@ -304,6 +305,8 @@ final class ToolSelector
             'dtu', 'destination', 'køredestination', 'commute', 'commuting', 'pendling', 'pendler', 'workplace',
             'arbejdssted', 'add destination', 'new destination', 'ny destination', 'tilføj destination',
             'distance to', 'afstand til', 'drove to dtu', 'kørte til dtu',
+            // correcting / deleting logged trips
+            'trip', 'trips', 'the drive', ' ture', 'turen', 'turene', 'køretur', 'slet kørsel', 'ret kørsel',
             // map distance lookup (address → km)
             'how far', 'how far is', 'distance from', 'distance between', 'hvor langt', 'hvor langt er der',
             'afstand', 'afstanden', 'home to', 'hjem til', 'log home to', 'kør fra', 'from home to',
@@ -327,6 +330,8 @@ final class ToolSelector
             // Danish (menstruation/-scyklus, periode, cyklus, ægløsning, frugtbar, mensen)
             'menstruation', 'menstruationscyklus', 'periode', 'cyklus', 'ægløsning', 'frugtbar',
             'frugtbarhed', 'mensen', 'min menstruation', 'min periode', 'ægløsn',
+            // "still going" / bleeding (report #24) — Winter season names too
+            'bleeding', 'still bleeding', 'bløder', 'blødning', 'winter', 'vinter', 'in spring',
             // mood/energy day logging (ID 4)
             'mood', 'my energy', 'energy level', 'energy is', 'how i feel', 'feel today', 'exhausted',
             'drained', 'humør', 'humor', 'energi', 'drænet', 'jeg føler',
