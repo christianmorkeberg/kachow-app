@@ -43,13 +43,34 @@ final class CycleTracker
 
     public const FLOWS = ['light', 'medium', 'heavy'];
 
-    /** Inner-seasons framing of the cycle phases (label + emoji). */
+    /**
+     * Inner-seasons framing of the cycle phases (label + emoji + a short paraphrased note).
+     * Boundaries and notes follow SEASON_SOURCE:
+     *   Winter = the period itself (from the first day of real bleeding, typically 3–7 days);
+     *   Spring = follicular, after the period until ovulation (the part that varies in length);
+     *   Summer = ovulation — short: the mood lasts ~3–4 days up to it, the egg itself 12–24 h;
+     *   Autumn = luteal, from the day AFTER ovulation to the next period (fixed per person).
+     * The fertile window is a separate estimate (FERTILE_*), not a season.
+     */
     public const SEASONS = [
-        'winter' => ['label' => 'Winter', 'emoji' => '❄️'],
-        'spring' => ['label' => 'Spring', 'emoji' => '🌱'],
-        'summer' => ['label' => 'Summer', 'emoji' => '☀️'],
-        'autumn' => ['label' => 'Autumn', 'emoji' => '🍂'],
+        'winter' => ['label' => 'Winter', 'emoji' => '❄️',
+            'note' => 'The period: the body needs rest; many feel more tired and inward.'],
+        'spring' => ['label' => 'Spring', 'emoji' => '🌱',
+            'note' => 'Oestrogen rises: energy returns and you become more outgoing.'],
+        'summer' => ['label' => 'Summer', 'emoji' => '☀️',
+            'note' => 'Around ovulation: peak energy, social and effective, but only a few days.'],
+        'autumn' => ['label' => 'Autumn', 'emoji' => '🍂',
+            'note' => 'Progesterone rises: more inward, a sharper critical sense; PMS may come near the end.'],
     ];
+
+    /** Where the season boundaries/notes come from (shown on the card, given to the model). */
+    public const SEASON_SOURCE = [
+        'title' => 'Momkind: Menstruationscyklus — de 4 faser (Ida Axholm)',
+        'url'   => 'https://momkind.dk/blogs/underlivet/menstruationscyklus-bliv-klogere-pa-de-4-faser-i-din-cyklus',
+    ];
+
+    /** Summer = ovulation day plus this many days before it ("3–4 dage op til"). */
+    private const SUMMER_BEFORE = 3;
 
     private PDO $db;
 
@@ -239,7 +260,35 @@ final class CycleTracker
         $ongoing = $rows[0]['end_date'] !== null && (string) $rows[0]['end_date'] >= $today->format('Y-m-d')
             && $cycleDay <= $currentLen;
 
-        $phase = $this->phaseFor($today, $cycleDay, $currentLen, $ovulation, $fertileFrom, $fertileTo);
+        $phase = $this->phaseFor($today, $cycleDay, $currentLen, $ovulation);
+
+        // This cycle's seasons as cycle-day ranges + dates (the card ring draws these, and the
+        // model can answer "how long does my autumn last" from real numbers). Ovulation day =
+        // cycle day (cycleLen − 13), i.e. next period − 14 days.
+        $ovDay   = $cycleLen - 13;
+        $winterTo = $currentLen;
+        $summerFrom = max($winterTo + 1, $ovDay - self::SUMMER_BEFORE);
+        $ranges = [
+            'winter' => [1, $winterTo],
+            'spring' => [$winterTo + 1, $summerFrom - 1],
+            'summer' => [$summerFrom, max($summerFrom, $ovDay)],
+            'autumn' => [max($summerFrom, $ovDay) + 1, $cycleLen],
+        ];
+        $seasons = [];
+        foreach ($ranges as $key => [$a, $b]) {
+            if ($b < $a) {
+                continue; // e.g. a long period swallowing spring
+            }
+            $seasons[] = [
+                'season' => $key,
+                'label'  => self::SEASONS[$key]['label'],
+                'from_day' => $a,
+                'to_day'   => $b,
+                'days'     => $b - $a + 1,
+                'from'     => $lastStart->modify('+' . ($a - 1) . ' days')->format('Y-m-d'),
+                'to'       => $lastStart->modify('+' . ($b - 1) . ' days')->format('Y-m-d'),
+            ];
+        }
         $inFertile = $today >= $fertileFrom && $today <= $fertileTo;
 
         return [
@@ -259,6 +308,7 @@ final class CycleTracker
             'fertile_from'  => $fertileFrom->format('Y-m-d'),
             'fertile_to'    => $fertileTo->format('Y-m-d'),
             'in_fertile'    => $inFertile,
+            'seasons'       => $seasons,
         ];
     }
 
@@ -328,6 +378,8 @@ final class CycleTracker
             'season'        => $season,
             'season_label'  => self::SEASONS[$season]['label'],
             'season_emoji'  => self::SEASONS[$season]['emoji'],
+            'season_note'   => self::SEASONS[$season]['note'],
+            'season_source' => self::SEASON_SOURCE,
             'show_fertile'  => $this->showFertile($userId),
             'mood_today'    => $log['mood'],
             'energy_today'  => $log['energy'],
@@ -342,23 +394,23 @@ final class CycleTracker
         int $cycleDay,
         int $periodLen,
         DateTimeImmutable $ovulation,
-        DateTimeImmutable $fertileFrom,
-        DateTimeImmutable $fertileTo
     ): string {
         if ($cycleDay >= 1 && $cycleDay <= $periodLen) {
             return 'menstrual';
         }
-        if ($today->format('Y-m-d') === $ovulation->format('Y-m-d')) {
+        $t  = $today->format('Y-m-d');
+        $ov = $ovulation->format('Y-m-d');
+        if ($t === $ov) {
             return 'ovulation';
         }
-        if ($today >= $fertileFrom && $today <= $fertileTo) {
-            return 'fertile';
+        if ($t < $ov && $t >= $ovulation->modify('-' . self::SUMMER_BEFORE . ' days')->format('Y-m-d')) {
+            return 'ovulatory'; // the days leading up to ovulation — still Summer
         }
-        if ($today < $ovulation) {
+        if ($t < $ov) {
             return 'follicular';
         }
 
-        return 'luteal';
+        return 'luteal'; // from the day after ovulation
     }
 
     public static function phaseLabel(string $phase): string
@@ -367,6 +419,7 @@ final class CycleTracker
             'menstrual'  => 'Menstrual',
             'follicular' => 'Follicular',
             'fertile'    => 'Fertile window',
+            'ovulatory'  => 'Around ovulation',
             'ovulation'  => 'Ovulation',
             'luteal'     => 'Luteal',
             default      => 'Cycle',
@@ -379,7 +432,7 @@ final class CycleTracker
         return match ($phase) {
             'menstrual'           => 'winter',
             'follicular'          => 'spring',
-            'fertile', 'ovulation' => 'summer',
+            'fertile', 'ovulatory', 'ovulation' => 'summer',
             'luteal'              => 'autumn',
             default               => 'spring',
         };
