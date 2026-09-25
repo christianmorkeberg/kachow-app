@@ -44,7 +44,7 @@ final class ToolSelector
         'workouts' => [
             'log_workout', 'get_workout_history', 'get_workout_progress', 'merge_exercises',
             'update_workout', 'delete_workout',
-            'get_connected_workouts', 'get_connected_workout_progress', 'log_connected_workout',
+            'get_connected_workouts', 'get_connected_workout_progress', 'log_connected_workout', 'training_load',
             'create_workout_plan', 'get_workout_plan', 'get_week_plan', 'check_off_exercise',
             'uncheck_exercise', 'add_plan_exercise', 'remove_plan_exercise', 'delete_workout_plan',
         ],
@@ -143,6 +143,9 @@ final class ToolSelector
             // Danish
             'træn', 'motion', 'løft', 'øvelse', 'bænkpres', 'dødløft', 'markløft',
             'gentagelser', 'kropsvægt', 'fitness',
+            // working weights / percentages / relative load (training_load)
+            'percent of my', '% of my', 'working weight', 'relative to my', 'same relative', 'my max',
+            'procent af', '% af min', 'arbejdsvægt', 'i forhold til min', 'min max', 'kg for',
             'træningsplan', 'træningsprogram', 'rutine', 'skema', 'færdig med', 'mangler jeg', 'i dag skal',
         ],
         // Personal wishlist is explicit-only now — the everyday "list"/"buy"/"shopping"

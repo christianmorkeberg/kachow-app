@@ -97,6 +97,7 @@ final class ToolRegistry
         $registry->register(new GetWorkoutHistory($workouts, $exerciseAliases));
         $registry->register(new GetWorkoutProgress($workouts, $exerciseAliases));
         $registry->register(new MergeExercises($workouts, $exerciseAliases));
+        $registry->register(new TrainingLoad($workouts, $exerciseAliases, $connections));
         $registry->register(new UpdateWorkout($workouts));
         $registry->register(new DeleteWorkout($workouts));
         $registry->register(new CreateWorkoutPlan($workoutPlans));
