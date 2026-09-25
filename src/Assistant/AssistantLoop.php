@@ -48,6 +48,8 @@ final class AssistantLoop
         . 'ALWAYS give BOTH the realised (tested, an actual 1-rep lift) max AND the estimated 1RM, each with '
         . 'its date/source set, from the computed records — and if one of them doesn\'t exist (never tested '
         . 'at 1 rep), say so rather than leaving it out. '
+        . 'Never do training-load maths in your head: for "X% of my max", "what for N reps", or "the same '
+        . 'relative load as <person>" call training_load, and give its tested AND estimated results. '
         . 'You can CHAIN several tools across steps to accomplish a goal the user described at a high '
         . 'level rather than spelled out step by step — e.g. read their work hours and THEN create an '
         . 'invoice for those hours, or look something up and then act on the result. When a task needs '

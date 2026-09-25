@@ -181,6 +181,11 @@ $cases = [
     ['msg' => 'der ligger to ture for i dag, slet den ene', 'expect' => 'bookkeeping'],
     ['msg' => 'delete the duplicate trip from today', 'expect' => 'bookkeeping'],
     ['msg' => 'ret turen i fredags, det var pendling', 'expect' => 'bookkeeping'],
+    // training loads / percentages (training_load)
+    ['msg' => 'I need to bench press at 85%, how much is that', 'expect' => 'workouts'],
+    ['msg' => 'Alex does 70 kg, I want the same relative to my max', 'expect' => 'workouts'],
+    ['msg' => 'hvad er 80% af min dødløft?', 'expect' => 'workouts'],
+
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],
