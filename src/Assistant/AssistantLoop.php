@@ -24,6 +24,15 @@ final class AssistantLoop
     /** Guard against a model that keeps calling tools without concluding. */
     private const MAX_TOOL_ROUNDS = 8;
 
+    /** Per-call cap on a Gemini request (s). Normal calls take ~2–5s. Env: GEMINI_TIMEOUT_S. */
+    private const CALL_TIMEOUT_S = 20;
+
+    /** Whole-turn budget for all Gemini calls incl. retries (s). Env: GEMINI_TURN_BUDGET_S. */
+    private const TURN_BUDGET_S = 45;
+
+    /** Don't start a call with less than this left in the turn budget (ms). */
+    private const MIN_CALL_MS = 3000;
+
     private const DEFAULT_SYSTEM_INSTRUCTION =
         'You are a concise, helpful personal assistant. Answer briefly and clearly. '
         . 'Always reply in the SAME language as the user\'s latest message — Danish if they wrote '
@@ -76,7 +85,9 @@ final class AssistantLoop
         . 'export_work_log for a CSV link. This "what I did" log is distinct from clock-in/out hours: for '
         . 'ANY question about HOW MUCH or HOW LONG the user worked — today, this week, last week, or per '
         . 'day/week/month — use the CLOCK tools (get_work_hours, or get_work_summary for a chart), NEVER '
-        . 'get_work_log (it has no hours). '
+        . 'get_work_log (it has no hours). For a multi-day period ("from 1 Sep until today", "this month") '
+        . 'make ONE get_work_hours call with from/to (or scope month) and use its total — never add up '
+        . 'single-day calls, that silently misses days. '
         . 'CRUCIAL: they are SEPARATE stores — when the user reports BOTH their hours and what they did in '
         . 'one message (e.g. "I worked 9-13 on the energy data"), you MUST call log_work_event for the '
         . 'clock times AND log_work_time for the description; logging the hours does NOT save the work-log '
@@ -104,7 +115,9 @@ final class AssistantLoop
         . 'get_driving_distance (or the km the user states) — NEVER estimate a route distance from your own '
         . 'geographic knowledge, and never say you "looked up" or "found" a route unless get_driving_distance '
         . 'actually returned it in this turn. If that lookup is unavailable or fails, say so plainly and ask '
-        . 'the user for the km — do not offer a guessed figure. '
+        . 'the user for the km — do not offer a guessed figure. To correct a logged trip (wrong destination, '
+        . 'business vs commute, date, km) use update_trip, and delete_trip to remove a duplicate — NEVER '
+        . 'log a new trip to "fix" an old one (that doubles it). '
         . 'Be aware of what already exists before you add or record something. Many tools return the '
         . 'current contents of the list or collection they touch (shopping list, wishlist, dev backlog, '
         . 'workouts, vinyls, calendar, …) — read that result and check whether what you are about to add '
@@ -177,6 +190,9 @@ final class AssistantLoop
 
     /** DB id of the assistant reply persisted this turn. */
     private ?int $lastAssistantMessageId = null;
+
+    /** microtime() by which this turn's Gemini calls must be done (see TURN_BUDGET_S). */
+    private float $turnDeadline = PHP_FLOAT_MAX;
 
     public function __construct(
         private GeminiClient $gemini,
@@ -343,16 +359,19 @@ final class AssistantLoop
         $models      = $this->gemini->models();
         $chosenModel = null;
 
+        // Time cap (report #17: a trivial turn took 32s because one Gemini call stalled).
+        // Each call gets a per-call cap; a stalled call is retried once (usually answers in
+        // ~3s); and the whole turn has a budget so a user never waits indefinitely.
+        $this->turnDeadline = $tStart + self::envSeconds('GEMINI_TURN_BUDGET_S', self::TURN_BUDGET_S);
+
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
             $g0 = microtime(true);
             try {
                 try {
-                    if ($chosenModel === null) {
-                        [$response, $chosenModel] = $this->generateWithFallback($models, $contents, $declarations, $system, $genConfig);
-                        $this->lastDiagnostics['model'] = $chosenModel;
-                    } else {
-                        $response = $this->gemini->generate($contents, $declarations, $system, $chosenModel, $genConfig);
-                    }
+                    [$response, $chosenModel] = $this->timedGenerate($models, $chosenModel, $contents, $declarations, $system, $genConfig);
+                    $this->lastDiagnostics['model'] = $chosenModel;
+                } catch (GeminiTimeoutException | RateLimitException $e) {
+                    throw $e; // not a thinking-config rejection — handled below
                 } catch (\RuntimeException $e) {
                     // A model that rejects the thinking config must not break the turn
                     // (that would also deadlock the off-switch). Retry once without it
@@ -364,13 +383,34 @@ final class AssistantLoop
                     $genConfig  = null;
                     $thoughtsOn = false;
                     unset($this->lastDiagnostics['thoughts']);
-                    if ($chosenModel === null) {
-                        [$response, $chosenModel] = $this->generateWithFallback($models, $contents, $declarations, $system, null);
-                        $this->lastDiagnostics['model'] = $chosenModel;
-                    } else {
-                        $response = $this->gemini->generate($contents, $declarations, $system, $chosenModel, null);
-                    }
+                    [$response, $chosenModel] = $this->timedGenerate($models, $chosenModel, $contents, $declarations, $system, null);
+                    $this->lastDiagnostics['model'] = $chosenModel;
                 }
+            } catch (GeminiTimeoutException $e) {
+                // Out of time (the retry stalled too, or the turn budget is spent). Stop
+                // waiting and say so. Tools that already ran this turn stay done — say that
+                // too, so the user checks before repeating the request.
+                $geminiMs += (microtime(true) - $g0) * 1000;
+                error_log('gemini timeout: ' . $e->getMessage());
+                $ran   = array_values(array_unique(array_map(
+                    static fn (array $c): string => (string) $c['name'],
+                    $this->lastDiagnostics['calls'] ?? []
+                )));
+                $reply = 'Sorry — the AI model took too long to answer, so I stopped waiting. Please try again.';
+                if ($ran !== []) {
+                    $reply .= ' (I had already run: ' . implode(', ', $ran) . ' — that part is saved, so '
+                        . 'check it before repeating the request.)';
+                }
+                $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
+                $this->lastAssistantMessageId = $this->conversations->addMessage(
+                    $conversationId,
+                    'assistant',
+                    $reply,
+                    null,
+                    $this->lastRenderJson(),
+                    $this->diagnosticsJson()
+                );
+                return $reply;
             } catch (RateLimitException $e) {
                 // Make the real cause diagnosable instead of hiding it behind a generic line:
                 // log Gemini's own message, stash it in this turn's diagnostics (dev mode +
@@ -538,6 +578,58 @@ final class AssistantLoop
     }
 
     /**
+     * One model call under the time cap. The first call of a turn ($chosenModel null) goes
+     * through the fallback chain; later calls stay on the chosen model (thoughtSignatures).
+     * Each attempt is capped at min(per-call cap, what's left of the turn budget). A call
+     * that stalls is retried ONCE — on round 0 with the next model in the chain, afterwards
+     * on the same model (safe: tool results are already in $contents, nothing re-runs).
+     *
+     * @param list<string>                     $models
+     * @param array<int, array<string, mixed>> $contents
+     * @param array<int, array<string, mixed>> $declarations
+     * @return array{0: array<string, mixed>, 1: string} [response, model]
+     *
+     * @throws GeminiTimeoutException when the retry stalls too or the budget is spent.
+     */
+    private function timedGenerate(array $models, ?string $chosenModel, array $contents, array $declarations, ?string $system, ?array $genConfig): array
+    {
+        $callCapMs = (int) (self::envSeconds('GEMINI_TIMEOUT_S', self::CALL_TIMEOUT_S) * 1000);
+        for ($attempt = 1; ; $attempt++) {
+            $leftMs = (int) (($this->turnDeadline - microtime(true)) * 1000);
+            if ($leftMs < self::MIN_CALL_MS) {
+                throw new GeminiTimeoutException('Turn time budget spent.');
+            }
+            $timeoutMs = min($callCapMs, $leftMs);
+            try {
+                if ($chosenModel === null) {
+                    return $this->generateWithFallback($models, $contents, $declarations, $system, $genConfig, $timeoutMs);
+                }
+
+                return [$this->gemini->generate($contents, $declarations, $system, $chosenModel, $genConfig, $timeoutMs), $chosenModel];
+            } catch (GeminiTimeoutException $e) {
+                if (is_array($this->lastDiagnostics)) {
+                    $this->lastDiagnostics['timeouts'][] = ['model' => $chosenModel ?? ($models[0] ?? null), 'after_ms' => $timeoutMs];
+                }
+                if ($attempt >= 2) {
+                    throw $e;
+                }
+                error_log('gemini: call stalled after ' . $timeoutMs . 'ms — retrying once');
+                if ($chosenModel === null && count($models) > 1) {
+                    $models = array_slice($models, 1); // round 0: try the next model instead
+                }
+            }
+        }
+    }
+
+    /** A positive number of seconds from .env, or the default. */
+    private static function envSeconds(string $key, float $default): float
+    {
+        $v = $_ENV[$key] ?? '';
+
+        return is_numeric($v) && (float) $v > 0 ? (float) $v : $default;
+    }
+
+    /**
      * Sends the first request of a turn, trying each model in the chain until one
      * answers. Returns [response, modelThatAnswered]. Only used for round 0 — before
      * any tool calls or thoughtSignatures exist — so switching models is safe here.
@@ -549,12 +641,12 @@ final class AssistantLoop
      *
      * @throws RateLimitException when every model in the chain is rate-limited.
      */
-    private function generateWithFallback(array $models, array $contents, array $declarations, ?string $system, ?array $genConfig = null): array
+    private function generateWithFallback(array $models, array $contents, array $declarations, ?string $system, ?array $genConfig = null, ?int $timeoutMs = null): array
     {
         $last = null;
         foreach ($models as $model) {
             try {
-                return [$this->gemini->generate($contents, $declarations, $system, $model, $genConfig), $model];
+                return [$this->gemini->generate($contents, $declarations, $system, $model, $genConfig, $timeoutMs), $model];
             } catch (RateLimitException $e) {
                 $last = $e;
             }

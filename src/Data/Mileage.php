@@ -287,6 +287,105 @@ final class Mileage
         return $this->settings->mileageConfig($userId)['round_trip']; // legacy fallback
     }
 
+    /**
+     * Corrects a logged driving day in place (report #20: the assistant could only ADD
+     * trips, so "that was commute, not business" produced duplicates instead of a fix).
+     * $fields: destination_id, date (YYYY-MM-DD), km, note — only the keys given change.
+     * Moving a trip to another destination without an explicit km re-derives the km from
+     * that destination's round trip (the old km belonged to the old destination).
+     *
+     * @param array{destination_id?:int, date?:string, km?:float, note?:?string} $fields
+     */
+    public function updateTrip(int $userId, int $id, array $fields): bool
+    {
+        $trip = $this->findTrip($userId, $id);
+        if ($trip === null) {
+            return false;
+        }
+
+        $destId = $trip['destination_id'];
+        if (isset($fields['destination_id'])) {
+            $owned = $this->ownedDestinationId($userId, (int) $fields['destination_id']);
+            if ($owned === null) {
+                throw new RuntimeException('Unknown destination.');
+            }
+            $destId = $owned;
+        }
+        $km = isset($fields['km']) && (float) $fields['km'] > 0
+            ? round((float) $fields['km'], 2)
+            : ($destId !== $trip['destination_id'] ? $this->distanceFor($userId, $destId) : $trip['km']);
+        $date = isset($fields['date']) && trim((string) $fields['date']) !== ''
+            ? date('Y-m-d', strtotime((string) $fields['date']) ?: strtotime($trip['date']))
+            : $trip['date'];
+        $note = array_key_exists('note', $fields)
+            ? ($fields['note'] !== null && trim((string) $fields['note']) !== '' ? mb_substr(trim((string) $fields['note']), 0, 255) : null)
+            : ($trip['note'] !== '' ? $trip['note'] : null);
+
+        $stmt = $this->db->prepare(
+            'UPDATE mileage_trips SET destination_id = :dest, trip_date = :d, km = :k, note = :n
+             WHERE id = :id AND user_id = :u'
+        );
+        $stmt->execute([':dest' => $destId, ':d' => $date, ':k' => $km, ':n' => $note, ':id' => $id, ':u' => $userId]);
+
+        return true;
+    }
+
+    /**
+     * One of the user's trips, or null.
+     *
+     * @return array{id:int, destination_id:?int, date:string, km:float, note:string}|null
+     */
+    public function findTrip(int $userId, int $id): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, destination_id, trip_date, km, note FROM mileage_trips WHERE id = :id AND user_id = :u'
+        );
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+        $r = $stmt->fetch();
+        if ($r === false) {
+            return null;
+        }
+
+        return [
+            'id'             => (int) $r['id'],
+            'destination_id' => $r['destination_id'] !== null ? (int) $r['destination_id'] : null,
+            'date'           => substr((string) $r['trip_date'], 0, 10),
+            'km'             => (float) $r['km'],
+            'note'           => (string) ($r['note'] ?? ''),
+        ];
+    }
+
+    /**
+     * The card's trip rows trimmed for the MODEL (the card itself is stripped before the
+     * model sees it): id, date, destination, business/commute and km — so it can spot a
+     * wrong destination or a duplicate day and fix it with update_trip / delete_trip.
+     *
+     * @param array<string, mixed> $card from card()
+     * @return list<array<string, mixed>>
+     */
+    public static function tripsForModel(array $card, int $limit = 25, ?string $date = null): array
+    {
+        $out = [];
+        foreach ($card['trips'] ?? [] as $t) {
+            if ($date !== null && $t['date'] !== $date) {
+                continue;
+            }
+            $out[] = [
+                'id'          => $t['id'],
+                'date'        => $t['date'],
+                'destination' => $t['destination'],
+                'counted_as'  => $t['bucket'],
+                'km'          => $t['km'],
+                'note'        => $t['note'],
+            ];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
     public function deleteTrip(int $userId, int $id): bool
     {
         $stmt = $this->db->prepare('DELETE FROM mileage_trips WHERE id = :id AND user_id = :u');

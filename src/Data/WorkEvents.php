@@ -229,9 +229,9 @@ final class WorkEvents
 
     /**
      * Summarises worked time over a scope ('today' | 'yesterday' | 'week' |
-     * 'lastweek') or an
-     * explicit local date (YYYY-MM-DD). Returns totals, the sessions overlapping
-     * the range, any forgotten clock-outs to fix, and a renderable card.
+     * 'lastweek' | 'month' | 'lastmonth'), an explicit local date (YYYY-MM-DD), or an
+     * inclusive local date RANGE ($date … $toDate). Returns totals, the sessions
+     * overlapping the range, any forgotten clock-outs to fix, and a renderable card.
      *
      * @return array{
      *   scope:string, range_label:string, total_minutes:int, total_label:string,
@@ -239,11 +239,11 @@ final class WorkEvents
      *   needs_fix:array<int,array<string,mixed>>, card:array<string,mixed>
      * }
      */
-    public function summary(int $userId, string $scope = 'today', ?string $date = null, ?string $place = null): array
+    public function summary(int $userId, string $scope = 'today', ?string $date = null, ?string $place = null, ?string $toDate = null): array
     {
         $tz  = new DateTimeZone(self::LOCAL_TZ);
         $utc = new DateTimeZone('UTC');
-        [$startLocal, $endLocal, $rangeLabel, $scopeLabel] = $this->rangeFor($scope, $date, $tz);
+        [$startLocal, $endLocal, $rangeLabel, $scopeLabel] = $this->rangeFor($scope, $date, $tz, $toDate);
 
         $fromUtc = $startLocal->setTimezone($utc);
         $toUtc   = $endLocal->setTimezone($utc);
@@ -635,9 +635,21 @@ final class WorkEvents
      * @return array{0:DateTimeImmutable,1:DateTimeImmutable,2:string,3:string}
      *         [startLocal, endLocal, rangeLabel, scopeLabel]
      */
-    private function rangeFor(string $scope, ?string $date, DateTimeZone $tz): array
+    private function rangeFor(string $scope, ?string $date, DateTimeZone $tz, ?string $toDate = null): array
     {
         $now = new DateTimeImmutable('now', $tz);
+
+        // Inclusive local date range, e.g. "1 Sep to today" (report #21: without it the
+        // model probed single days and silently missed some).
+        if ($date !== null && $date !== '' && $toDate !== null && $toDate !== '' && $toDate !== $date) {
+            $a = (new DateTimeImmutable($date, $tz))->setTime(0, 0);
+            $b = (new DateTimeImmutable($toDate, $tz))->setTime(0, 0);
+            if ($b < $a) {
+                [$a, $b] = [$b, $a];
+            }
+            $label = $a->format('j M') . ' – ' . $b->format($a->format('Y') === $b->format('Y') ? 'j M' : 'j M Y');
+            return [$a, $b->modify('+1 day'), $label, $label];
+        }
 
         if ($date !== null && $date !== '') {
             $d = (new DateTimeImmutable($date, $tz))->setTime(0, 0);
@@ -651,6 +663,15 @@ final class WorkEvents
             $end     = $start->modify('+7 days');
             $label   = $scope === 'lastweek' ? 'Last week' : 'This week';
             return [$start, $end, $start->format('j M') . ' – ' . $end->modify('-1 day')->format('j M'), $label];
+        }
+
+        if ($scope === 'month' || $scope === 'lastmonth') {
+            $start = $now->setTime(0, 0)->modify('first day of this month');
+            if ($scope === 'lastmonth') {
+                $start = $start->modify('-1 month');
+            }
+            $end = $start->modify('+1 month');
+            return [$start, $end, $start->format('F Y'), $scope === 'lastmonth' ? 'Last month' : 'This month'];
         }
 
         if ($scope === 'yesterday') {

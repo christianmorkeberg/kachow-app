@@ -175,6 +175,10 @@ $cases = [
     ['msg' => 'jeg kørte på arbejde i dag', 'expect' => 'bookkeeping'],
     ['msg' => 'hvor meget kørselsfradrag har jeg?', 'expect' => 'bookkeeping'],
     ['msg' => 'registrér min kørsel til kunden', 'expect' => 'bookkeeping'],
+    // correcting / deleting logged trips (report #20)
+    ['msg' => 'der ligger to ture for i dag, slet den ene', 'expect' => 'bookkeeping'],
+    ['msg' => 'delete the duplicate trip from today', 'expect' => 'bookkeeping'],
+    ['msg' => 'ret turen i fredags, det var pendling', 'expect' => 'bookkeeping'],
 
     // ---- worklog vs worktime ----
     ['msg' => 'log what I did at work today', 'expect' => 'worklog'],
