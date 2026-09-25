@@ -191,8 +191,54 @@ final class AssistantLoop
     /** DB id of the assistant reply persisted this turn. */
     private ?int $lastAssistantMessageId = null;
 
+    /** The user's message this turn (for lastCardMode). */
+    private string $lastUserText = '';
+
     /** microtime() by which this turn's Gemini calls must be done (see TURN_BUDGET_S). */
     private float $turnDeadline = PHP_FLOAT_MAX;
+
+    /** @var (callable(array<string, mixed>): void)|null Live progress sink (see onProgress). */
+    private $progressSink = null;
+
+    /** @var array{phase:string, steps:list<array{tool:string, status:string}>} */
+    private array $progress = ['phase' => 'thinking', 'steps' => []];
+
+    /**
+     * Receives this turn's live progress — {phase: thinking|tools|answering, steps: [{tool,
+     * status: running|done|error}]} — every time it changes, so the UI can show what's going
+     * on behind the scenes (dev idea: show tools used live). Tool NAMES and status only: never
+     * arguments or results (those can hold personal data). A failing sink never breaks a turn.
+     */
+    public function onProgress(callable $sink): void
+    {
+        $this->progressSink = $sink;
+    }
+
+    private function progress(?string $phase = null, ?string $tool = null, ?string $status = null): void
+    {
+        if ($phase !== null) {
+            $this->progress['phase'] = $phase;
+        }
+        if ($tool !== null) {
+            if ($status === 'running') {
+                $this->progress['steps'][] = ['tool' => $tool, 'status' => 'running'];
+            } else {
+                for ($i = count($this->progress['steps']) - 1; $i >= 0; $i--) {
+                    if ($this->progress['steps'][$i]['tool'] === $tool && $this->progress['steps'][$i]['status'] === 'running') {
+                        $this->progress['steps'][$i]['status'] = (string) $status;
+                        break;
+                    }
+                }
+            }
+        }
+        if ($this->progressSink !== null) {
+            try {
+                ($this->progressSink)($this->progress);
+            } catch (Throwable $e) {
+                error_log('progress sink: ' . $e->getMessage());
+            }
+        }
+    }
 
     public function __construct(
         private GeminiClient $gemini,
@@ -215,6 +261,45 @@ final class AssistantLoop
      * assistant's reply text. $userId scopes all tool execution.
      */
     /** The renderable card emitted during the last handle() call, if any. */
+    /**
+     * How the UI should present this turn's card on a phone (dev idea: don't always open
+     * cards): 'open' when the user asked to SEE something, or the card needs them to act
+     * (confirm a receipt, send a draft, pick a theme, a chart they asked to draw); otherwise
+     * 'min' — the reply text answers ("how many hours today?") and the card waits minimised
+     * with its summary in the header, one tap away. Null when there is no card.
+     */
+    public function lastCardMode(): ?string
+    {
+        if ($this->lastRender === null) {
+            return null;
+        }
+
+        return self::cardModeFor((string) ($this->lastRender['kind'] ?? ''), $this->lastUserText);
+    }
+
+    /** Card kinds that are pointless minimised: the user has to look at / act on them. */
+    private const OPEN_CARD_KINDS = ['receipt', 'income', 'email_draft', 'email', 'appearance', 'personality',
+        'feedback', 'chart', 'notice'];
+
+    public static function cardModeFor(string $kind, string $userText): string
+    {
+        if (in_array($kind, self::OPEN_CARD_KINDS, true)) {
+            return 'open';
+        }
+        // Asked to see/open/draw something (EN + DA), e.g. "show my shopping list", "vis kortet".
+        $see = '/\b(show|open|see|view|display|draw|chart|graph|plot|visuali[sz]e|card|overview|dashboard|'
+            . 'vis|åbn|se|kig|tegn|graf|diagram|kortet|kort|oversigt|overblik)\b/iu';
+
+        if (preg_match($see, $userText) === 1) {
+            return 'open';
+        }
+        // A bare topic ("Cyklus", "Weather", "my calendar", "min kørsel") is a request to see it
+        // — but not a two-word command like "add milk".
+        $t = trim($userText);
+
+        return preg_match('/^(?:(?:my|min|mit|mine)\s+)?[\p{L}\-]+[.!]?$/iu', $t) === 1 ? 'open' : 'min';
+    }
+
     public function lastRender(): ?array
     {
         return $this->lastRender;
@@ -281,6 +366,7 @@ final class AssistantLoop
     {
         $tStart = microtime(true);
         $this->lastUserMessageId = $this->conversations->addMessage($conversationId, 'user', $userMessage);
+        $this->lastUserText = $userMessage;
         $this->lastRender = null;
         $this->lastSuggestions = null;
         $this->lastAssistantMessageId = null;
@@ -363,6 +449,9 @@ final class AssistantLoop
         // Each call gets a per-call cap; a stalled call is retried once (usually answers in
         // ~3s); and the whole turn has a budget so a user never waits indefinitely.
         $this->turnDeadline = $tStart + self::envSeconds('GEMINI_TURN_BUDGET_S', self::TURN_BUDGET_S);
+
+        $this->progress = ['phase' => 'thinking', 'steps' => []];
+        $this->progress('thinking');
 
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
             $g0 = microtime(true);
@@ -479,11 +568,13 @@ final class AssistantLoop
             $responseParts = [];
             foreach ($calls as $call) {
                 $td0 = microtime(true);
+                $this->progress('tools', (string) $call['name'], 'running');
                 try {
                     $result = $this->tools->dispatch($call['name'], $call['args'], $userId);
                 } catch (Throwable $e) {
                     $result = ['error' => $e->getMessage()];
                 }
+                $this->progress(null, (string) $call['name'], is_array($result) && isset($result['error']) ? 'error' : 'done');
                 $callMs  = (microtime(true) - $td0) * 1000;
                 $toolMs += $callMs;
 
@@ -526,6 +617,7 @@ final class AssistantLoop
             // generativelanguage REST API. Verify against the live API on first
             // real call; a single constant to change if it wants "function".
             $contents[] = ['role' => 'user', 'parts' => $responseParts];
+            $this->progress('answering'); // tools done; the model is composing the next step/reply
         }
 
         // Step limit reached (report #22: 8 rounds of single-day lookups, then a bare apology
