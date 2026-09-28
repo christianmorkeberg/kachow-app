@@ -330,6 +330,8 @@ final class WorkEvents
         $totalLabel = self::fmtDuration($totalMinutes);
         $card = [
             'kind'        => 'work_hours',
+            // The exact view, so an open card can be re-requested (live refresh while clocked in).
+            'query'       => ['scope' => $scope, 'date' => $date, 'to' => $toDate, 'place' => $filterKey !== null ? $place : null],
             'title'       => $scopeLabel . ($filterKey !== null ? ' · ' . $place : ''),
             'range'       => $rangeLabel,
             'total'       => $totalLabel,
