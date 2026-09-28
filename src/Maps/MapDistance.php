@@ -96,26 +96,33 @@ final class MapDistance
      * @return array{lat:float, lon:float, label:string}
      * @throws RuntimeException when not configured or the address can't be found
      */
-    public function geocodeAddress(string $address): array
+    public function geocodeAddress(string $address, ?float $nearLat = null, ?float $nearLon = null): array
     {
         if (!$this->isConfigured()) {
             throw new RuntimeException('Map lookup is not configured (no ORS_API_KEY).');
         }
-        [$lon, $lat, $label] = $this->geocode(trim($address));
+        $focus = $nearLat !== null && $nearLon !== null ? [$nearLat, $nearLon] : null;
+        [$lon, $lat, $label] = $this->geocode(trim($address), $focus);
 
         return ['lat' => $lat, 'lon' => $lon, 'label' => $label];
     }
 
     /**
+     * @param array{0:float, 1:float}|null $focus [lat, lon] to prefer results near
      * @return array{0:float, 1:float, 2:string} [lon, lat, label]
      */
-    private function geocode(string $address): array
+    private function geocode(string $address, ?array $focus = null): array
     {
-        $url = self::GEOCODE . '?' . http_build_query([
+        $query = [
             'api_key' => $this->apiKey,
             'text'    => $address,
             'size'    => 1,
-        ]);
+        ];
+        if ($focus !== null) {
+            $query['focus.point.lat'] = $focus[0];
+            $query['focus.point.lon'] = $focus[1];
+        }
+        $url      = self::GEOCODE . '?' . http_build_query($query);
         $data     = $this->getJson($url);
         $features = $data['features'] ?? null;
         if (!is_array($features) || !isset($features[0]['geometry']['coordinates'][0], $features[0]['geometry']['coordinates'][1])) {

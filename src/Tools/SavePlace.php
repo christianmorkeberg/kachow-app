@@ -42,7 +42,9 @@ final class SavePlace implements Tool
                 'name'     => ['type' => 'string', 'description' => 'What the user calls the place, e.g. "Office".'],
                 'type'     => ['type' => 'string', 'enum' => Places::TYPES],
                 'radius_m' => ['type' => 'integer', 'description' => 'Circle radius in metres (default 100).'],
-                'address'  => ['type' => 'string', 'description' => 'Save at this address instead of the current position.'],
+                'address'  => ['type' => 'string', 'description' => 'A real street address or named '
+                    . 'location to geocode ("Main Street 2, Townsville"), instead of the current position. Leave it '
+                    . 'out when the user is AT the place ("I\'m at home right now") — never pass "home"/"here".'],
             ],
             'required' => ['name', 'type'],
         ];
