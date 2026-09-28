@@ -59,6 +59,9 @@ final class AssistantLoop
         . '(in Danish OR English — e.g. "gem", "husk", "noter", "tilføj"), you MUST actually call the '
         . 'matching tool and only confirm once it succeeds. Never tell the user you saved/noted/added '
         . 'something without having called the tool — an acknowledgement without a tool call is a bug. '
+        . 'Likewise never END your reply announcing a next step ("I\'ll fetch the updated hours now", '
+        . '"Jeg henter dem med det samme", "lad os lige tjekke") — the user gets nothing after your reply. '
+        . 'If you need another lookup, make that tool call now, in this turn, and reply once you have the answer. '
         . 'When a tool returns an error, explain it plainly to the user. '
         . 'When you ask the user a short yes/no or approval question, or offer a small set of choices, '
         . 'end your message with a suggestions marker like [[suggest: Yes | No]] (or '
@@ -306,6 +309,32 @@ final class AssistantLoop
         return preg_match('/^(?:(?:my|min|mit|mine)\s+)?[\p{L}\-]+[.!]?$/iu', $t) === 1 ? 'open' : 'min';
     }
 
+    /**
+     * Whether a final reply ENDS by announcing a lookup it hasn't done ("I'll fetch the updated
+     * hours now", "Jeg henter dem med det samme", "Lad os lige tjekke…"). Only the closing
+     * sentences count; a question or an offer ("…if you want", "Skal jeg hente…?") is fine.
+     */
+    public static function announcesPendingStep(string $reply): bool
+    {
+        $text = trim((string) preg_replace('/\[\[\s*suggest\s*:.+?\]\]/is', '', $reply));
+        if ($text === '' || str_contains($reply, '[[suggest')) {
+            return false;
+        }
+        $sentences = preg_split('/(?<=[.!?…])\s+/u', $text) ?: [];
+        $tail      = implode(' ', array_slice($sentences, -2));
+        if (str_ends_with(rtrim($tail), '?')
+            || preg_match('/\b(if you (want|like|wish)|would you like|shall i|should i|hvis du (vil|ønsker|har lyst)|skal jeg|vil du have|gerne)\b/iu', $tail) === 1) {
+            return false;
+        }
+        $en = '/\b(i\'?ll|i will|i\'?m going to|i am going to|let me|let\'s)\s+(now\s+|just\s+|quickly\s+|go\s+(and\s+)?)?'
+            . '(fetch|check|look|get|pull|retrieve|recalculate|calculate|find|load|re-?run|update)\b'
+            . '|\b(fetching|checking|looking up|pulling up|retrieving)\b.{0,60}\b(now|right away|one moment|shortly)\b/iu';
+        $da = '/\b(jeg\s+(henter|tjekker|kigger|finder|beregner|udregner|slår|opdaterer|ser\s+efter)'
+            . '|lad\s+(mig|os)\s+(lige\s+|hurtigt\s+)?(tjekke|hente|se|kigge|finde|beregne|regne|slå))\b/iu';
+
+        return preg_match($en, $tail) === 1 || preg_match($da, $tail) === 1;
+    }
+
     public function lastRender(): ?array
     {
         return $this->lastRender;
@@ -459,6 +488,7 @@ final class AssistantLoop
         $this->progress = ['phase' => 'thinking', 'steps' => []];
         $this->progress('thinking');
 
+        $announceNudged = false;
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
             $g0 = microtime(true);
             try {
@@ -547,6 +577,21 @@ final class AssistantLoop
             }
 
             $calls = GeminiClient::extractFunctionCalls($response);
+
+            // A reply that ends by announcing a lookup ("Jeg henter de opdaterede timer med det
+            // samme") would leave the user waiting for something that never comes (report #25).
+            // Once per turn, hand it back and have the model actually make the call.
+            if ($calls === [] && !$announceNudged && $round < self::MAX_TOOL_ROUNDS - 1
+                && self::announcesPendingStep(GeminiClient::extractText($response))) {
+                $announceNudged = true;
+                $this->lastDiagnostics['announce_nudge'] = true;
+                $contents[] = GeminiClient::firstCandidateContent($response);
+                $contents[] = ['role' => 'user', 'parts' => [['text' =>
+                    '(system) You ended by saying you would do something next, but your reply is final — the '
+                    . 'user gets nothing after it. Make the tool call(s) now, then give the complete answer.',
+                ]]];
+                continue;
+            }
 
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);

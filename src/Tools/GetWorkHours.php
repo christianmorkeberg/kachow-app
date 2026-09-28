@@ -74,11 +74,17 @@ final class GetWorkHours implements Tool
         ];
     }
 
-    public function execute(array $arguments, int $userId): array
+    /**
+     * Parses the period arguments (scope / date / from / to / place) shared with
+     * delete_work_event, which re-shows the period the user was looking at.
+     *
+     * @return array{scope:string, date:?string, to:?string, place:?string}|array{error:string}
+     */
+    public static function periodArgs(array $arguments, string $defaultScope = 'today'): array
     {
-        $scope = (string) ($arguments['scope'] ?? 'today');
-        $date  = isset($arguments['date']) ? (string) $arguments['date'] : null;
-        $place = isset($arguments['place']) ? (string) $arguments['place'] : null;
+        $scope = (string) ($arguments['scope'] ?? $defaultScope);
+        $date  = isset($arguments['date']) && $arguments['date'] !== '' ? (string) $arguments['date'] : null;
+        $place = isset($arguments['place']) && trim((string) $arguments['place']) !== '' ? (string) $arguments['place'] : null;
         $from  = trim((string) ($arguments['from'] ?? ''));
         $to    = trim((string) ($arguments['to'] ?? ''));
 
@@ -93,6 +99,17 @@ final class GetWorkHours implements Tool
                 return ['error' => 'Dates must be YYYY-MM-DD (got "' . $d . '").'];
             }
         }
+
+        return ['scope' => $scope, 'date' => $date, 'to' => $toDate, 'place' => $place];
+    }
+
+    public function execute(array $arguments, int $userId): array
+    {
+        $p = self::periodArgs($arguments);
+        if (isset($p['error'])) {
+            return $p;
+        }
+        ['scope' => $scope, 'date' => $date, 'to' => $toDate, 'place' => $place] = $p;
 
         $summary = $this->events->summary($userId, $scope, $date, $place, $toDate);
 

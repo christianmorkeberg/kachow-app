@@ -104,6 +104,72 @@ final class WorkEvents
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * One event by id, scoped to the user, with its LOCAL date (for re-showing that day).
+     *
+     * @return array{id:int, kind:string, occurred_at:string, location:?string, local_date:string}|null
+     */
+    public function find(int $userId, int $eventId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT id, kind, occurred_at, location FROM work_events WHERE id = :id AND user_id = :u');
+        $stmt->execute([':id' => $eventId, ':u' => $userId]);
+        $r = $stmt->fetch();
+        if ($r === false) {
+            return null;
+        }
+
+        return [
+            'id'          => (int) $r['id'],
+            'kind'        => (string) $r['kind'],
+            'occurred_at' => (string) $r['occurred_at'],
+            'location'    => $r['location'] !== null ? (string) $r['location'] : null,
+            'local_date'  => $this->toLocal((string) $r['occurred_at'])->format('Y-m-d'),
+        ];
+    }
+
+    /**
+     * The derived session an event belongs to (as its clock-in or clock-out), so deleting a
+     * wrong session removes BOTH punches: dropping only the 'in' leaves a stray 'out' behind,
+     * and dropping only the 'out' would turn the session into an open/forgotten one.
+     * Null when the event isn't part of a session (a stray or duplicate punch).
+     *
+     * @return array{in_id:int, out_id:?int, place:?string, day:string, date:string, in:string, out:?string, minutes:?int}|null
+     */
+    public function sessionOf(int $userId, int $eventId): ?array
+    {
+        $ev = $this->find($userId, $eventId);
+        if ($ev === null) {
+            return null;
+        }
+        $at   = new DateTimeImmutable($ev['occurred_at'], new DateTimeZone('UTC'));
+        $span = (self::STALE_OPEN_HOURS + 8) * 3600;
+        $events = $this->eventsBetween(
+            $userId,
+            gmdate('Y-m-d H:i:s', $at->getTimestamp() - $span),
+            gmdate('Y-m-d H:i:s', $at->getTimestamp() + $span)
+        );
+        foreach ($this->pairByLocation($events) as $s) {
+            if ($s['in_id'] !== $eventId && $s['out_id'] !== $eventId) {
+                continue;
+            }
+            $in  = $this->toLocal($s['in']);
+            $out = $s['out'] !== null ? $this->toLocal($s['out']) : null;
+
+            return [
+                'in_id'   => $s['in_id'],
+                'out_id'  => $s['out_id'],
+                'place'   => $s['location'],
+                'day'     => $in->format('D j M'),
+                'date'    => $in->format('Y-m-d'),
+                'in'      => $in->format('H:i'),
+                'out'     => $out?->format('H:i'),
+                'minutes' => $out !== null ? (int) round(($out->getTimestamp() - $in->getTimestamp()) / 60) : null,
+            ];
+        }
+
+        return null;
+    }
+
     /** @return array{id:int, kind:string, occurred_at:string, location:?string}|null */
     public function lastEvent(int $userId): ?array
     {
