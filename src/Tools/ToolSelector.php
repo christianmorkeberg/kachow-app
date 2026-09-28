@@ -240,6 +240,8 @@ final class ToolSelector
             'how much did i work', 'how much have i worked', 'how much i worked', 'did i work', 'how many hours',
             'hours per', 'per day', 'per week', 'per month', 'each day', 'each week', 'each month',
             'this month', 'last month', 'per måned', 'per uge', 'denne måned', 'sidste måned', 'timer om',
+            // working from home (the morning "Working from home today?" push → clock in)
+            'working from home', 'work from home', 'wfh', 'hjemmefra', 'not working today',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
         ],

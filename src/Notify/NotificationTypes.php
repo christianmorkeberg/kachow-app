@@ -20,6 +20,7 @@ final class NotificationTypes
     public const CYCLE_UPCOMING = 'cycle_upcoming';
     public const MOMS_DEADLINE  = 'moms_deadline';
     public const REMINDER       = 'reminder';
+    public const WFH_PROMPT     = 'wfh_prompt';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -56,6 +57,13 @@ final class NotificationTypes
         self::REMINDER => [
             'label'       => 'Reminders',
             'description' => 'One-off reminders you ask me to set ("remind me to … at …").',
+            'default'     => true,
+        ],
+        // Sent by notify-cron around 09:00 on weekdays when location tracking shows you at a
+        // home place, not yet at a workplace and not clocked in. Needs a "home" place.
+        self::WFH_PROMPT => [
+            'label'       => 'Working from home?',
+            'description' => 'On a weekday morning when you\'re still at home (location tracking), asks whether you\'re working from home so the clock can start.',
             'default'     => true,
         ],
     ];
