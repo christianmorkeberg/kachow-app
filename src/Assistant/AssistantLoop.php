@@ -392,9 +392,22 @@ final class AssistantLoop
     /** The current turn's card as JSON for persistence, or null if none. */
     private function lastRenderJson(): ?string
     {
-        return $this->lastRender !== null
-            ? (string) json_encode($this->lastRender, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
-            : null;
+        if ($this->lastRender === null) {
+            return null;
+        }
+        // A card can name keys that must not be stored with the chat history (location points
+        // are kept 60 days, the history indefinitely). The stored copy drops them and is marked
+        // "stripped", so reopening it re-fetches the live data instead.
+        $card = $this->lastRender;
+        if (is_array($card['_persist_strip'] ?? null)) {
+            foreach ($card['_persist_strip'] as $key) {
+                unset($card[(string) $key]);
+            }
+            unset($card['_persist_strip']);
+            $card['stripped'] = true;
+        }
+
+        return (string) json_encode($card, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /**
