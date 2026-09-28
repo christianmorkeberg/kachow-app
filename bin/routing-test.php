@@ -40,6 +40,11 @@ $cases = [
     ['msg' => 'gem stedet her som Kontor', 'expect' => 'location'],
     ['msg' => 'gør radius på Kontor større', 'expect' => 'location'],
     ['msg' => 'vis mine steder', 'expect' => 'location'],
+    ['msg' => 'when did I leave the office on Thursday?', 'expect' => 'location'],
+    ['msg' => 'how many times was I at the gym in October', 'expect' => 'location'],
+    ['msg' => 'hvornår kom jeg på arbejde i går?', 'expect' => 'location'],
+    ['msg' => 'foreslå steder jeg burde gemme', 'expect' => 'location'],
+    ['msg' => 'hvor langt gik jeg i denne uge', 'expect' => 'location'],
     // ---- cycle: periods ----
     ['msg' => 'my period started today', 'expect' => 'cycle'],
     ['msg' => 'I got my period yesterday', 'expect' => 'cycle'],

@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\LocationPoints;
-use App\Data\Places;
+use App\Data\Timeline;
 use App\Data\WorkEvents;
 use DateTimeImmutable;
 use DateTimeZone;
 
 /**
- * Tool: one day of the user's tracked movement — a map card with the route, plus data-quality
- * statistics for the model (point count, time span, distance, largest gap, accuracy, battery).
- * The model never receives coordinates; they go to the map card only.
+ * Tool: one day of the user's tracked movement — a map card with the route and timeline, plus
+ * for the model: the timeline (stays and trips, by place name), time per saved place, and
+ * data-quality statistics. The model never receives coordinates; they go to the card only.
  */
 final class GetLocationDay implements Tool
 {
-    public function __construct(private LocationPoints $points, private Places $places)
+    public function __construct(private Timeline $timeline)
     {
     }
 
@@ -28,14 +28,14 @@ final class GetLocationDay implements Tool
 
     public function description(): string
     {
-        return 'Shows one day of the user\'s tracked location (OwnTracks) on a map card, and returns that '
-            . 'day\'s statistics: number of points, first/last time, distance (km, from accurate fixes), '
-            . 'average interval, largest gap between points, median accuracy, battery. Use for "show my '
-            . 'route today", "where have I been", "vis min dag på kortet", or checking tracking quality. A '
-            . 'gap usually means the phone was still (iOS pauses updates), not that tracking failed. With '
-            . 'no points, suggest get_location_tracking_setup. With saved places it also returns in_places: '
-            . 'visits (from–to, minutes) per place and pass-bys — a first, simple estimate (runs of points '
-            . 'inside the place), not yet the work clock.';
+        return 'The user\'s day from location tracking (OwnTracks): a map card plus the TIMELINE — stays '
+            . '(where they were, from–to, by saved place name or "unnamed place") and trips between them (km, '
+            . 'minutes, mode walk/bike/vehicle — car and train look alike), time per saved place (in_places), '
+            . 'and data-quality stats (points, interval, gaps, accuracy, battery). Use for "what did I do '
+            . 'today/on Tuesday", "when did I get to / leave the office", "show my route", "hvor var jeg i går", '
+            . 'or checking tracking. A stay counts from ~10 min in one spot (tunable in settings); gaps while '
+            . 'still count as being there. An ongoing stay has to=null. No points → offer '
+            . 'get_location_tracking_setup.';
     }
 
     public function parameters(): array
@@ -59,7 +59,7 @@ final class GetLocationDay implements Tool
             return ['error' => 'Date must be YYYY-MM-DD (got "' . $date . '").'];
         }
 
-        $day = $this->points->day($userId, $date, $this->places->list($userId));
+        $day = $this->timeline->day($userId, $date);
         $out = $day['stats'];
         if (($out['points'] ?? 0) === 0) {
             $out['note'] = 'No location points for this day. Raw points are kept '

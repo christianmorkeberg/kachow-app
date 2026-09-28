@@ -139,34 +139,24 @@ final class LocationPoints
     }
 
     /**
-     * One local day: statistics (for the model — no coordinates) and a map card (for the UI).
-     * With the user's places, the stats include a first, simple time-in-places and the card
-     * draws the places.
+     * Points between two UTC timestamps [from, to), ordered, in the shape the stats / stay
+     * detection use (with the local HH:MM for display).
      *
-     * @param list<array<string, mixed>> $places from Places::list()
-     * @return array{stats: array<string, mixed>, card: array<string, mixed>}
+     * @return list<array{ts:int, time:string, lat:float, lon:float, acc:?int, vel:?int, batt:?int}>
      */
-    public function day(int $userId, string $localDate, array $places = []): array
+    public function between(int $userId, int $fromTs, int $toTs): array
     {
-        $tz    = new DateTimeZone(WorkEvents::LOCAL_TZ);
-        $utc   = new DateTimeZone('UTC');
-        $start = (new DateTimeImmutable($localDate, $tz))->setTime(0, 0);
-        $end   = $start->modify('+1 day');
-
         $stmt = $this->db->prepare(
             'SELECT recorded_at, lat, lon, acc, vel, batt FROM location_points
              WHERE user_id = :u AND recorded_at >= :f AND recorded_at < :t
              ORDER BY recorded_at ASC'
         );
-        $stmt->execute([
-            ':u' => $userId,
-            ':f' => $start->setTimezone($utc)->format('Y-m-d H:i:s'),
-            ':t' => $end->setTimezone($utc)->format('Y-m-d H:i:s'),
-        ]);
-        $rows = $stmt->fetchAll();
+        $stmt->execute([':u' => $userId, ':f' => gmdate('Y-m-d H:i:s', $fromTs), ':t' => gmdate('Y-m-d H:i:s', $toTs)]);
 
+        $tz  = new DateTimeZone(WorkEvents::LOCAL_TZ);
+        $utc = new DateTimeZone('UTC');
         $pts = [];
-        foreach ($rows as $r) {
+        foreach ($stmt->fetchAll() as $r) {
             $at    = new DateTimeImmutable((string) $r['recorded_at'], $utc);
             $pts[] = [
                 'ts'   => $at->getTimestamp(),
@@ -179,28 +169,42 @@ final class LocationPoints
             ];
         }
 
+        return $pts;
+    }
+
+    /** Local-day bounds as UTC timestamps [start, end). @return array{0:int, 1:int} */
+    public static function dayBounds(string $localDate): array
+    {
+        $start = (new DateTimeImmutable($localDate, new DateTimeZone(WorkEvents::LOCAL_TZ)))->setTime(0, 0);
+
+        return [$start->getTimestamp(), $start->modify('+1 day')->getTimestamp()];
+    }
+
+    /**
+     * One local day: data-quality statistics (for the model — no coordinates) and a map card
+     * (for the UI). Stays / trips / places are added on top by Timeline::day().
+     *
+     * @return array{stats: array<string, mixed>, card: array<string, mixed>, points: list<array<string, mixed>>}
+     */
+    public function day(int $userId, string $localDate): array
+    {
+        [$from, $to] = self::dayBounds($localDate);
+        $pts   = $this->between($userId, $from, $to);
+        $start = (new DateTimeImmutable('@' . $from))->setTimezone(new DateTimeZone(WorkEvents::LOCAL_TZ));
         $label = $start->format('D j M');
-        $stats = self::stats($pts);
-        $stats = ['date' => $start->format('Y-m-d'), 'day' => $label] + $stats;
-        if ($places !== [] && $pts !== []) {
-            $isToday = $start->format('Y-m-d') === (new DateTimeImmutable('now', $tz))->format('Y-m-d');
-            $stats['in_places'] = Places::timeInPlaces($pts, $places, $isToday);
-        }
+        $stats = ['date' => $start->format('Y-m-d'), 'day' => $label] + self::stats($pts);
 
         return [
-            'stats' => $stats,
-            'card'  => [
-                'kind'   => 'location_day',
-                'date'   => $start->format('Y-m-d'),
-                'title'  => $label,
-                'stats'  => $stats,
+            'stats'  => $stats,
+            'points' => $pts,
+            'card'   => [
+                'kind'       => 'location_day',
+                'date'       => $start->format('Y-m-d'),
+                'title'      => $label,
+                'stats'      => $stats,
                 'good_acc_m' => self::GOOD_ACC_M,
                 // Coordinates are never stored with the chat history (see AssistantLoop::lastRenderJson).
-                '_persist_strip' => ['points', 'places'],
-                'places' => array_map(static fn (array $p): array => [
-                    'name' => $p['name'], 'type' => $p['type'], 'shape' => $p['shape'], 'lat' => $p['lat'],
-                    'lon' => $p['lon'], 'radius_m' => $p['radius_m'], 'polygon' => $p['polygon'],
-                ], $places),
+                '_persist_strip' => ['points', 'places', 'timeline'],
                 // [lat, lon, "HH:MM", acc|null, km/h|null]
                 'points' => array_map(
                     static fn (array $p): array => [$p['lat'], $p['lon'], $p['time'], $p['acc'], $p['vel']],
