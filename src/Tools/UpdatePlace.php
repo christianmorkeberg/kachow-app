@@ -38,7 +38,7 @@ final class UpdatePlace implements Tool
                 'type'      => ['type' => 'string', 'enum' => Places::TYPES],
                 'radius_m'  => ['type' => 'integer'],
                 'move_here' => ['type' => 'boolean', 'description' => 'Move it to the user\'s current position.'],
-                'address'   => ['type' => 'string', 'description' => 'Move it to this address.'],
+                'address'   => ['type' => 'string', 'description' => 'Move it to this real street address (never "here"/"home" — use move_here).'],
             ],
             'required' => ['place'],
         ];

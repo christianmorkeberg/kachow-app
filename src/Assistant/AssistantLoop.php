@@ -9,8 +9,12 @@ use App\Data\Conversations;
 use App\Data\Memories;
 use App\Data\UserInstructions;
 use App\Data\UserSettings;
+use App\Data\WorkEvents;
+use App\Support\DeviceFix;
 use App\Tools\ToolRegistry;
 use App\Tools\ToolSelector;
+use DateTimeImmutable;
+use DateTimeZone;
 use Throwable;
 
 /**
@@ -416,11 +420,13 @@ final class AssistantLoop
     }
 
     /**
-     * @param array{lat: float, lon: float}|null                 $location optional device location (browser geolocation)
+     * @param array{lat: float, lon: float, acc?: float}|null    $location optional device location (browser geolocation)
      * @param array{mime: string, data: string}|null             $image    optional attached photo (base64), read multimodally this turn
      */
     public function handle(int $userId, int $conversationId, string $userMessage, ?array $location = null, ?array $image = null): string
     {
+        DeviceFix::set($location);
+
         $tStart = microtime(true);
         $this->lastUserMessageId = $this->conversations->addMessage($conversationId, 'user', $userMessage);
         $this->lastUserText = $userMessage;
@@ -852,7 +858,23 @@ final class AssistantLoop
     }
 
     /**
-     * Builds the system instruction for a turn: base prompt + current UTC time +
+     * The current time as the user lives it. Tools take LOCAL wall-clock times, so the model
+     * must never have to add the UTC offset itself (report #26: "20 minutes ago" at 18:25
+     * became 16:05 because only UTC was given).
+     */
+    public static function nowLine(?DateTimeImmutable $now = null): string
+    {
+        $now   = $now ?? new DateTimeImmutable('now');
+        $local = $now->setTimezone(new DateTimeZone(WorkEvents::LOCAL_TZ));
+
+        return 'Current local time for the user: ' . $local->format('l Y-m-d H:i') . ' (' . WorkEvents::LOCAL_TZ
+            . ', UTC' . $local->format('P') . '). Every time you give a tool, and every time you mention to the '
+            . 'user, is this local time — work out relative times ("20 minutes ago", "i morgen kl. 9") from it. '
+            . '(UTC now: ' . $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i') . '.)';
+    }
+
+    /**
+     * Builds the system instruction for a turn: base prompt + current local time +
      * the user's stored standing instructions (so they always apply).
      */
     /**
@@ -861,7 +883,7 @@ final class AssistantLoop
     private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false, array $groups = []): string
     {
         $system = $this->systemInstruction
-            . "\n\nCurrent date/time (UTC): " . gmdate('Y-m-d H:i:s') . '.';
+            . "\n\n" . self::nowLine();
 
         if ($hasImage) {
             $system .= "\n\nThe user has attached a PHOTO to this message. Read it carefully — it may be a "
