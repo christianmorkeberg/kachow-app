@@ -119,6 +119,7 @@ final class ToolSelector
         'location' => [
             'get_location_day', 'get_location_tracking_setup',
             'save_place', 'list_places', 'update_place', 'delete_place',
+            'get_stays', 'get_trips', 'suggest_places',
         ],
         'settings' => [
             'get_settings', 'update_setting', 'get_appearance',
@@ -239,6 +240,8 @@ final class ToolSelector
             'how much did i work', 'how much have i worked', 'how much i worked', 'did i work', 'how many hours',
             'hours per', 'per day', 'per week', 'per month', 'each day', 'each week', 'each month',
             'this month', 'last month', 'per måned', 'per uge', 'denne måned', 'sidste måned', 'timer om',
+            // working from home (the morning "Working from home today?" push → clock in)
+            'working from home', 'work from home', 'wfh', 'hjemmefra', 'not working today',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
         ],
@@ -353,6 +356,11 @@ final class ToolSelector
             'new place', 'geofence', 'radius', 'workplace',
             // Danish: sted/steder, "gem stedet", "hvor jeg er", arbejdsplads
             'mine steder', 'stedet', ' sted ', 'steder', 'hvor jeg er', 'gem her', 'nyt sted', 'arbejdsplads', 'radius',
+            // timeline / stays / trips (phase 3)
+            'timeline', 'my day', 'what did i do today', 'when did i leave', 'when did i get to', 'how many times was i',
+            'my trips', 'how far did i', 'suggest places', 'stay radius',
+            'tidslinje', 'min dag', 'hvornår tog jeg', 'hvornår kom jeg', 'hvor mange gange var jeg', 'mine ture',
+            'hvor langt gik', 'hvor langt kørte', 'foreslå steder',
             // Danish
             'hvor var jeg', 'hvor har jeg været', 'hvor tog jeg', 'min placering', 'lokation', 'sporing',
             'på kortet', 'kort over', 'min rute', 'mine bevægelser', 'positionsdata',

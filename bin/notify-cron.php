@@ -25,10 +25,13 @@ use App\Auth\GoogleOAuth;
 use App\Data\Calendar;
 use App\Data\CycleTracker;
 use App\Data\Income;
+use App\Data\LocationPoints;
 use App\Data\Moms;
 use App\Data\NotificationLog;
+use App\Data\Places;
 use App\Data\PushSubscriptions;
 use App\Data\Receipts;
+use App\Data\Timeline;
 use App\Data\Users;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
@@ -36,6 +39,7 @@ use App\Data\WorkLog;
 use App\Notify\NotificationTypes;
 use App\Notify\Notifier;
 use App\Notify\WebPush;
+use App\Support\WorkFromHome;
 
 if (!WebPush::isConfigured()) {
     fwrite(STDERR, "notify-cron: VAPID not configured; nothing to do.\n");
@@ -182,6 +186,34 @@ try {
     }
 } catch (\Throwable $e) {
     error_log('notify-cron worklog: ' . $e->getMessage());
+}
+
+// ---------- Working from home? (weekday ~09:00, location tracking) ----------
+// Location can't tell a work-from-home day from a day off, so ask: still at a home place on
+// a weekday morning, not at a workplace yet today and not clocked in → one push per day.
+try {
+    if ((int) $nowLocal->format('G') === WorkFromHome::PROMPT_HOUR && (int) $nowLocal->format('N') <= 5) {
+        $timeline = new Timeline(new LocationPoints(), new Places(), new UserSettings());
+        $today    = $nowLocal->format('Y-m-d');
+        [$dayFrom, $dayTo] = LocationPoints::dayBounds($today);
+        foreach (array_keys($subscribed) as $uid) {
+            $stays = $timeline->analyse($uid, $dayFrom, $dayTo)['stays'];
+            if (!WorkFromHome::shouldPrompt($stays, $work->isClockedIn($uid), $nowLocal)) {
+                continue;
+            }
+            if (!$log->claim($uid, NotificationTypes::WFH_PROMPT, $today)) {
+                continue;
+            }
+            $notifier->notify(
+                $uid,
+                NotificationTypes::WFH_PROMPT,
+                'Working from home today?',
+                "You're still at home this morning. Tap to start the clock — I'll ask which client it's for."
+            );
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron wfh: ' . $e->getMessage());
 }
 
 // ---------- Cycle: "register your period" reminder ----------

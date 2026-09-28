@@ -101,6 +101,11 @@ final class AssistantLoop
         . 'get_work_log (it has no hours). For a multi-day period ("from 1 Sep until today", "this month") '
         . 'make ONE get_work_hours call with from/to (or scope month) and use its total — never add up '
         . 'single-day calls, that silently misses days. '
+        . 'WORKING FROM HOME: when the user says they are working from home (often answering the morning '
+        . '"Working from home today?" notification), ALWAYS ask which client/workplace the hours are for unless '
+        . 'they already said it, then clock in with log_work_event (kind in, place = that client, at the time '
+        . 'they started — default now). A work-from-home day is loose: errands or walks do not end it; it ends '
+        . 'when they say so (clock out then), and the evening check-out reminder catches a forgotten one. '
         . 'CRUCIAL: they are SEPARATE stores — when the user reports BOTH their hours and what they did in '
         . 'one message (e.g. "I worked 9-13 on the energy data"), you MUST call log_work_event for the '
         . 'clock times AND log_work_time for the description; logging the hours does NOT save the work-log '
@@ -978,6 +983,12 @@ final class AssistantLoop
             } elseif ($role === 'assistant') {
                 $contents[] = ['role' => 'model', 'parts' => [['text' => $content]]];
             }
+        }
+
+        // A chat opened from a push notification starts with the assistant's turn (the
+        // notification text). The API expects the user to speak first, so anchor it.
+        if (($contents[0]['role'] ?? 'user') === 'model') {
+            array_unshift($contents, ['role' => 'user', 'parts' => [['text' => '(Opened the app from this notification.)']]]);
         }
 
         return $contents;

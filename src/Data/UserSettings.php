@@ -122,6 +122,32 @@ final class UserSettings
             'label'       => 'Commuter rate (25–120 km/day)',
             'description' => 'Befordringsfradrag rate for 25–120 km/day, kr/km (2025: 2.23). First 24 km/day are not deductible.',
         ],
+        // Location tracking (phase 3): how stays are detected from the raw points. Tunable per
+        // user after looking at real days; past days are recomputed with the new values.
+        'location_stay_radius_m' => [
+            'default'     => '100',
+            'label'       => 'Stay radius (m)',
+            'description' => 'Location tracking: how far (metres) points may spread and still count as ONE stay '
+                . '(default 100, allowed 30–500). Larger = fewer, merged stays; smaller = stays split up.',
+        ],
+        'location_stay_min_minutes' => [
+            'default'     => '10',
+            'label'       => 'Minimum stay (min)',
+            'description' => 'Location tracking: how long (minutes) you must stay somewhere before it counts as a '
+                . 'stay (default 10, allowed 3–60). Shorter stops — a red light, driving past — are ignored.',
+        ],
+        'location_max_accuracy_m' => [
+            'default'     => '100',
+            'label'       => 'Ignore fixes worse than (m)',
+            'description' => 'Location tracking: GPS fixes less accurate than this many metres are ignored for '
+                . 'stays, trips and distances (default 100, allowed 20–500).',
+        ],
+        'location_merge_gap_minutes' => [
+            'default'     => '20',
+            'label'       => 'Merge gap (min)',
+            'description' => 'Location tracking: two stays at the same spot separated by at most this many '
+                . 'minutes are merged into one (default 20, allowed 0–120) — smooths over GPS wobble.',
+        ],
         'commute_rate_far' => [
             'default'     => '1.12',
             'label'       => 'Commuter rate (over 120 km/day)',

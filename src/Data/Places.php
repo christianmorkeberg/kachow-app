@@ -15,9 +15,7 @@ use PDOException;
  * location-tracking-spec.md). A place is a circle (centre + radius) or a polygon; its type
  * decides what it drives later (work → work clock, business/commute → kørebog).
  *
- * Also computes the first, deliberately simple "time in places" for a day: consecutive
- * accurate points inside a place form a visit. The proper arrival/leave rules (dwell time,
- * same-day bridging, drive-bys) are phase 3/4.
+ * Stays are matched to places by Timeline (phase 3).
  */
 final class Places
 {
@@ -26,9 +24,6 @@ final class Places
     public const MIN_RADIUS_M = 25;
     public const MAX_RADIUS_M = 2000;
     private const MAX_VERTICES = 60;
-
-    /** A visit shorter than this is a pass-by (e.g. driving past), counted separately. */
-    public const MIN_VISIT_MIN = 5;
 
     private PDO $db;
 
@@ -160,6 +155,19 @@ final class Places
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * Whether a stay's centre belongs to a place: inside it, or (circles) within a small margin
+     * of its edge — a stay's centre is an average of noisy fixes and can sit just outside.
+     */
+    public static function matchesStay(array $place, float $lat, float $lon, float $marginM = 25.0): bool
+    {
+        if ($place['shape'] === 'polygon') {
+            return self::contains($place, $lat, $lon);
+        }
+
+        return LocationPoints::haversineKm($place['lat'], $place['lon'], $lat, $lon) * 1000 <= (float) $place['radius_m'] + $marginM;
+    }
+
     /** Whether a coordinate lies inside a place (circle: haversine ≤ radius; polygon: ray casting). */
     public static function contains(array $place, float $lat, float $lon): bool
     {
@@ -180,69 +188,6 @@ final class Places
         }
 
         return LocationPoints::haversineKm($place['lat'], $place['lon'], $lat, $lon) * 1000 <= (float) $place['radius_m'];
-    }
-
-    /**
-     * Time in places for one day's points (ordered by time): a visit is a run of consecutive
-     * accurate points inside the place, from the first to the last of them. A gap between two
-     * inside points counts as inside (iOS pauses updates when you're still). Runs shorter than
-     * MIN_VISIT_MIN are pass-bys, unless they touch the start or end of the day's data (then you
-     * were there before/after tracking saw it). On today, a run ending at the latest point is ongoing.
-     *
-     * @param list<array{ts:int, time:string, lat:float, lon:float, acc:?int}> $pts
-     * @param list<array<string, mixed>> $places
-     * @return list<array{place:string, type:string, minutes:int, visits:list<array<string, mixed>>, passes:int}>
-     */
-    public static function timeInPlaces(array $pts, array $places, bool $isToday = false): array
-    {
-        $good = array_values(array_filter(
-            $pts,
-            static fn (array $p): bool => $p['acc'] === null || $p['acc'] <= LocationPoints::GOOD_ACC_M
-        ));
-        $out = [];
-        foreach ($places as $pl) {
-            $visits = [];
-            $passes = 0;
-            $run    = null;
-            $lastIdx = count($good) - 1;
-            $flush  = static function () use (&$run, &$visits, &$passes): void {
-                if ($run === null) {
-                    return;
-                }
-                $mins = (int) round(($run['last']['ts'] - $run['first']['ts']) / 60);
-                // A run touching the start or end of the day's data is a real visit however short
-                // (you were there before the first point / after the last), never a pass-by.
-                if ($mins >= self::MIN_VISIT_MIN || $run['ongoing'] || $run['edge']) {
-                    $visits[] = ['from' => $run['first']['time'], 'to' => $run['last']['time'], 'minutes' => $mins, 'ongoing' => $run['ongoing']];
-                } else {
-                    $passes++;
-                }
-                $run = null;
-            };
-            foreach ($good as $i => $p) {
-                if (self::contains($pl, $p['lat'], $p['lon'])) {
-                    $run ??= ['first' => $p, 'last' => $p, 'ongoing' => false, 'edge' => $i === 0];
-                    $run['last']    = $p;
-                    $run['ongoing'] = $isToday && $i === $lastIdx;
-                    $run['edge']    = $run['edge'] || $i === $lastIdx;
-                } else {
-                    $flush();
-                }
-            }
-            $flush();
-            if ($visits !== [] || $passes > 0) {
-                $out[] = [
-                    'place'   => $pl['name'],
-                    'type'    => $pl['type'],
-                    'minutes' => array_sum(array_column($visits, 'minutes')),
-                    'visits'  => $visits,
-                    'passes'  => $passes,
-                ];
-            }
-        }
-        usort($out, static fn (array $a, array $b): int => $b['minutes'] <=> $a['minutes']);
-
-        return $out;
     }
 
     /**
