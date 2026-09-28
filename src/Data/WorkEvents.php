@@ -335,10 +335,11 @@ final class WorkEvents
             'title'       => $scopeLabel . ($filterKey !== null ? ' · ' . $place : ''),
             'range'       => $rangeLabel,
             'total'       => $totalLabel,
+            'total_minutes' => $totalMinutes,
             'ongoing'     => $ongoing,
             'multi_place' => $multiPlace,
             'places'      => $multiPlace
-                ? array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total']], $places)
+                ? array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total'], 'minutes' => $p['minutes']], $places)
                 : [],
             'sessions'    => array_map(static fn (array $s): array => [
                 'day'      => $s['day'],
@@ -347,6 +348,7 @@ final class WorkEvents
                 'out'      => $s['out'],
                 'ongoing'  => $s['ongoing'],
                 'duration' => $s['duration'],
+                'minutes'  => $s['minutes'],
             ], $displaySessions),
             'needs_fix'   => array_map(static fn (array $f): array => [
                 'day' => $f['day'], 'in' => $f['in'], 'place' => $f['place'],
