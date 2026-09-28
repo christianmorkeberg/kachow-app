@@ -91,6 +91,22 @@ final class MapDistance
     }
 
     /**
+     * One address → coordinates (e.g. to save a place the user names by address).
+     *
+     * @return array{lat:float, lon:float, label:string}
+     * @throws RuntimeException when not configured or the address can't be found
+     */
+    public function geocodeAddress(string $address): array
+    {
+        if (!$this->isConfigured()) {
+            throw new RuntimeException('Map lookup is not configured (no ORS_API_KEY).');
+        }
+        [$lon, $lat, $label] = $this->geocode(trim($address));
+
+        return ['lat' => $lat, 'lon' => $lon, 'label' => $label];
+    }
+
+    /**
      * @return array{0:float, 1:float, 2:string} [lon, lat, label]
      */
     private function geocode(string $address): array

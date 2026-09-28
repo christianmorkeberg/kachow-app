@@ -118,6 +118,7 @@ final class ToolSelector
         // Tracked movement (OwnTracks raw points; private per user).
         'location' => [
             'get_location_day', 'get_location_tracking_setup',
+            'save_place', 'list_places', 'update_place', 'delete_place',
         ],
         'settings' => [
             'get_settings', 'update_setting', 'get_appearance',
@@ -347,6 +348,11 @@ final class ToolSelector
             'where was i', 'where have i been', 'where did i go', 'my location', 'location tracking',
             'track my location', 'tracking', 'owntracks', 'own tracks', 'my route', 'on the map', 'on a map',
             'map of my', 'my movement', 'gps',
+            // places (phase 2)
+            'my places', 'a place', 'this place', 'the place', 'where i am', "where i'm", 'mark here', 'save place',
+            'new place', 'geofence', 'radius', 'workplace',
+            // Danish: sted/steder, "gem stedet", "hvor jeg er", arbejdsplads
+            'mine steder', 'stedet', ' sted ', 'steder', 'hvor jeg er', 'gem her', 'nyt sted', 'arbejdsplads', 'radius',
             // Danish
             'hvor var jeg', 'hvor har jeg været', 'hvor tog jeg', 'min placering', 'lokation', 'sporing',
             'på kortet', 'kort over', 'min rute', 'mine bevægelser', 'positionsdata',

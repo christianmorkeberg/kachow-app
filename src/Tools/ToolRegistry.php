@@ -23,6 +23,7 @@ use App\Data\ExerciseAliases;
 use App\Data\FeedbackReports;
 use App\Data\Invites;
 use App\Data\LocationPoints;
+use App\Data\Places;
 use App\Data\Memories;
 use App\Data\PushSubscriptions;
 use App\Data\Receipts;
@@ -150,7 +151,8 @@ final class ToolRegistry
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
         $locationPoints = new LocationPoints();
-        $registry->register(new GetLocationDay($locationPoints));
+        $places         = new Places();
+        $registry->register(new GetLocationDay($locationPoints, $places));
         $registry->register(new GetLocationTrackingSetup($apiTokens, $locationPoints));
         $registry->register(new LogWorkTime($workLog, $calendar, $userSettings));
         $registry->register(new GetWorkLog($workLog));
@@ -172,6 +174,10 @@ final class ToolRegistry
         $registry->register(new GetOwnerDraws($ownerDraws));
         $mileage     = new Mileage($userSettings);
         $mapDistance = new MapDistance();
+        $registry->register(new SavePlace($places, $locationPoints, $mapDistance));
+        $registry->register(new ListPlaces($places, $locationPoints));
+        $registry->register(new UpdatePlace($places, $locationPoints, $mapDistance));
+        $registry->register(new DeletePlace($places));
         $registry->register(new GetBooks(new Books($income, $receipts, $ownerDraws, $userSettings, $mileage)));
         $registry->register(new GetMoms(new Moms($income, $receipts)));
         $cashEntries = new CashEntries();
