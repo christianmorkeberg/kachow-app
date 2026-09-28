@@ -22,6 +22,7 @@ use App\Data\ProfitLoss;
 use App\Data\ExerciseAliases;
 use App\Data\FeedbackReports;
 use App\Data\Invites;
+use App\Data\LocationPoints;
 use App\Data\Memories;
 use App\Data\PushSubscriptions;
 use App\Data\Receipts;
@@ -148,6 +149,9 @@ final class ToolRegistry
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
+        $locationPoints = new LocationPoints();
+        $registry->register(new GetLocationDay($locationPoints));
+        $registry->register(new GetLocationTrackingSetup($apiTokens, $locationPoints));
         $registry->register(new LogWorkTime($workLog, $calendar, $userSettings));
         $registry->register(new GetWorkLog($workLog));
         $registry->register(new ExportWorkLog($workLog));

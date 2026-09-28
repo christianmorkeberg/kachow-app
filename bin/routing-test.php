@@ -28,6 +28,13 @@ use App\Tools\ToolSelector;
 
 /** @var array<int, array{msg:string, recent?:string, expect?:string, absent?:string, empty?:bool}> */
 $cases = [
+    // ---- location tracking ----
+    ['msg' => 'show my route today on the map', 'expect' => 'location'],
+    ['msg' => 'where was I yesterday afternoon?', 'expect' => 'location'],
+    ['msg' => 'set up OwnTracks location tracking', 'expect' => 'location'],
+    ['msg' => 'hvor var jeg i går?', 'expect' => 'location'],
+    ['msg' => 'vis min rute på kortet', 'expect' => 'location'],
+    ['msg' => 'virker sporingen?', 'expect' => 'location'],
     // ---- cycle: periods ----
     ['msg' => 'my period started today', 'expect' => 'cycle'],
     ['msg' => 'I got my period yesterday', 'expect' => 'cycle'],

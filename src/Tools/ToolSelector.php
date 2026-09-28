@@ -115,6 +115,10 @@ final class ToolSelector
         'reminders' => [
             'set_reminder', 'list_reminders', 'cancel_reminder',
         ],
+        // Tracked movement (OwnTracks raw points; private per user).
+        'location' => [
+            'get_location_day', 'get_location_tracking_setup',
+        ],
         'settings' => [
             'get_settings', 'update_setting', 'get_appearance',
         ],
@@ -338,6 +342,14 @@ final class ToolSelector
             // mood/energy day logging (ID 4)
             'mood', 'my energy', 'energy level', 'energy is', 'how i feel', 'feel today', 'exhausted',
             'drained', 'humør', 'humor', 'energi', 'drænet', 'jeg føler',
+        ],
+        'location' => [
+            'where was i', 'where have i been', 'where did i go', 'my location', 'location tracking',
+            'track my location', 'tracking', 'owntracks', 'own tracks', 'my route', 'on the map', 'on a map',
+            'map of my', 'my movement', 'gps',
+            // Danish
+            'hvor var jeg', 'hvor har jeg været', 'hvor tog jeg', 'min placering', 'lokation', 'sporing',
+            'på kortet', 'kort over', 'min rute', 'mine bevægelser', 'positionsdata',
         ],
         'settings' => [
             'setting', 'settings', 'preference', 'configure', 'which calendar', 'work calendar',
