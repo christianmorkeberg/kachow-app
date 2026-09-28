@@ -35,6 +35,11 @@ $cases = [
     ['msg' => 'hvor var jeg i går?', 'expect' => 'location'],
     ['msg' => 'vis min rute på kortet', 'expect' => 'location'],
     ['msg' => 'virker sporingen?', 'expect' => 'location'],
+    ['msg' => 'mark where I am as Office, it is a workplace', 'expect' => 'location'],
+    ['msg' => 'show my places', 'expect' => 'location'],
+    ['msg' => 'gem stedet her som Kontor', 'expect' => 'location'],
+    ['msg' => 'gør radius på Kontor større', 'expect' => 'location'],
+    ['msg' => 'vis mine steder', 'expect' => 'location'],
     // ---- cycle: periods ----
     ['msg' => 'my period started today', 'expect' => 'cycle'],
     ['msg' => 'I got my period yesterday', 'expect' => 'cycle'],

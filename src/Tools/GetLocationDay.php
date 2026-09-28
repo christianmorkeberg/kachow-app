@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\LocationPoints;
+use App\Data\Places;
 use App\Data\WorkEvents;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -16,7 +17,7 @@ use DateTimeZone;
  */
 final class GetLocationDay implements Tool
 {
-    public function __construct(private LocationPoints $points)
+    public function __construct(private LocationPoints $points, private Places $places)
     {
     }
 
@@ -32,7 +33,9 @@ final class GetLocationDay implements Tool
             . 'average interval, largest gap between points, median accuracy, battery. Use for "show my '
             . 'route today", "where have I been", "vis min dag på kortet", or checking tracking quality. A '
             . 'gap usually means the phone was still (iOS pauses updates), not that tracking failed. With '
-            . 'no points, suggest get_location_tracking_setup. Places/stays are not analysed yet.';
+            . 'no points, suggest get_location_tracking_setup. With saved places it also returns in_places: '
+            . 'visits (from–to, minutes) per place and pass-bys — a first, simple estimate (runs of points '
+            . 'inside the place), not yet the work clock.';
     }
 
     public function parameters(): array
@@ -56,7 +59,7 @@ final class GetLocationDay implements Tool
             return ['error' => 'Date must be YYYY-MM-DD (got "' . $date . '").'];
         }
 
-        $day = $this->points->day($userId, $date);
+        $day = $this->points->day($userId, $date, $this->places->list($userId));
         $out = $day['stats'];
         if (($out['points'] ?? 0) === 0) {
             $out['note'] = 'No location points for this day. Raw points are kept '
