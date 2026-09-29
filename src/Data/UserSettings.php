@@ -148,6 +148,18 @@ final class UserSettings
             'description' => 'Location tracking: two stays at the same spot separated by at most this many '
                 . 'minutes are merged into one (default 20, allowed 0–120) — smooths over GPS wobble.',
         ],
+        'workclock_min_dwell_minutes' => [
+            'default'     => '10',
+            'label'       => 'Work clock: min dwell (min)',
+            'description' => 'Automatic work clock: a stay at a work place shorter than this is a drive-by and '
+                . 'does not count as work (default 10, allowed 3–60). Tuned during the shadow phase.',
+        ],
+        'workclock_max_bridge_hours' => [
+            'default'     => '3',
+            'label'       => 'Work clock: max bridge (h)',
+            'description' => 'Automatic work clock: returning to the SAME workplace later the same day bridges '
+                . 'the gap as worked time only if the gap is at most this many hours (default 3, allowed 0–8).',
+        ],
         'commute_rate_far' => [
             'default'     => '1.12',
             'label'       => 'Commuter rate (over 120 km/day)',

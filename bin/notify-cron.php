@@ -193,23 +193,39 @@ try {
 // a weekday morning, not at a workplace yet today and not clocked in → one push per day.
 try {
     if ((int) $nowLocal->format('G') === WorkFromHome::PROMPT_HOUR && (int) $nowLocal->format('N') <= 5) {
-        $timeline = new Timeline(new LocationPoints(), new Places(), new UserSettings());
+        $timeline    = new Timeline(new LocationPoints(), new Places(), new UserSettings());
+        $wfhSettings = new UserSettings();
+        $wfhCal      = new Calendar(GoogleOAuth::fromEnv(new Users()));
         $today    = $nowLocal->format('Y-m-d');
         [$dayFrom, $dayTo] = LocationPoints::dayBounds($today);
         foreach (array_keys($subscribed) as $uid) {
+            // Gate on the work calendar: only prompt on a day the user is scheduled to work,
+            // and pre-fill the client from the event (job = first word of the title).
+            $calName = $wfhSettings->get($uid, 'work_calendar') ?? WorkLog::WORK_CALENDAR;
+            try {
+                $events = $wfhCal->eventsForDay($uid, $today, $calName);
+            } catch (\Throwable $e) {
+                continue; // no Google connection / calendar → can't confirm a work day, so don't prompt
+            }
+            $jobs = [];
+            foreach ($events as $e) {
+                $j = WorkLog::jobFromTitle((string) ($e['summary'] ?? ''));
+                if ($j !== '' && !in_array($j, $jobs, true)) {
+                    $jobs[] = $j;
+                }
+            }
+
             $stays = $timeline->analyse($uid, $dayFrom, $dayTo)['stays'];
-            if (!WorkFromHome::shouldPrompt($stays, $work->isClockedIn($uid), $nowLocal)) {
+            if (!WorkFromHome::shouldPrompt($stays, $work->isClockedIn($uid), $nowLocal, $jobs !== [])) {
                 continue;
             }
             if (!$log->claim($uid, NotificationTypes::WFH_PROMPT, $today)) {
                 continue;
             }
-            $notifier->notify(
-                $uid,
-                NotificationTypes::WFH_PROMPT,
-                'Working from home today?',
-                "You're still at home this morning. Tap to start the clock — I'll ask which client it's for."
-            );
+            $body = count($jobs) === 1
+                ? "You're still at home this morning — working from home for {$jobs[0]}? Tap to start the clock."
+                : "You're still at home this morning. Tap to start the clock — I'll ask which client it's for.";
+            $notifier->notify($uid, NotificationTypes::WFH_PROMPT, 'Working from home today?', $body);
         }
     }
 } catch (\Throwable $e) {

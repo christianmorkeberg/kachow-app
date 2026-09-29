@@ -63,7 +63,7 @@ final class NotificationTypes
         // home place, not yet at a workplace and not clocked in. Needs a "home" place.
         self::WFH_PROMPT => [
             'label'       => 'Working from home?',
-            'description' => 'On a weekday morning when you\'re still at home (location tracking), asks whether you\'re working from home so the clock can start.',
+            'description' => 'On a weekday morning when you\'re scheduled to work (a work-calendar event) but still at home (location tracking), asks whether you\'re working from home so the clock can start.',
             'default'     => true,
         ],
     ];

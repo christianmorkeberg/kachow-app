@@ -8,11 +8,13 @@ use DateTimeImmutable;
 
 /**
  * When to ask "Working from home today?" (location tracking, phase 4 groundwork). Location
- * can't tell a work-from-home day from a day off, so instead of guessing, Kachow asks once,
- * on a weekday morning, when the user is still at a home-type place, hasn't been at a
- * work-type place today and isn't clocked in. Tapping the push opens a chat that asks which
- * client the hours are for (every time) and clocks in. Work-from-home days are loose: errands
- * don't end them — the user does ("I'm done"), with the evening check-out nudge as a backstop.
+ * can't tell a work-from-home day from a day off, so Kachow asks once, on a weekday morning,
+ * when the user is SCHEDULED to work (has an event in their work calendar today), is still at a
+ * home-type place, hasn't been at a work-type place today and isn't clocked in. The calendar
+ * gate means a genuine day off spent at home never nags. Tapping the push opens a chat that
+ * clocks in for the client (pre-filled from the calendar when there's one job, else it asks).
+ * Work-from-home days are loose: errands don't end them — the user does ("I'm done"), with the
+ * evening check-out nudge as a backstop.
  */
 final class WorkFromHome
 {
@@ -21,9 +23,13 @@ final class WorkFromHome
 
     /**
      * @param list<array{type:?string, ongoing:bool}> $todayStays stays overlapping today (Timeline::analyse)
+     * @param bool $scheduledToday the user has ≥1 event in their work calendar today (gate)
      */
-    public static function shouldPrompt(array $todayStays, bool $clockedIn, DateTimeImmutable $nowLocal): bool
+    public static function shouldPrompt(array $todayStays, bool $clockedIn, DateTimeImmutable $nowLocal, bool $scheduledToday): bool
     {
+        if (!$scheduledToday) {
+            return false; // no work scheduled today → don't nag on a day off at home
+        }
         if ((int) $nowLocal->format('N') > 5 || (int) $nowLocal->format('G') !== self::PROMPT_HOUR || $clockedIn) {
             return false;
         }
