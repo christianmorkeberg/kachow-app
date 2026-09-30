@@ -106,6 +106,8 @@ final class Timeline
                 'to'      => $b['place']['name'] ?? null,
                 'from_type' => $a['place']['type'] ?? null,
                 'to_type'   => $b['place']['type'] ?? null,
+                'from_place_id' => $a['place']['id'] ?? null,
+                'to_place_id'   => $b['place']['id'] ?? null,
                 'from_ll' => [$a['lat'], $a['lon']],
                 'to_ll'   => [$b['lat'], $b['lon']],
             ];

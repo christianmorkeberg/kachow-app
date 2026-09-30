@@ -108,6 +108,36 @@ final class MapDistance
     }
 
     /**
+     * Driving distance between two known coordinates (skips geocoding — used for saved places
+     * in the kørebog trip suggestions).
+     *
+     * @return array{one_way_km:float, round_trip_km:float}
+     * @throws RuntimeException when not configured or no route is found.
+     */
+    public function lookupByCoords(float $fromLat, float $fromLon, float $toLat, float $toLon): array
+    {
+        if (!$this->isConfigured()) {
+            throw new RuntimeException('Map lookup is not configured (no ORS_API_KEY).');
+        }
+        $url = self::DIRECTIONS . '?' . http_build_query([
+            'api_key' => $this->apiKey,
+            'start'   => $fromLon . ',' . $fromLat,
+            'end'     => $toLon . ',' . $toLat,
+        ]);
+        $data     = $this->getJson($url);
+        $features = $data['features'] ?? null;
+        $meters   = is_array($features) && isset($features[0]['properties']['summary']['distance'])
+            ? (float) $features[0]['properties']['summary']['distance']
+            : null;
+        if ($meters === null || $meters <= 0) {
+            throw new RuntimeException('No driving route found between those points.');
+        }
+        $oneWay = round($meters / 1000, 1);
+
+        return ['one_way_km' => $oneWay, 'round_trip_km' => round($oneWay * 2, 1)];
+    }
+
+    /**
      * @param array{0:float, 1:float}|null $focus [lat, lon] to prefer results near
      * @return array{0:float, 1:float, 2:string} [lon, lat, label]
      */

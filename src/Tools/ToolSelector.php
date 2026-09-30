@@ -325,6 +325,9 @@ final class ToolSelector
             // map distance lookup (address → km)
             'how far', 'how far is', 'distance from', 'distance between', 'hvor langt', 'hvor langt er der',
             'afstand', 'afstanden', 'home to', 'hjem til', 'log home to', 'kør fra', 'from home to',
+            // kørebog suggestions (phase 5)
+            'drives to log', 'driving to log', 'suggested drives', 'trips to log', 'any driving to log',
+            'foreslåede ture', 'ture at logge', 'kørsel at registrere',
             'mit regnskab', 'regnskabsoversigt', 'åbn regnskab', 'åbn bogføring', 'bogføringen',
             'overblik over økonomi', 'mine finanser', 'overskud', 'hensæt',
         ],

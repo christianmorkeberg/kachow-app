@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\Mileage;
+use App\Data\MileageSuggestions;
 
 /**
  * Tool: show the mileage (kørsel) card — this year's business driving deduction, the
@@ -12,7 +13,7 @@ use App\Data\Mileage;
  */
 final class GetMileage implements Tool
 {
-    public function __construct(private Mileage $mileage)
+    public function __construct(private Mileage $mileage, private MileageSuggestions $suggest)
     {
     }
 
@@ -30,7 +31,9 @@ final class GetMileage implements Tool
             . 'Business driving lowers your profit + tax reserve; the commuter part is a personal-return figure. '
             . 'The result also lists the most recent logged `trips` (id, date, destination, counted_as, km) — '
             . 'use them to answer "what did I log" and to find the id for update_trip / delete_trip when the '
-            . 'user says a trip is wrong or doubled.';
+            . 'user says a trip is wrong or doubled. It may also list `suggestions`: drives detected from '
+            . 'location that aren\'t logged yet — if there are any, mention them and offer to open mileage so '
+            . 'the user can confirm each one on the card.';
     }
 
     public function parameters(): array
@@ -40,9 +43,16 @@ final class GetMileage implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
-        $card = $this->mileage->card($userId, 0);
+        $card = $this->suggest->attach($this->mileage->card($userId, 0), $userId);
 
         return [
+            'suggestions'        => array_map(static fn (array $s): array => [
+                'date'        => $s['date'],
+                'route'       => $s['route'],
+                'km'          => $s['km'],
+                'destination' => $s['destination'],
+                'needs_link'  => $s['needs_link'],
+            ], $card['suggestions'] ?? []),
             'business_deduction' => $card['business']['amount'],
             'business_days'      => $card['business']['days'],
             'commuter_estimate'  => $card['commuter']['amount'],

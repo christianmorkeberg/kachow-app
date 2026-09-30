@@ -62,7 +62,7 @@ final class Mileage
      */
     public function destinations(int $userId, bool $includeArchived = false): array
     {
-        $sql = 'SELECT id, name, type, round_trip_km, home_address, dest_address, archived_at
+        $sql = 'SELECT id, name, type, place_id, round_trip_km, home_address, dest_address, archived_at
                 FROM mileage_destinations WHERE user_id = :u';
         if (!$includeArchived) {
             $sql .= ' AND archived_at IS NULL';
@@ -77,6 +77,7 @@ final class Mileage
                 'id'           => (int) $r['id'],
                 'name'         => (string) $r['name'],
                 'type'         => (string) $r['type'] === self::TYPE_COMMUTE ? self::TYPE_COMMUTE : self::TYPE_BUSINESS,
+                'place_id'     => $r['place_id'] !== null ? (int) $r['place_id'] : null,
                 'round_trip'   => round((float) $r['round_trip_km'], 2),
                 'home_address' => $r['home_address'] !== null ? (string) $r['home_address'] : '',
                 'dest_address' => $r['dest_address'] !== null ? (string) $r['dest_address'] : '',
@@ -104,7 +105,8 @@ final class Mileage
         string $type = self::TYPE_BUSINESS,
         float $roundTripKm = 0.0,
         ?string $home = null,
-        ?string $dest = null
+        ?string $dest = null,
+        ?int $placeId = null
     ): int {
         $name = mb_substr(trim($name), 0, 120);
         if ($name === '') {
@@ -113,13 +115,14 @@ final class Mileage
         $type = $type === self::TYPE_COMMUTE ? self::TYPE_COMMUTE : self::TYPE_BUSINESS;
 
         $stmt = $this->db->prepare(
-            'INSERT INTO mileage_destinations (user_id, name, type, round_trip_km, home_address, dest_address)
-             VALUES (:u, :n, :t, :km, :h, :d)'
+            'INSERT INTO mileage_destinations (user_id, name, type, place_id, round_trip_km, home_address, dest_address)
+             VALUES (:u, :n, :t, :pid, :km, :h, :d)'
         );
         $stmt->execute([
             ':u'  => $userId,
             ':n'  => $name,
             ':t'  => $type,
+            ':pid' => $placeId,
             ':km' => round(max(0.0, $roundTripKm), 2),
             ':h'  => $home !== null && trim($home) !== '' ? mb_substr(trim($home), 0, 255) : null,
             ':d'  => $dest !== null && trim($dest) !== '' ? mb_substr(trim($dest), 0, 255) : null,
@@ -161,6 +164,11 @@ final class Mileage
             $d = trim((string) $fields['dest_address']);
             $set[] = 'dest_address = :d';
             $args[':d'] = $d !== '' ? mb_substr($d, 0, 255) : null;
+        }
+        if (array_key_exists('place_id', $fields)) {
+            $pid = $fields['place_id'];
+            $set[] = 'place_id = :pid';
+            $args[':pid'] = ($pid === null || $pid === '' || (int) $pid <= 0) ? null : (int) $pid;
         }
         if ($set === []) {
             return false;
@@ -223,6 +231,65 @@ final class Mileage
     private static function normalizeName(string $s): string
     {
         return preg_replace('/[^a-z0-9æøå]/u', '', mb_strtolower(trim($s))) ?? '';
+    }
+
+    // ---- Kørebog suggestions (phase 5) ------------------------------------
+
+    /**
+     * The active mileage destination linked to a place, or null.
+     *
+     * @return array{id:int, name:string, type:string, round_trip:float}|null
+     */
+    public function destinationForPlace(int $userId, int $placeId): ?array
+    {
+        foreach ($this->destinations($userId, false) as $d) {
+            if ($d['place_id'] === $placeId) {
+                return ['id' => $d['id'], 'name' => $d['name'], 'type' => $d['type'], 'round_trip' => $d['round_trip']];
+            }
+        }
+
+        return null;
+    }
+
+    /** Whether a driving day is already logged for this destination on this date. */
+    public function tripExistsForDay(int $userId, int $destinationId, string $date): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT 1 FROM mileage_trips WHERE user_id = :u AND destination_id = :d AND trip_date = :dt LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId, ':d' => $destinationId, ':dt' => $date]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /** Records that a suggested drive (day + place) was dismissed, so it isn't re-suggested. */
+    public function dismissSuggestion(int $userId, string $date, int $placeId): void
+    {
+        $date = date('Y-m-d', strtotime($date) ?: time());
+        $stmt = $this->db->prepare(
+            'INSERT IGNORE INTO mileage_trip_dismissals (user_id, trip_date, place_id) VALUES (:u, :dt, :p)'
+        );
+        $stmt->execute([':u' => $userId, ':dt' => $date, ':p' => $placeId]);
+    }
+
+    /**
+     * Dismissed (day, place) pairs in a date range, as a set keyed "YYYY-MM-DD|placeId".
+     *
+     * @return array<string, bool>
+     */
+    public function dismissals(int $userId, string $fromDate, string $toDate): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT trip_date, place_id FROM mileage_trip_dismissals
+             WHERE user_id = :u AND trip_date BETWEEN :f AND :t'
+        );
+        $stmt->execute([':u' => $userId, ':f' => $fromDate, ':t' => $toDate]);
+        $set = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $set[substr((string) $r['trip_date'], 0, 10) . '|' . (int) $r['place_id']] = true;
+        }
+
+        return $set;
     }
 
     // ---- Trips -------------------------------------------------------------
@@ -591,6 +658,7 @@ final class Mileage
                 'id'           => $d['id'],
                 'name'         => $d['name'],
                 'type'         => $d['type'],
+                'place_id'     => $d['place_id'],
                 'round_trip'   => $d['round_trip'],
                 'home_address' => $d['home_address'],
                 'dest_address' => $d['dest_address'],

@@ -16,6 +16,7 @@ use App\Data\Cash;
 use App\Data\CashEntries;
 use App\Data\Income;
 use App\Data\Mileage;
+use App\Data\MileageSuggestions;
 use App\Data\Moms;
 use App\Data\OwnerDraws;
 use App\Data\ProfitLoss;
@@ -192,8 +193,9 @@ final class ToolRegistry
         $registry->register(new GetCash($cash));
         $registry->register(new RecordCashMovement($cashEntries, $cash));
         $registry->register(new GetProfitLoss(new ProfitLoss($income, $receipts, $userSettings, $mileage)));
+        $mileageSuggest = new MileageSuggestions($timeline, $places, $mileage, $mapDistance);
         $registry->register(new LogTrip($mileage, $mapDistance, $userSettings));
-        $registry->register(new GetMileage($mileage));
+        $registry->register(new GetMileage($mileage, $mileageSuggest));
         $registry->register(new UpdateTrip($mileage));
         $registry->register(new DeleteTrip($mileage));
         $registry->register(new GetDrivingDistance($mapDistance, $userSettings));
