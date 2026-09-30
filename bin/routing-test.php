@@ -28,6 +28,19 @@ use App\Tools\ToolSelector;
 
 /** @var array<int, array{msg:string, recent?:string, expect?:string, absent?:string, empty?:bool}> */
 $cases = [
+    // ---- help / meta ("what can you do", "how does X work") ----
+    ['msg' => 'what can you do?', 'expect' => 'help'],
+    ['msg' => 'what features do you have?', 'expect' => 'help'],
+    ['msg' => 'how does the mileage feature work?', 'expect' => 'help'],
+    ['msg' => 'how do you decide business vs commute driving?', 'expect' => 'help'],
+    ['msg' => 'hvad kan du?', 'expect' => 'help'],
+    ['msg' => 'hvilke funktioner har du?', 'expect' => 'help'],
+    ['msg' => 'hvordan virker kørebogen?', 'expect' => 'help'],
+    ['msg' => 'hvad kan appen egentlig?', 'expect' => 'help'],
+    // anti-spurious: an ordinary task must NOT pull in the capability tool
+    ['msg' => 'add milk to the list', 'absent' => 'help'],
+    ['msg' => 'log that I worked 9 to 5 at DTU', 'absent' => 'help'],
+
     // ---- location tracking ----
     ['msg' => 'show my route today on the map', 'expect' => 'location'],
     ['msg' => 'where was I yesterday afternoon?', 'expect' => 'location'],

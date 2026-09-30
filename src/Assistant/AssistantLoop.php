@@ -37,7 +37,9 @@ final class AssistantLoop
     /** Don't start a call with less than this left in the turn budget (ms). */
     private const MIN_CALL_MS = 3000;
 
-    private const DEFAULT_SYSTEM_INSTRUCTION =
+    // Public so explain_capabilities can surface the actual operating rules verbatim —
+    // the authoritative "how each feature behaves" reference, kept as one source of truth.
+    public const DEFAULT_SYSTEM_INSTRUCTION =
         'You are a concise, helpful personal assistant. Answer briefly and clearly. '
         . 'Always reply in the SAME language as the user\'s latest message — Danish if they wrote '
         . 'Danish, English if they wrote English. Do not switch languages on your own, even if '
@@ -182,7 +184,8 @@ final class AssistantLoop
         'hvad kan du', 'kan du hjælpe', 'hvad kan jeg', 'dine funktioner', 'hvem er du',
     ];
 
-    private const CAPABILITIES =
+    // Public so explain_capabilities can reuse the same short areas overview (single source of truth).
+    public const CAPABILITIES =
         'If the user asks what you can do or how you can help, summarise these areas briefly and in '
         . 'their own language: workouts (log sets, review history and personal records); Google '
         . 'Calendar (read, add and delete events); shared shopping lists with their partner (named '

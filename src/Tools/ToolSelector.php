@@ -37,6 +37,8 @@ final class ToolSelector
     private const CORE_FALLBACK = [
         'workouts', 'shopping', 'calendar', 'weather', 'worktime', 'worklog',
         'receipts', 'email', 'cycle', 'reminders', 'memory', 'instructions', 'profile',
+        // A novel meta phrasing that matches no group still gets the capability-reference tool.
+        'help',
     ];
 
     /** group => tool names */
@@ -124,6 +126,10 @@ final class ToolSelector
         ],
         'settings' => [
             'get_settings', 'update_setting', 'get_appearance',
+        ],
+        // Meta "what can you do / how does X work" questions → the capability-reference tool.
+        'help' => [
+            'explain_capabilities',
         ],
     ];
 
@@ -405,6 +411,21 @@ final class ToolSelector
             // Danish
             'feedback', 'fejlrapport', 'fejlrapporter', 'brugerrapport', 'rapporter',
             'hvad har brugerne rapporteret', 'til udvikleren', 'rapporteret noget',
+        ],
+        // Meta questions about the assistant itself. Kept to distinctly-meta phrases so an
+        // ordinary task ("can you add milk") doesn't over-trigger — a spurious hit here is
+        // cheap (one extra tool) but the phrases below still aim to be clearly about capabilities.
+        'help' => [
+            'what can you do', 'what do you do', 'what can i ask', 'what are you able',
+            'your capabilities', 'what features', 'what can this app', 'what does the app',
+            'how can you help', 'what can you help', 'what can you help me with', 'who are you',
+            'what are you', 'able to help', 'do you have a way', 'is there a way to',
+            'how do i use', 'how does', 'how do you ', 'what tools do you', 'everything you can',
+            // Danish
+            'hvad kan du', 'hvad kan du gøre', 'kan du hjælpe', 'hvad kan jeg', 'dine funktioner',
+            'hvem er du', 'hvad er du', 'hvilke funktioner', 'hvad kan appen', 'hvad kan denne app',
+            'hvordan virker', 'hvordan fungerer', 'hvordan gør du', 'forklar hvordan',
+            'hvad kan jeg bruge', 'hvordan bruger jeg',
         ],
     ];
 

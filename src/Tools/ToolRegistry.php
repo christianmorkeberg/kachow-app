@@ -235,6 +235,8 @@ final class ToolRegistry
         $registry->register(new ListFeedback($users, $feedback));
         $registry->register(new ResolveFeedback($users, $feedback));
         $registry->register(new SetDiagnostics($users, new AppFlags()));
+        // Registered last: it reads the registry at call time to describe the full, current tool set.
+        $registry->register(new ExplainCapabilities($registry));
 
         return $registry;
     }
