@@ -21,6 +21,7 @@ final class NotificationTypes
     public const MOMS_DEADLINE  = 'moms_deadline';
     public const REMINDER       = 'reminder';
     public const WFH_PROMPT     = 'wfh_prompt';
+    public const TRACKING_SILENT = 'tracking_silent';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -64,6 +65,14 @@ final class NotificationTypes
         self::WFH_PROMPT => [
             'label'       => 'Working from home?',
             'description' => 'On a weekday morning when you\'re scheduled to work (a work-calendar event) but still at home (location tracking), asks whether you\'re working from home so the clock can start.',
+            'default'     => true,
+        ],
+        // Sent by notify-cron when no location point has arrived for hours of daytime — i.e.
+        // OwnTracks has quietly stopped (force-quit, suspended, Low Power Mode, no data abroad).
+        self::TRACKING_SILENT => [
+            'label'       => 'Tracking stopped',
+            'description' => 'A heads-up when no position has arrived for several hours during the day, so a '
+                . 'stopped OwnTracks is caught the same day instead of leaving a hole in your timeline.',
             'default'     => true,
         ],
     ];

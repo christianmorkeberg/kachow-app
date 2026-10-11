@@ -43,13 +43,16 @@ final class Timeline
             'min_minutes'       => $g('location_stay_min_minutes', 3, 60, StayDetector::DEFAULTS['min_minutes']),
             'max_acc_m'         => $g('location_max_accuracy_m', 20, 500, StayDetector::DEFAULTS['max_acc_m']),
             'merge_gap_minutes' => $g('location_merge_gap_minutes', 0, 120, StayDetector::DEFAULTS['merge_gap_minutes']),
+            'max_gap_minutes'   => $g('location_max_gap_minutes', 15, 1440, StayDetector::DEFAULTS['max_gap_minutes']),
         ];
     }
 
     /**
-     * Stays + trips overlapping [fromTs, toTs), enriched with place names and local times.
+     * Stays + trips overlapping [fromTs, toTs), enriched with place names and local times, plus
+     * the GAPS where the phone reported nothing (so a hole in the data reads as a hole, not as a
+     * long stay or an invented drive).
      *
-     * @return array{stays: list<array<string, mixed>>, trips: list<array<string, mixed>>, places: list<array<string, mixed>>, params: array<string, int>}
+     * @return array{stays: list<array<string, mixed>>, trips: list<array<string, mixed>>, gaps: list<array<string, mixed>>, places: list<array<string, mixed>>, params: array<string, int>}
      */
     public function analyse(int $userId, int $fromTs, int $toTs): array
     {
@@ -113,7 +116,17 @@ final class Timeline
             ];
         }
 
-        return ['stays' => $stays, 'trips' => $trips, 'places' => $places, 'params' => $params];
+        $gaps = [];
+        foreach ($det['gaps'] as $g) {
+            if ($g['end'] <= $fromTs || $g['start'] >= $toTs) {
+                continue;
+            }
+            $gaps[] = $g + [
+                'minutes_in_range' => (int) round((min($g['end'], $toTs) - max($g['start'], $fromTs)) / 60),
+            ];
+        }
+
+        return ['stays' => $stays, 'trips' => $trips, 'gaps' => $gaps, 'places' => $places, 'params' => $params];
     }
 
     /**
@@ -303,8 +316,11 @@ final class Timeline
         foreach ($a['trips'] as $t) {
             $items[] = ['kind' => 'trip'] + $t;
         }
-        usort($items, static fn (array $x, array $y): int =>
-            ($x['kind'] === 'stay' ? $x['arrive'] : $x['start']) <=> ($y['kind'] === 'stay' ? $y['arrive'] : $y['start']));
+        foreach ($a['gaps'] as $g) {
+            $items[] = ['kind' => 'gap'] + $g;
+        }
+        $at = static fn (array $it): int => $it['kind'] === 'stay' ? $it['arrive'] : $it['start'];
+        usort($items, static fn (array $x, array $y): int => $at($x) <=> $at($y));
 
         return array_map(static function (array $it) use ($from, $to): array {
             if ($it['kind'] === 'stay') {
@@ -315,8 +331,14 @@ final class Timeline
                 $it['minutes']  = $it['minutes_in_range'];
                 unset($it['idx'], $it['minutes_in_range'], $it['place_id']);
             } else {
-                $it['start_time'] = self::local($it['start'], 'H:i');
-                $it['end_time']   = self::local($it['end'], 'H:i');
+                $it['start_time'] = self::local(max($it['start'], $from), 'H:i');
+                $it['end_time']   = self::local(min($it['end'], $to), 'H:i');
+                if ($it['kind'] === 'gap') {
+                    $it['prev_day'] = $it['start'] < $from;
+                    $it['next_day'] = $it['end'] > $to;
+                    $it['minutes']  = $it['minutes_in_range'];
+                    unset($it['minutes_in_range']);
+                }
             }
 
             return $it;
@@ -350,6 +372,27 @@ final class Timeline
             }
 
             return $out;
+        }
+
+        if ($it['kind'] === 'gap') {
+            // Say it plainly: the assistant must never present a gap as time spent somewhere.
+            $out = [
+                'kind'    => 'gap',
+                'note'    => $it['ongoing'] ?? false
+                    ? 'NO DATA since here — the phone has stopped reporting positions'
+                    : 'NO DATA for this stretch — the phone reported nothing, so where you were is unknown',
+                'start'   => $it['start_time'] ?? self::local($it['start'], 'H:i'),
+                'end'     => $it['end_time'] ?? self::local($it['end'], 'H:i'),
+                'minutes' => $it['minutes'],
+            ];
+            if (!empty($it['prev_day'])) {
+                $out['started_previous_day'] = true;
+            }
+            if (!empty($it['next_day'])) {
+                $out['continues_next_day'] = true;
+            }
+
+            return $withDate ? ['day' => self::local($it['start'], 'D j M')] + $out : $out;
         }
 
         $out = [

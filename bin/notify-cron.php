@@ -39,6 +39,7 @@ use App\Data\WorkLog;
 use App\Notify\NotificationTypes;
 use App\Notify\Notifier;
 use App\Notify\WebPush;
+use App\Support\TrackingHealth;
 use App\Support\WorkFromHome;
 
 if (!WebPush::isConfigured()) {
@@ -230,6 +231,37 @@ try {
     }
 } catch (\Throwable $e) {
     error_log('notify-cron wfh: ' . $e->getMessage());
+}
+
+// ---------- Location tracking has gone silent ----------
+// OwnTracks stops quietly: force-quit from the app switcher, iOS suspending it, Low Power Mode,
+// or no data abroad. Points simply stop, and without this the hole is only found weeks later in
+// the database. Only daytime silence counts (see TrackingHealth), and at most one push per day.
+try {
+    $trkPoints   = new LocationPoints();
+    $trkSettings = new UserSettings();
+    foreach (array_keys($subscribed) as $uid) {
+        $last   = $trkPoints->latest($uid);
+        $lastTs = $last === null ? null : strtotime($last['recorded_at'] . ' UTC');
+        $hours  = TrackingHealth::silentHours($trkSettings->get($uid, 'location_silent_alert_hours'));
+        if ($lastTs === false || !TrackingHealth::shouldAlert($lastTs, $nowLocal, $hours)) {
+            continue;
+        }
+        if (!$log->claim($uid, NotificationTypes::TRACKING_SILENT, $nowLocal->format('Y-m-d'))) {
+            continue;
+        }
+        $seenLocal = (new DateTimeImmutable('@' . $lastTs))->setTimezone($tz);
+        $notifier->notify(
+            $uid,
+            NotificationTypes::TRACKING_SILENT,
+            'Location tracking has stopped',
+            'No position since ' . $seenLocal->format('D j M H:i') . ' ('
+                . fmtDur((int) round(($nowLocal->getTimestamp() - $lastTs) / 60))
+                . ' ago). Open OwnTracks, check the mode is Move, and tap publish to send one now.'
+        );
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron tracking-silent: ' . $e->getMessage());
 }
 
 // ---------- Cycle: "register your period" reminder ----------
