@@ -2,12 +2,12 @@
 --
 -- Until now mileage assumed ONE customer: one round-trip distance, one 60-day
 -- counter across all trips, all business driving folded into the P&L. Christian now
--- drives to more than one place (e.g. a Kachow Consult customer AND DTU), and the
+-- drives to more than one place (e.g. a consulting customer AND a fixed workplace), and the
 -- tax treatment differs per place:
 --   type='business' → statens takst, the 60-day rule applies PER destination, and the
 --                      business part is a deduction in the business P&L (erhvervskørsel).
 --   type='commute'  → befordringsfradrag from day 1 (a fixed/regular workplace such as
---                      DTU); a PERSONAL-return figure, never in the business P&L.
+--                      a campus or office); a PERSONAL-return figure, never in the business P&L.
 -- The 20,000 km/year high-rate tier stays global (per person per year), not per place.
 --
 -- home_address / dest_address let the app auto-fill round_trip_km via a routing API

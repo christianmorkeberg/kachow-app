@@ -7,6 +7,7 @@ namespace App\Assistant;
 use App\Data\AppFlags;
 use App\Data\Conversations;
 use App\Data\Memories;
+use App\Data\Mileage;
 use App\Data\UserInstructions;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
@@ -111,7 +112,7 @@ final class AssistantLoop
         . 'WORKING FROM HOME: when the user says they are working from home (often answering the morning '
         . '"Working from home today?" notification), clock in with log_work_event (kind in, place = the client, '
         . 'at the time they started — default now). If the prompt already NAMED the client (e.g. "working from '
-        . 'home for DTU?" — read from their work calendar), use that client and just confirm; otherwise ask '
+        . 'home for Client Z?" — read from their work calendar), use that client and just confirm; otherwise ask '
         . 'which client/workplace the hours are for unless they already said it. A work-from-home day is loose: '
         . 'errands or walks do not end it; it ends '
         . 'when they say so (clock out then), and the evening check-out reminder catches a forgotten one. '
@@ -487,8 +488,11 @@ final class AssistantLoop
             $groups       = ['ALL (wide)'];
             $declarations = $this->tools->declarations();
         } else {
-            $groups       = ToolSelector::matchGroups($userMessage, $recent);
-            $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent);
+            // The user's own workplace / destination names, so "at <workplace>" still routes
+            // to the work and mileage tools without those names living in the code.
+            $userTerms    = $this->userRoutingTerms($userId);
+            $groups       = ToolSelector::matchGroups($userMessage, $recent, $userTerms);
+            $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent, $userTerms);
         }
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
@@ -992,6 +996,38 @@ final class AssistantLoop
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * The user's own workplace and driving-destination names, for keyword routing. They are
+     * personal (and this repo is public), so they are read from the user's data instead of
+     * being listed in ToolSelector. Only consulted when narrowing actually runs.
+     *
+     * @return list<string>
+     */
+    private function userRoutingTerms(int $userId): array
+    {
+        $terms = [];
+        try {
+            foreach ((new WorkEvents())->knownPlaces($userId) as $place) {
+                $terms[] = (string) $place;
+            }
+            foreach ((new Mileage(new UserSettings()))->destinations($userId) as $dest) {
+                $terms[] = (string) ($dest['name'] ?? '');
+            }
+        } catch (Throwable $e) {
+            return [];   // routing must never fail because a lookup did
+        }
+
+        $out = [];
+        foreach ($terms as $term) {
+            $term = trim($term);
+            if ($term !== '' && mb_strlen($term) >= 2) {
+                $out[mb_strtolower($term)] = $term;
+            }
+        }
+
+        return array_slice(array_values($out), 0, 40);
+    }
+
     /**
      * The previous user turn(s), for tool-selection context — the current message
      * (the last user entry) is excluded so it isn't double-counted. Returns the

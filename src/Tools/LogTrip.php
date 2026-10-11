@@ -35,9 +35,9 @@ final class LogTrip implements Tool
             . '"log my driving", "jeg kørte på arbejde i dag", "log home to Middelfart station". Distance comes '
             . 'from (in order): an explicit km; else a from/to address pair computed via the map (round trip); '
             . 'else the destination\'s saved round-trip distance. Pass "destination" with the place name if the '
-            . 'user has more than one (e.g. a customer vs DTU); omit to use their default. "from" defaults to the '
+            . 'user has more than one (e.g. a customer vs a fixed workplace); omit to use their default. "from" defaults to the '
             . 'user\'s home address. Optionally give a date or note. Business destinations follow the 60-day rule; '
-            . 'commute destinations (a fixed workplace like DTU) always count as befordringsfradrag. Only for a '
+            . 'commute destinations (a fixed workplace they travel to regularly) always count as befordringsfradrag. Only for a '
             . 'NEW driving day: to fix an already-logged trip (wrong destination, date or km) use update_trip, '
             . 'and to remove one use delete_trip — logging again would create a duplicate. The result lists '
             . 'all trips on that date (`trips_that_day`); if there are now two, point it out.';
@@ -48,7 +48,7 @@ final class LogTrip implements Tool
         return [
             'type'       => 'object',
             'properties' => [
-                'destination' => ['type' => 'string', 'description' => 'Destination name, if the user has more than one (e.g. "DTU" or a customer). Omit for the default.'],
+                'destination' => ['type' => 'string', 'description' => 'Destination name, if the user has more than one (a workplace or a customer). Omit for the default.'],
                 'from'        => ['type' => 'string', 'description' => 'Start address for a map-computed distance. Use "home" (or omit) for the saved home address. Only used when km is not given.'],
                 'to'          => ['type' => 'string', 'description' => 'Destination address for a map-computed distance (e.g. "Middelfart station"). Only used when km is not given.'],
                 'date'        => ['type' => 'string', 'description' => 'Date YYYY-MM-DD. Omit for today.'],

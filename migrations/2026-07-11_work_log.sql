@@ -1,5 +1,5 @@
 -- Work-log: a free-text record of what the user did at each job, day by day.
--- Jobs (e.g. DTU / DSB) come from the "Arbejde" Google calendar; hours are entered
+-- Jobs (the user's workplaces/clients) come from the "Arbejde" Google calendar; hours are entered
 -- by the user. Separate from work_events (geofence clock in/out hours).
 -- Run once on the server DB (kachowdk_ai).
 

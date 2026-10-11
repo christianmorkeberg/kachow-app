@@ -258,10 +258,10 @@ final class ToolSelector
         // What I DID at work (free-text log per job), distinct from clock-in hours above.
         'worklog' => [
             'work log', 'worklog', 'what did i do', 'what i did', 'what i got done', 'log what',
-            'log my work', 'log that i', ' at dtu', ' at dsb', ' dtu', ' dsb',
+            'log my work', 'log that i',
             // Danish
             'arbejdslog', 'hvad lavede jeg', 'hvad har jeg lavet', 'hvad jeg lavede', 'loggede',
-            'log mit arbejde', 'log hvad', 'på dtu', 'på dsb', 'noter hvad jeg',
+            'log mit arbejde', 'log hvad', 'noter hvad jeg',
         ],
         'devideas' => [
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
@@ -322,10 +322,10 @@ final class ToolSelector
             'mileage', 'kørsel', 'koersel', 'kørselsfradrag', 'kørte', 'i drove', 'drove to', 'driving deduction',
             'kilometer', 'km to the customer', 'business driving', 'erhvervskørsel', 'befordring', 'befordringsfradrag',
             'drove today', 'log my driving', 'driving days', 'registrér kørsel', 'registrer kørsel', 'min kørsel',
-            // mileage destinations + commuting (per-place: customer vs DTU)
-            'dtu', 'destination', 'køredestination', 'commute', 'commuting', 'pendling', 'pendler', 'workplace',
+            // mileage destinations + commuting (per-place: a customer vs a fixed workplace)
+            'destination', 'køredestination', 'commute', 'commuting', 'pendling', 'pendler', 'workplace',
             'arbejdssted', 'add destination', 'new destination', 'ny destination', 'tilføj destination',
-            'distance to', 'afstand til', 'drove to dtu', 'kørte til dtu',
+            'distance to', 'afstand til',
             // correcting / deleting logged trips
             'trip', 'trips', 'the drive', ' ture', 'turen', 'turene', 'køretur', 'slet kørsel', 'ret kørsel',
             // map distance lookup (address → km)
@@ -442,9 +442,9 @@ final class ToolSelector
      * @param array<int, array<string, mixed>> $declarations
      * @return array<int, array<string, mixed>>
      */
-    public static function select(array $declarations, string $message, string $recentContext = ''): array
+    public static function select(array $declarations, string $message, string $recentContext = '', array $userTerms = []): array
     {
-        $groups = self::matchGroups($message, $recentContext);
+        $groups = self::matchGroups($message, $recentContext, $userTerms);
 
         if ($groups === []) {
             // Ambiguous → the bounded everyday set instead of all ~90 tools (smaller,
@@ -481,7 +481,7 @@ final class ToolSelector
      *
      * @return array<int, string> matched group names (in GROUPS order)
      */
-    public static function matchGroups(string $message, string $recentContext = ''): array
+    public static function matchGroups(string $message, string $recentContext = '', array $userTerms = []): array
     {
         $text = ' ' . mb_strtolower($message . ' ' . $recentContext) . ' ';
 
@@ -494,6 +494,25 @@ final class ToolSelector
                 }
             }
         }
+
+        // A bare mention of one of the user's OWN workplaces or driving destinations ("logged
+        // 9 to 5 at <workplace>") should reach the work and mileage tools. Those names are
+        // personal, so they come from the user's data (see AssistantLoop::userRoutingTerms) —
+        // never from the keyword lists above, which live in a public repo.
+        foreach ($userTerms as $term) {
+            $term = trim(mb_strtolower((string) $term));
+            if ($term === '' || mb_strlen($term) < 2) {
+                continue;
+            }
+            // Whole word, so a short name can't match inside an unrelated word.
+            if (preg_match('/(?<![\p{L}\d])' . preg_quote($term, '/') . '(?![\p{L}\d])/u', $text) === 1) {
+                foreach (self::USER_TERM_GROUPS as $g) {
+                    $groups[] = $g;
+                }
+                break;
+            }
+        }
+        $groups = array_values(array_unique($groups));
 
         // Income and expenses are two halves of ONE bookkeeping conversation: a turn
         // about money often names only one side ("I sent them a 5k invoice" has no
@@ -510,6 +529,9 @@ final class ToolSelector
 
         return $groups;
     }
+
+    /** Groups opened by a mention of one of the user's own workplaces / destinations. */
+    private const USER_TERM_GROUPS = ['worktime', 'worklog', 'bookkeeping'];
 
     /** @return array<int, string> all group names (for tests / tooling). */
     public static function groupNames(): array

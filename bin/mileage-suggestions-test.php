@@ -47,13 +47,13 @@ echo "4) drives that don't touch a business/commute place are ignored\n";
 $c = MileageSuggestions::candidates([trip('2026-09-29', 'vehicle', 'home', 1, 'Home', 'private', 2, 'Gym', 12.0)]);
 check('no candidates', count($c), 0);
 
-echo "5) commute place (e.g. DTU) is included\n";
-$c = MileageSuggestions::candidates([trip('2026-09-28', 'vehicle', 'home', null, 'Home', 'commute', 7, 'DTU', 90.0)]);
+echo "5) a commute place (a fixed workplace) is included\n";
+$c = MileageSuggestions::candidates([trip('2026-09-28', 'vehicle', 'home', null, 'Home', 'commute', 7, 'Campus', 90.0)]);
 check('one candidate', count($c), 1);
 check('type commute', $c['2026-09-28|7']['type'], 'commute');
 
-echo "5b) a WORK place (DTU clocked for hours) also yields a drive candidate\n";
-$c = MileageSuggestions::candidates([trip('2026-09-28', 'vehicle', 'home', null, 'Home', 'work', 8, 'DTU', 90.0)]);
+echo "5b) a WORK place (clocked for hours) also yields a drive candidate\n";
+$c = MileageSuggestions::candidates([trip('2026-09-28', 'vehicle', 'home', null, 'Home', 'work', 8, 'Campus', 90.0)]);
 check('one candidate', count($c), 1);
 check('has place 8', array_key_exists('2026-09-28|8', $c), true);
 

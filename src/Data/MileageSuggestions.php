@@ -51,7 +51,8 @@ final class MileageSuggestions
                 [$t['from_type'] ?? null, $t['from_place_id'] ?? null, $t['from'] ?? null],
             ];
             foreach ($ends as [$type, $pid, $name]) {
-                // work places count too: DTU is a work place (phase-4 clock) AND a commute drive
+                // work places count too: a regular workplace is both a work place (phase-4 clock)
+                // and a commute drive
                 // for befordringsfradrag (phase 5). The tax treatment comes from the linked
                 // mileage destination's type, not the place type.
                 if ($pid === null || !in_array($type, ['business', 'commute', 'work'], true)) {

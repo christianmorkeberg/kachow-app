@@ -190,7 +190,7 @@ check('nextInvoiceNumber = K-2026-001', $next === 'K-2026-001', $next);
 
 echo "\n== 10. update_income corrects a draft in place — no duplicate (report #11) ==\n";
 $upd = new UpdateIncome($income, $audit);
-$c1  = $addIncome->execute(['amount_ex_vat' => 10000, 'customer' => 'DSB'], $U); // draft: ex 10000 → total 12500
+$c1  = $addIncome->execute(['amount_ex_vat' => 10000, 'customer' => 'Client Y'], $U); // draft: ex 10000 → total 12500
 $cid = $c1['id'];
 $rowsBefore = (int) $db->query('SELECT COUNT(*) FROM income')->fetchColumn();
 $u   = $upd->execute(['id' => $cid, 'total' => 10000], $U);                       // "no, 10k INCL vat"
@@ -203,7 +203,7 @@ check('draft now 10000 incl. moms (ex 8000 / vat 2000)',
 
 echo "\n== 11. Books cockpit overview (KPIs, moms, reserve) ==\n";
 // State so far (all DKK): booked income = kommune (ex 10000 / vat 2500) + private
-// (ex 4000 / vat 1000) → revenue 14000, output VAT 3500. One draft (DSB, not counted).
+// (ex 4000 / vat 1000) → revenue 14000, output VAT 3500. One draft (Client Y, not counted).
 // Confirmed expenses = parking (total 250 / vat 50 → ex 200). Draws deleted.
 $ov = $booksObj->overview($U, 'all', 0);
 $k  = $ov['kpis'];
@@ -240,14 +240,14 @@ check('overview carries granularity/offset + can_next', ($navCard['granularity']
 
 echo "\n== 13. Moms quarterly settlement (salgs − købs = tilsvar) ==\n";
 // Current quarter (offset 0): booked income today = salgsmoms 3500; confirmed expense
-// today = købsmoms 50; so tilsvar = 3450 to pay. DSB draft is excluded but flagged.
+// today = købsmoms 50; so tilsvar = 3450 to pay. The Client Y draft is excluded but flagged.
 $moms = new Moms($income, $receipt);
 $ms   = $moms->settlement($U, 0);
 check('salgsmoms = 3500', money($ms['salgsmoms']) === '3500.00', money($ms['salgsmoms']));
 check('købsmoms = 50', money($ms['kobsmoms']) === '50.00', money($ms['kobsmoms']));
 check('tilsvar = 3450 to pay', money($ms['tilsvar']) === '3450.00' && $ms['pay'] === true, money($ms['tilsvar']));
 check('sales/expense counts = 2/1', $ms['sales_count'] === 2 && $ms['expense_count'] === 1, json_encode([$ms['sales_count'], $ms['expense_count']]));
-check('draft income flagged (DSB not counted)', $ms['draft_income'] === 1, (string) $ms['draft_income']);
+check('draft income flagged (the draft is not counted)', $ms['draft_income'] === 1, (string) $ms['draft_income']);
 check('current quarter reported open', $ms['period_open'] === true);
 $mc = $moms->card($U, 0);
 check('moms card kind + label', ($mc['kind'] ?? '') === 'moms' && ($mc['period_label'] ?? '') === $ms['label'], json_encode([$mc['kind'] ?? null, $mc['period_label'] ?? null]));
@@ -411,8 +411,8 @@ $mc7 = $mileage->card($U7, 0);
 // 20000 × 3.79 + 5000 × 2.23 = 75800 + 11150 = 86950.
 check('two-tier: 20000×3.79 + 5000×2.23 = 86950', money($mc7['business']['amount']) === '86950.00', money($mc7['business']['amount']));
 
-// A commute destination (e.g. DTU) for the same user is befordringsfradrag only — never in the P&L.
-$dtuU7 = $mileage->addDestination($U7, 'DTU', Mileage::TYPE_COMMUTE, 60.0);
+// A commute destination (a fixed workplace) for the same user is befordringsfradrag only — never in the P&L.
+$dtuU7 = $mileage->addDestination($U7, 'Campus', Mileage::TYPE_COMMUTE, 60.0);
 $mileage->logTrip($U7, $dtuU7, Income::today(), 60.0);
 check('commute dest adds 0 to businessDeduction', money($mileage->businessDeduction($U7, null, null)) === '86950.00', money($mileage->businessDeduction($U7, null, null)));
 $mc7b = $mileage->card($U7, 0);

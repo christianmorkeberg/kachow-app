@@ -37,7 +37,7 @@ final class CreateInvoice implements Tool
             . 'faktura til …", "opret en faktura". Provide the customer and the line items (each a description, '
             . 'quantity and unit price EX-VAT). Do NOT use for public-sector clients (those use NemHandel — '
             . 'record with add_income) or to log an invoice you already sent (add_income). Public bodies '
-            . 'include a kommune, region, ministry/state institution, or state-owned enterprise such as DSB; '
+            . 'include a kommune, region, ministry/state institution, or a state-owned enterprise; '
             . 'if unsure whether the client is a public authority, ask the user before generating. The '
             . 'company/sender details come from the saved company profile (set_company_profile).';
     }

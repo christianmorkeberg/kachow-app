@@ -19,7 +19,7 @@ use RuntimeException;
  *     deducted at statens takst (two-tier at 20,000 km/year, global per person per year)
  *     — a BUSINESS deduction that lowers profit + the tax reserve. Day 61+ to the same
  *     destination becomes commuting to a fast arbejdssted → befordringsfradrag.
- *   - type='commute' (a fixed/regular workplace, e.g. DTU): every day is befordringsfradrag
+ *   - type='commute' (a fixed/regular workplace): every day is befordringsfradrag
  *     from day 1 — a PERSONAL-return deduction, estimated separately and NEVER folded into
  *     the business P&L.
  *
@@ -577,7 +577,7 @@ final class Mileage
     /**
      * Business (erhvervsmæssig) deduction for trips in a period — for the P&L / tax
      * reserve. All-time when no range. Commuter driving (day 61+ AND all commute-type
-     * destinations such as DTU) is deliberately excluded — it's a personal deduction.
+     * destinations, i.e. a fixed workplace) is deliberately excluded — it's a personal deduction.
      */
     public function businessDeduction(int $userId, ?string $from = null, ?string $to = null): float
     {

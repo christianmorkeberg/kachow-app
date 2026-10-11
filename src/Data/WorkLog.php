@@ -28,7 +28,7 @@ final class WorkLog
         $this->db = $db ?? Database::get();
     }
 
-    /** The job label from an "Arbejde" event title = its first word (e.g. "DSB hjemme" → "DSB"). */
+    /** The job label from an "Arbejde" event title = its first word (e.g. "Client Z hjemme" → "Client Z"). */
     public static function jobFromTitle(string $title): string
     {
         $title = trim($title);

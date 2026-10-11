@@ -18,6 +18,8 @@ declare(strict_types=1);
  *   expect — a group that MUST be matched (implies "not the empty fallback")
  *   absent — a group that must NOT be matched (guards spurious narrowing)
  *   empty  — true if the message should match NOTHING (intentional fallback)
+ *   terms  — the user's own workplace / destination names for this case (AssistantLoop reads
+ *            these from their data; they are never keywords, since this repo is public)
  *
  * A coverage check at the end fails if any group has no positive fixture.
  */
@@ -26,7 +28,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use App\Tools\ToolSelector;
 
-/** @var array<int, array{msg:string, recent?:string, expect?:string, absent?:string, empty?:bool}> */
+/** @var array<int, array{msg:string, recent?:string, expect?:string, absent?:string, empty?:bool, terms?:list<string>}> */
 $cases = [
     // ---- help / meta ("what can you do", "how does X work") ----
     ['msg' => 'what can you do?', 'expect' => 'help'],
@@ -39,7 +41,14 @@ $cases = [
     ['msg' => 'hvad kan appen egentlig?', 'expect' => 'help'],
     // anti-spurious: an ordinary task must NOT pull in the capability tool
     ['msg' => 'add milk to the list', 'absent' => 'help'],
-    ['msg' => 'log that I worked 9 to 5 at DTU', 'absent' => 'help'],
+    ['msg' => 'log that I worked 9 to 5 at the office', 'absent' => 'help'],
+    // The user's OWN workplace names come from their data, not from the keyword lists.
+    ['msg' => 'what did I do at Client Z today', 'terms' => ['Client Z'], 'expect' => 'worklog'],
+    ['msg' => 'jeg var på Client Z i dag', 'terms' => ['Client Z'], 'expect' => 'worktime'],
+    ['msg' => 'kørte til Client Z', 'terms' => ['Client Z'], 'expect' => 'bookkeeping'],
+    // …and a name must not match inside an unrelated word, nor route without the user's data.
+    ['msg' => 'jeg var på Client Z i dag', 'absent' => 'worktime'],
+    ['msg' => 'remind me to buy coffee', 'terms' => ['Co'], 'absent' => 'bookkeeping'],
 
     // ---- location tracking ----
     ['msg' => 'show my route today on the map', 'expect' => 'location'],
@@ -162,7 +171,7 @@ $cases = [
     ['msg' => 'hvad er min omsætning i år?', 'expect' => 'bookkeeping'],
     // reimbursing an udlæg — both bookkeeping and receipts carry the tool
     ['msg' => 'jeg har refunderet mit udlæg', 'expect' => 'bookkeeping'],
-    ['msg' => 'I sent DSB a 5000 invoice', 'expect' => 'bookkeeping'],
+    ['msg' => 'I sent Client Z a 5000 invoice', 'expect' => 'bookkeeping'],
     // report #11: a keyword-less income follow-up after a "vat" turn was routed to
     // receipts-only, so the invoice got booked as an expense. Income+expenses are now
     // coupled — either side offers both toolsets.
@@ -329,7 +338,7 @@ $fail = 0;
 $pass = 0;
 
 foreach ($cases as $c) {
-    $groups = ToolSelector::matchGroups($c['msg'], $c['recent'] ?? '');
+    $groups = ToolSelector::matchGroups($c['msg'], $c['recent'] ?? '', $c['terms'] ?? []);
     $errors = [];
 
     foreach (['expect', 'absent'] as $field) {

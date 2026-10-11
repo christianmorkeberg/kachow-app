@@ -39,14 +39,14 @@ function series(int $startId, int $destId, string $start, int $n, float $km): ar
 }
 
 // ---------------------------------------------------------------------------
-echo "1) DTU is commute-from-day-1: never business, even past 60 days\n";
-$dests = [7 => ['id' => 7, 'name' => 'DTU', 'type' => Mileage::TYPE_COMMUTE, 'round_trip' => 50.0]];
+echo "1) a commute destination is commute-from-day-1: never business, even past 60 days\n";
+$dests = [7 => ['id' => 7, 'name' => 'Campus', 'type' => Mileage::TYPE_COMMUTE, 'round_trip' => 50.0]];
 $rows  = Mileage::classifyRows(series(1, 7, '2026-01-06', 70, 50.0), $dests, $rates);
 $biz   = array_filter($rows, fn ($r) => $r['bucket'] === 'business');
-check('70 DTU days, business count = 0', count($biz), 0);
+check('70 commute days, business count = 0', count($biz), 0);
 // befordringsfradrag on 50 km: (min(50,120)-24)=26 * 2.23 = 57.98
-check('DTU day commuter amount = 57.98', $rows[0]['commuter_amount'], 57.98);
-check('DTU day business amount = 0', $rows[0]['business_amount'], 0.0);
+check('commute day commuter amount = 57.98', $rows[0]['commuter_amount'], 57.98);
+check('commute day business amount = 0', $rows[0]['business_amount'], 0.0);
 
 // ---------------------------------------------------------------------------
 echo "2) Business destination: first 60 days business, day 61 flips to commuter\n";
@@ -92,7 +92,7 @@ check('trip3 3000km split tier', $rows[2]['business_amount'], round(1000 * 3.79 
 
 // ---------------------------------------------------------------------------
 echo "5) befordringsfradrag two bands (24 free, step at 120)\n";
-$dests = [7 => ['id' => 7, 'name' => 'DTU', 'type' => Mileage::TYPE_COMMUTE, 'round_trip' => 0.0]];
+$dests = [7 => ['id' => 7, 'name' => 'Campus', 'type' => Mileage::TYPE_COMMUTE, 'round_trip' => 0.0]];
 $rows  = Mileage::classifyRows([trip(1, 7, '2026-03-01', 200.0)], $dests, $rates);
 // (120-24)=96 * 2.23 + (200-120)=80 * 1.12 = 214.08 + 89.6 = 303.68
 check('200 km commute = 303.68', $rows[0]['commuter_amount'], 303.68);
