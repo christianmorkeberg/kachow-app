@@ -148,6 +148,20 @@ final class UserSettings
             'description' => 'Location tracking: two stays at the same spot separated by at most this many '
                 . 'minutes are merged into one (default 20, allowed 0–120) — smooths over GPS wobble.',
         ],
+        'location_max_gap_minutes' => [
+            'default'     => '90',
+            'label'       => 'Data gap (min)',
+            'description' => 'Location tracking: silence longer than this many minutes counts as NO DATA rather '
+                . 'than standing still (default 90, allowed 15–1440). Across such a gap no stay is extended, no '
+                . 'trip is guessed and nothing is suggested for the kørebog.',
+        ],
+        'location_silent_alert_hours' => [
+            'default'     => '6',
+            'label'       => 'Alert if tracking silent for (h)',
+            'description' => 'Location tracking: send a push when no position has arrived for this many hours '
+                . 'during the day (default 6, allowed 2–48), so a stopped OwnTracks is noticed in hours instead '
+                . 'of days. Needs the "Tracking stopped" notification on.',
+        ],
         'workclock_min_dwell_minutes' => [
             'default'     => '10',
             'label'       => 'Work clock: min dwell (min)',

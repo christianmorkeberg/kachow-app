@@ -62,7 +62,7 @@ final class WorkClockShadow
         }
 
         $rows = [];
-        $totLoc = 0; $totPunch = 0; $agree = 0; $dayCount = 0;
+        $totLoc = 0; $totPunch = 0; $agree = 0; $dayCount = 0; $incomplete = 0;
         for ($d = $start; $d <= $end; $d = $d->modify('+1 day')) {
             $date = $d->format('Y-m-d');
             [$from, $to] = LocationPoints::dayBounds($date);
@@ -75,6 +75,13 @@ final class WorkClockShadow
                 }
             }
             $sessions = WorkClock::sessions($workStays, $from, $to, $params);
+
+            // Minutes the phone reported nothing: on such a day the location clock is reading
+            // incomplete data, so a mismatch says nothing about the rules (see the gap rule).
+            $gapMin = 0;
+            foreach ($a['gaps'] as $g) {
+                $gapMin += (int) $g['minutes_in_range'];
+            }
 
             $locMin = 0;
             $locSessions = [];
@@ -108,6 +115,9 @@ final class WorkClockShadow
                 }
             }
             $totLoc += $locMin; $totPunch += $punchMin;
+            if ($gapMin >= self::INCOMPLETE_GAP_MIN && ($locMin > 0 || $punchMin > 0)) {
+                $incomplete++;
+            }
 
             $rows[] = [
                 'date'             => $date,
@@ -122,6 +132,8 @@ final class WorkClockShadow
                 'delta_minutes'    => $delta,
                 'delta_label'      => ($delta > 0 ? '+' : '') . self::fmt($delta),
                 'match'            => ($locMin > 0 || $punchMin > 0) ? abs($delta) <= 15 : null,
+                'gap_minutes'      => $gapMin,
+                'incomplete'       => $gapMin >= self::INCOMPLETE_GAP_MIN,
             ];
         }
 
@@ -135,6 +147,7 @@ final class WorkClockShadow
             'punch_total'    => self::fmt($totPunch),
             'agree_days'  => $agree,
             'compared_days' => $dayCount,
+            'incomplete_days' => $incomplete,
             'params'      => $params,
             'days'        => $rows,
             'note'        => 'Shadow only — not counted in your hours yet. The location clock reads work-type '
@@ -147,10 +160,18 @@ final class WorkClockShadow
             'punch_total'    => self::fmt($totPunch),
             'agree_days'     => $agree,
             'compared_days'  => $dayCount,
+            'incomplete_days' => $incomplete,
+            'note_incomplete' => $incomplete > 0
+                ? $incomplete . ' of the compared days have a tracking gap of an hour or more — the location clock '
+                    . 'saw only part of them, so judge the rules on the other days.'
+                : null,
             'days'           => $rows,
             'card'           => $card,
         ];
     }
+
+    /** A day missing at least this many minutes of positions is flagged as incomplete. */
+    private const INCOMPLETE_GAP_MIN = 60;
 
     private static function localTime(int $ts): string
     {

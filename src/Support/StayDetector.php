@@ -21,6 +21,11 @@ use App\Data\LocationPoints;
  *   the departure is the next (outside) point's time minus the time to travel there (at
  *   ~36 km/h, never before the stay's last point). The final run when the window reaches
  *   "now" is ongoing — silence since the last point means you're still there.
+ * - BUT silence only means "didn't move" for a while. Past `max_gap_minutes` the phone has
+ *   stopped reporting (app killed, no data abroad, Low Power Mode) and we know nothing. Such
+ *   a gap becomes its own item, and across it we refuse to guess: no back-dated departure, no
+ *   ongoing stay and no trip — unobserved movement must never surface as a "23 h drive" on
+ *   the timeline, let alone as a suggested kørebog trip.
  * - Two stays at the same spot separated by a short gap (≤ `merge_gap_minutes`, e.g. a
  *   GPS wobble) are merged.
  * - Drive-bys never become stays: they last a minute, far below `min_minutes`.
@@ -38,13 +43,15 @@ final class StayDetector
         'min_minutes'       => 10,
         'max_acc_m'         => 100,
         'merge_gap_minutes' => 20,
+        'max_gap_minutes'   => 90,
     ];
 
     /**
      * @param list<array{ts:int, lat:float, lon:float, acc:?int}> $pts   ordered by ts
      * @param array<string, int|float> $params  see DEFAULTS
      * @param int|null $now  when set, a final run touching the end of the data is open until $now
-     * @return array{stays: list<array<string, mixed>>, trips: list<array<string, mixed>>}
+     * @return array{stays: list<array<string, mixed>>, trips: list<array<string, mixed>>,
+     *               gaps: list<array{start:int, end:int, minutes:int, ongoing:bool}>}
      */
     public static function detect(array $pts, array $params = [], ?int $now = null): array
     {
@@ -53,7 +60,9 @@ final class StayDetector
             $pts,
             static fn (array $x): bool => $x['acc'] === null || $x['acc'] <= $p['max_acc_m']
         ));
-        $n = count($good);
+        $n    = count($good);
+        $gapS = (int) $p['max_gap_minutes'] * 60;
+        $gaps = self::gaps($good, $gapS, $now);
 
         $stays = [];
         $i     = 0;
@@ -79,11 +88,14 @@ final class StayDetector
                 break;
             }
 
-            $open  = $now !== null && $last === $n - 1;
+            // A run reaching the end of the data is only "still going" while the silence since
+            // its last point is short. Stale silence is a reporting failure, not presence.
+            $open  = $now !== null && $last === $n - 1 && $now - $good[$last]['ts'] <= $gapS;
             $endTs = $open ? max($now, $good[$last]['ts']) : $good[$last]['ts'];
-            if (!$open && $last + 1 < $n) {
+            if (!$open && $last + 1 < $n && $good[$last + 1]['ts'] - $good[$last]['ts'] <= $gapS) {
                 // Silence after the last point here means the phone didn't move: you stayed until
-                // shortly before the next (outside) point — minus the time to travel there.
+                // shortly before the next (outside) point — minus the time to travel there. Over a
+                // real gap that reasoning fails, so the stay ends at the last point we have.
                 $next  = $good[$last + 1];
                 $endTs = max($endTs, $next['ts'] - (int) round(self::m($lat, $lon, $next) / self::LEAVE_SPEED_MS));
             }
@@ -106,8 +118,50 @@ final class StayDetector
         }
 
         $stays = self::merge($stays, $good, $p);
+        // Silence WITHIN one stay is not a hole in what we know: the points on either side are at
+        // the same spot, so the phone was parked there (with locatorDisplacement filtering, a whole
+        // quiet afternoon at a desk reports nothing). Only silence between different places — or
+        // running up to now — leaves us guessing, so only those stay on the timeline.
+        $gaps = array_values(array_filter($gaps, static function (array $g) use ($stays): bool {
+            foreach ($stays as $s) {
+                if ($g['start'] >= $s['arrive'] && $g['end'] <= $s['depart']) {
+                    return false;
+                }
+            }
 
-        return ['stays' => $stays, 'trips' => self::trips($stays, $good)];
+            return true;
+        }));
+
+        return ['stays' => $stays, 'trips' => self::trips($stays, $good, $gapS), 'gaps' => $gaps];
+    }
+
+    /**
+     * Stretches of silence longer than `max_gap_minutes`: the phone reported nothing, so we know
+     * nothing. The trailing one (last point → now) is how a dead tracker shows up.
+     *
+     * @param list<array{ts:int, lat:float, lon:float, acc:?int}> $good
+     * @return list<array{start:int, end:int, minutes:int, ongoing:bool}>
+     */
+    private static function gaps(array $good, int $gapS, ?int $now): array
+    {
+        $out = [];
+        for ($k = 1, $n = count($good); $k < $n; $k++) {
+            if ($good[$k]['ts'] - $good[$k - 1]['ts'] > $gapS) {
+                $out[] = self::gap($good[$k - 1]['ts'], $good[$k]['ts'], false);
+            }
+        }
+        $lastTs = $good === [] ? null : $good[count($good) - 1]['ts'];
+        if ($now !== null && $lastTs !== null && $now - $lastTs > $gapS) {
+            $out[] = self::gap($lastTs, $now, true);
+        }
+
+        return $out;
+    }
+
+    /** @return array{start:int, end:int, minutes:int, ongoing:bool} */
+    private static function gap(int $start, int $end, bool $ongoing): array
+    {
+        return ['start' => $start, 'end' => $end, 'minutes' => (int) round(($end - $start) / 60), 'ongoing' => $ongoing];
     }
 
     /**
@@ -150,13 +204,19 @@ final class StayDetector
      * @param list<array<string, mixed>> $good
      * @return list<array<string, mixed>>
      */
-    private static function trips(array $stays, array $good): array
+    private static function trips(array $stays, array $good, int $gapS): array
     {
         $trips = [];
         for ($k = 1, $c = count($stays); $k < $c; $k++) {
             $a = $stays[$k - 1];
             $b = $stays[$k];
             $path = array_slice($good, $a['last'], $b['first'] - $a['last'] + 1);
+            // Unobserved movement: with a gap in the path the distance, duration and mode would all
+            // be invented (`max_kmh` would merely echo LEAVE_SPEED_MS). No trip — the gap item says
+            // the route is unknown.
+            if (self::hasGap($path, $gapS)) {
+                continue;
+            }
             $km = 0.0;
             $speeds = [];
             for ($q = 1, $m = count($path); $q < $m; $q++) {
@@ -186,6 +246,22 @@ final class StayDetector
         }
 
         return $trips;
+    }
+
+    /**
+     * True when two consecutive points of $path are more than $gapS apart.
+     *
+     * @param list<array{ts:int, lat:float, lon:float, acc:?int}> $path
+     */
+    private static function hasGap(array $path, int $gapS): bool
+    {
+        for ($q = 1, $m = count($path); $q < $m; $q++) {
+            if ($path[$q]['ts'] - $path[$q - 1]['ts'] > $gapS) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Metres from a centre to a point. */
