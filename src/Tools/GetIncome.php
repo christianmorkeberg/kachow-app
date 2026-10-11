@@ -30,7 +30,10 @@ final class GetIncome implements Tool
             . 'per-customer breakdown. Use for "how much have I invoiced this quarter", "what\'s my revenue '
             . 'this month", "hvor meget har jeg faktureret", "what\'s outstanding / hvem skylder mig". The app '
             . 'renders a summary card, so give a brief total rather than listing every invoice. Only booked '
-            . 'income is counted. This is INCOME, not expenses (that is get_expenses).';
+            . 'income is counted in the TOTALS — unbooked DRAFTS are listed separately under '
+            . '"open_drafts" with their ids, because a draft is not revenue until it is booked. If the '
+            . 'user means an invoice that is still a draft, correct it with update_income using that id; '
+            . 'never add a second entry for it. This is INCOME, not expenses (that is get_expenses).';
     }
 
     public function parameters(): array
@@ -60,6 +63,10 @@ final class GetIncome implements Tool
 
         $s    = $this->income->summary($userId, $from, $to);
         $card = $this->income->summaryCard($userId, $from, $to, $label);
+        // Drafts are deliberately outside the booked totals, but the assistant still has to SEE
+        // them: without this, an entry it had just created read back as "not there" and it created
+        // a duplicate for the same invoice (report #31).
+        $drafts = $this->income->items($userId, $from, $to, 'draft', 20);
 
         return [
             'period'      => $label,
@@ -76,6 +83,18 @@ final class GetIncome implements Tool
                 'currency'   => $i['currency'],
                 'paid'       => $i['paid'],
             ], $s['items']),
+            'open_drafts' => array_map(static fn (array $i): array => [
+                'id'       => $i['id'],
+                'customer' => $i['customer'],
+                'date'     => $i['date'],
+                'total'    => $i['total'],
+                'ex_vat'   => $i['ex'],
+                'currency' => $i['currency'],
+            ], $drafts),
+            'drafts_note' => $drafts === []
+                ? 'No unbooked drafts in this period.'
+                : 'NOT counted in the totals above — unbooked drafts. Correct one with update_income '
+                    . '(use its id); the user books it with Confirm on the card.',
             '_render' => $card,
         ];
     }

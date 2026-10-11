@@ -85,8 +85,16 @@ $db->exec("CREATE TABLE cash_entries (
     occurred_at TEXT NOT NULL, direction TEXT NOT NULL, amount NUMERIC NOT NULL,
     category TEXT DEFAULT 'other', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 $db->exec("CREATE TABLE mileage_trips (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, destination_id INTEGER,
     trip_date TEXT NOT NULL, km NUMERIC NOT NULL, note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$db->exec("CREATE TABLE mileage_destinations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'business', place_id INTEGER, round_trip_km NUMERIC NOT NULL DEFAULT 0,
+    home_address TEXT, dest_address TEXT, archived_at TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$db->exec("CREATE TABLE mileage_trip_dismissals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, trip_date TEXT NOT NULL,
+    place_id INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 
 $U = 1;
 $income   = new Income($db);
@@ -409,6 +417,34 @@ $mileage->logTrip($U7, $dtuU7, Income::today(), 60.0);
 check('commute dest adds 0 to businessDeduction', money($mileage->businessDeduction($U7, null, null)) === '86950.00', money($mileage->businessDeduction($U7, null, null)));
 $mc7b = $mileage->card($U7, 0);
 check('commute dest shows as a commuter day', $mc7b['commuter']['days'] === 1, json_encode($mc7b['commuter']['days']));
+
+echo "\n== 15. report #31: a draft the assistant just made must be findable, and take a PDF ==\n";
+// It created a draft, then could not see it (get_income counts BOOKED income only) and made a
+// second entry for the same invoice. The totals must stay booked-only, but the draft has to be
+// visible — with its id — so a correction can land on it.
+$d31 = $addIncome->execute(['amount_ex_vat' => 45487, 'customer' => 'Client Z', 'kind' => 'invoice'], $U);
+$id31 = $d31['id'];
+$g31  = $getIncome->execute(['period' => 'all'], $U);
+$ids  = array_map(static fn (array $i): int => (int) $i['id'], $g31['open_drafts'] ?? []);
+check('the new draft is listed in open_drafts', in_array($id31, $ids, true), json_encode($ids));
+check('with the customer, so two drafts can be told apart',
+    ($g31['open_drafts'][0]['customer'] ?? '') !== '', json_encode($g31['open_drafts'][0] ?? []));
+check('and is NOT in the booked totals',
+    !in_array($id31, array_map(static fn (array $i): int => (int) $i['id'], $g31['items'] ?? []), true));
+check('a note says drafts are excluded', str_contains((string) ($g31['drafts_note'] ?? ''), 'NOT counted'));
+check('add_income tells the model a PDF can be attached',
+    str_contains((string) ($d31['attachments'] ?? ''), 'Attach invoice'));
+
+// …and the file can be attached to that existing entry afterwards (it was created in chat, so
+// the PDF only turns up later). The reference is set here, never through the model's fields.
+check('no bilag yet', ($income->card($income->get($U, $id31))['has_image'] ?? true) === false);
+check('attachFile links it', $income->attachFile($U, $id31, 'ref-abc123', 'application/pdf') === true);
+$card31 = $income->card($income->get($U, $id31));
+check('the card now offers the invoice', ($card31['has_image'] ?? false) === true
+    && str_contains((string) $card31['mime'], 'pdf'), json_encode($card31['mime'] ?? null));
+check('attachFile refuses another user\'s entry', $income->attachFile(99, $id31, 'x', 'application/pdf') === false);
+check('and the amounts are untouched by attaching',
+    money($card31['ex']) === '45487.00', money($card31['ex']));
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

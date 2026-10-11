@@ -154,6 +154,21 @@ final class Income
         return $this->get($userId, $id) !== null;
     }
 
+    /**
+     * Attaches an already-stored bilag (invoice PDF/photo) to an existing entry. Deliberately NOT
+     * part of FIELDS: the file reference is set by the upload endpoint, never by a model-supplied
+     * field. Returns true if the entry exists.
+     */
+    public function attachFile(int $userId, int $id, string $fileRef, string $mime): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE income SET file_ref = :f, mime = :m WHERE id = :id AND user_id = :u'
+        );
+        $stmt->execute([':f' => $fileRef, ':m' => $mime, ':id' => $id, ':u' => $userId]);
+
+        return $this->get($userId, $id) !== null;
+    }
+
     /** Books a draft (status → booked). Returns true if it exists. */
     public function book(int $userId, int $id): bool
     {

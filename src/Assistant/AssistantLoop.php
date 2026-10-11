@@ -11,6 +11,7 @@ use App\Data\UserInstructions;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
 use App\Support\DeviceFix;
+use App\Support\ToolMemory;
 use App\Tools\ToolRegistry;
 use App\Tools\ToolSelector;
 use DateTimeImmutable;
@@ -125,6 +126,10 @@ final class AssistantLoop
         . 'app.) When they ask what they have spent, call get_expenses — it renders a totals card, so '
         . 'give the headline total rather than listing every receipt. export_expenses_csv returns a '
         . 'download_url — present it to the user as a clickable link to download the CSV. '
+        . 'A PDF invoice or receipt CAN be filed: every income and expense card has an attach button '
+        . '("Attach invoice"/"Vedhæft faktura") for a PDF or photo, and the Books card can create an '
+        . 'entry straight from an uploaded file. Only the chat box itself is limited to photos, so if '
+        . 'they offer you a PDF, point them at that button — never say a PDF is impossible. '
         . 'For email, use get_emails to check their mailbox (it renders a list card, so summarise '
         . 'rather than re-listing every message), read_email to open one, and draft_email or send_email '
         . 'to compose. You NEVER send email yourself: both tools prepare the message and show it with a '
@@ -439,7 +444,11 @@ final class AssistantLoop
         $this->lastSuggestions = null;
         $this->lastAssistantMessageId = null;
 
-        $contents = $this->buildContents($conversationId);
+        // One read of the history: the text turns the model replays, plus a digest of what
+        // earlier turns created (tool rows are stored but never replayed — see ToolMemory).
+        $history    = $this->conversations->messages($conversationId);
+        $contents   = $this->buildContents($history);
+        $toolMemory = ToolMemory::digest($history);
         $hasImage = $image !== null && isset($image['mime'], $image['data']) && $image['data'] !== '';
         if ($hasImage) {
             // Attach the uploaded photo to the current (last) user turn so the model
@@ -483,7 +492,7 @@ final class AssistantLoop
         }
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
-        $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups);
+        $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups, $toolMemory);
 
         // Performance instrumentation for this turn.
         $reqKb       = (int) round((strlen($system) + strlen((string) json_encode($declarations))
@@ -885,10 +894,15 @@ final class AssistantLoop
     /**
      * @param array{lat: float, lon: float}|null $location
      */
-    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false, array $groups = []): string
+    private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false, array $groups = [], string $toolMemory = ''): string
     {
         $system = $this->systemInstruction
             . "\n\n" . self::nowLine();
+
+        // Ids from earlier turns, so a correction updates what exists instead of duplicating it.
+        if ($toolMemory !== '') {
+            $system .= "\n\n" . $toolMemory;
+        }
 
         if ($hasImage) {
             $system .= "\n\nThe user has attached a PHOTO to this message. Read it carefully — it may be a "
@@ -968,11 +982,13 @@ final class AssistantLoop
     /**
      * Rebuilds Gemini "contents" from stored history.
      *
-     * For v1 we replay only prior user/assistant *text* turns as context. Tool
-     * exchanges are handled fresh within the current turn and their stored rows
-     * are kept for the record, not replayed as functionCall/response pairs
-     * (which would need the original args persisted too). Simple and correct for
-     * a single-turn tool loop.
+     * We replay only prior user/assistant *text* turns. Tool exchanges are handled fresh
+     * within the current turn; replaying them as functionCall/response pairs would need the
+     * original args persisted plus the thoughtSignature thinking models require. What later
+     * turns actually need from them — the ids of what was created or changed — is carried
+     * into the system instruction by ToolMemory::digest instead (report #31).
+     *
+     * @param list<array<string, mixed>> $history stored message rows (ASC)
      *
      * @return array<int, array<string, mixed>>
      */
@@ -998,10 +1014,10 @@ final class AssistantLoop
         return mb_substr(trim(implode(' ', $recent)), -400);
     }
 
-    private function buildContents(int $conversationId): array
+    private function buildContents(array $history): array
     {
         $contents = [];
-        foreach ($this->conversations->messages($conversationId) as $message) {
+        foreach ($history as $message) {
             $role    = (string) $message['role'];
             $content = (string) $message['content'];
 

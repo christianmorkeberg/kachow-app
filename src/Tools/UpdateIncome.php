@@ -113,6 +113,7 @@ final class UpdateIncome implements Tool
         return [
             'updated' => true,
             'id'      => $id,
+            'attachments' => 'The user can attach the invoice PDF (or a photo) to this entry with "Attach invoice" on the card it is shown on — say so if they ask; do NOT tell them a PDF is impossible. Chat attachments are photos only.',
             '_render' => $row !== null ? $this->income->card($row) : null,
         ];
     }
