@@ -30,14 +30,14 @@ final class GeminiClient
         private string $apiKey,
         array|string $models = ['gemini-3.6-flash'],
         ?callable $transport = null,
-        // Low temperature keeps a factual, tool-grounded assistant from improvising
-        // numbers/data. Override via GEMINI_TEMPERATURE if ever needed.
-        private float $temperature = 0.2,
         // Caps the model's internal "thinking" tokens. These are mostly lookup/tool
         // tasks that don't need deep reasoning, and thinking dominates the response
         // latency, so a low budget is much faster. null = leave the model default;
         // 0 = thinking off; N>0 = token cap; -1 = dynamic. Set via GEMINI_THINKING_BUDGET.
+        // Superseded by $thinkingLevel when that's set — Google is retiring numeric
+        // budgets in favor of a coarse level ("minimal"/"low"/"medium"/"high").
         private ?int $thinkingBudget = null,
+        private ?string $thinkingLevel = null,
     ) {
         $this->models = self::normalizeModels($models);
         $this->transport = $transport ?? [$this, 'curlTransport'];
@@ -53,15 +53,15 @@ final class GeminiClient
         $fallbacks = $_ENV['GEMINI_FALLBACK_MODELS'] ?? 'gemini-2.5-flash,gemini-3.1-flash-lite';
         $models    = array_merge([$primary], explode(',', $fallbacks));
 
-        $temperature = isset($_ENV['GEMINI_TEMPERATURE']) && $_ENV['GEMINI_TEMPERATURE'] !== ''
-            ? (float) $_ENV['GEMINI_TEMPERATURE']
-            : 0.2;
-
         $budget = isset($_ENV['GEMINI_THINKING_BUDGET']) && $_ENV['GEMINI_THINKING_BUDGET'] !== ''
             ? (int) $_ENV['GEMINI_THINKING_BUDGET']
             : null;
 
-        return new self($key, $models, $transport, $temperature, $budget);
+        $level = isset($_ENV['GEMINI_THINKING_LEVEL']) && $_ENV['GEMINI_THINKING_LEVEL'] !== ''
+            ? (string) $_ENV['GEMINI_THINKING_LEVEL']
+            : null;
+
+        return new self($key, $models, $transport, $budget, $level);
     }
 
     /**
@@ -99,20 +99,32 @@ final class GeminiClient
     ): array {
         $model ??= $this->models[0];
 
-        $genConfig = array_merge(['temperature' => $this->temperature], $generationConfig ?? []);
-        // Apply the configured thinking budget, preserving any thinkingConfig keys
-        // (e.g. includeThoughts) the caller already set.
-        if ($this->thinkingBudget !== null) {
+        // No sampling overrides (temperature/top_p/top_k) — Gemini has ignored custom
+        // values since 3.6-flash, and upcoming models reject them outright.
+        $genConfig = $generationConfig ?? [];
+        // Apply the configured thinking level/budget, preserving any thinkingConfig
+        // keys (e.g. includeThoughts) the caller already set. thinkingLevel wins when
+        // both are configured — it's the field Google is moving to; thinkingBudget is
+        // the legacy numeric cap, still needed for models that don't support levels.
+        if ($this->thinkingLevel !== null) {
+            $genConfig['thinkingConfig'] = array_merge(
+                $genConfig['thinkingConfig'] ?? [],
+                ['thinkingLevel' => $this->thinkingLevel]
+            );
+        } elseif ($this->thinkingBudget !== null) {
             $genConfig['thinkingConfig'] = array_merge(
                 $genConfig['thinkingConfig'] ?? [],
                 ['thinkingBudget' => $this->thinkingBudget]
             );
         }
 
-        $payload = [
-            'contents'         => $contents,
-            'generationConfig' => $genConfig,
-        ];
+        $payload = ['contents' => $contents];
+        if ($genConfig !== []) {
+            // PHP's [] is a JSON array, not object — only attach it non-empty so an
+            // empty config never serializes as "generationConfig":[] (Gemini expects
+            // an object there).
+            $payload['generationConfig'] = $genConfig;
+        }
 
         if ($systemInstruction !== null && $systemInstruction !== '') {
             $payload['system_instruction'] = ['parts' => [['text' => $systemInstruction]]];
