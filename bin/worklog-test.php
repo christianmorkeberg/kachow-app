@@ -43,6 +43,9 @@ $db->exec("CREATE TABLE work_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
     log_date TEXT NOT NULL, job TEXT NOT NULL, hours NUMERIC, description TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$db->exec("CREATE TABLE user_settings (
+    user_id INTEGER NOT NULL, setting_key TEXT NOT NULL, setting_value TEXT NOT NULL,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, setting_key))");
 
 $log = new WorkLog($db);
 $U = 1;
@@ -92,6 +95,29 @@ check('hint tells the model to call log_work_time again on real detail',
 check('merged into the existing DTU/2026-10-12 entry, still just one row',
     count($log->listForUser($U, '2026-10-12', '2026-10-12', 'DTU')) === 1,
     (string) count($log->listForUser($U, '2026-10-12', '2026-10-12', 'DTU')));
+
+echo "7) WorkLog::expandJobAlias() — report #35 (short job label -> full name)\n";
+$aliases = "DSB=Danske Statsbaner\nDTU=Technical University of Denmark";
+check('matches case-insensitively', WorkLog::expandJobAlias('dsb', $aliases) === 'Danske Statsbaner', WorkLog::expandJobAlias('dsb', $aliases));
+check('a different known alias also expands', WorkLog::expandJobAlias('DTU', $aliases) === 'Technical University of Denmark', WorkLog::expandJobAlias('DTU', $aliases));
+check('an unknown job passes through unchanged', WorkLog::expandJobAlias('Client Y', $aliases) === 'Client Y', WorkLog::expandJobAlias('Client Y', $aliases));
+check('blank aliases setting is a no-op', WorkLog::expandJobAlias('DSB', '') === 'DSB', WorkLog::expandJobAlias('DSB', ''));
+check('a malformed line (no "=") is ignored, not a crash', WorkLog::expandJobAlias('DSB', "not a mapping\nDSB=Danske Statsbaner") === 'Danske Statsbaner', WorkLog::expandJobAlias('DSB', "not a mapping\nDSB=Danske Statsbaner"));
+
+echo "8) LogWorkTime applies the user's own job_aliases setting end to end\n";
+// UserSettings::set() uses MySQL's ON DUPLICATE KEY UPDATE (not SQLite) — insert directly.
+$db->prepare('INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES (:u, :k, :v)')
+    ->execute([':u' => $U, ':k' => 'job_aliases', ':v' => 'DSB=Danske Statsbaner']);
+$result = $tool->execute(['description' => 'Standup and code review.', 'job' => 'DSB', 'date' => '2026-10-14'], $U);
+check('tool result reports the EXPANDED name', ($result['job'] ?? null) === 'Danske Statsbaner', json_encode($result));
+$rows = $log->listForUser($U, '2026-10-14', '2026-10-14');
+check('stored job is the expanded name too', count($rows) === 1 && $rows[0]['job'] === 'Danske Statsbaner', json_encode($rows));
+
+echo "9) without the setting, the short job label is stored as given (no surprise expansion)\n";
+$settings->remove($U, 'job_aliases');
+$tool->execute(['description' => 'Another day.', 'job' => 'DSB', 'date' => '2026-10-15'], $U);
+$rows = $log->listForUser($U, '2026-10-15', '2026-10-15');
+check('job stays "DSB" with no alias configured', count($rows) === 1 && $rows[0]['job'] === 'DSB', json_encode($rows));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

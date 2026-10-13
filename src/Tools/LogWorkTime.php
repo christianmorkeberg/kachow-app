@@ -80,6 +80,8 @@ final class LogWorkTime implements Tool
             }
         }
 
+        $job = WorkLog::expandJobAlias($job, $this->settings->get($userId, 'job_aliases') ?? '');
+
         $this->log->add($userId, $date, $job, $description);
 
         [$from, $to, $label] = WorkLog::resolveRange('this_week', null, null);

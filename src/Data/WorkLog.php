@@ -40,6 +40,32 @@ final class WorkLog
         return (string) $parts[0];
     }
 
+    /**
+     * Expands a short job label to its full name per the user's own job_aliases setting
+     * (report #35 — "DSB" should read "Danske Statsbaner"). $aliasesRaw is that setting's
+     * raw value: one per line, "SHORT=Full Name". Case-insensitive match on the short
+     * side; returns $job unchanged if blank or nothing matches.
+     */
+    public static function expandJobAlias(string $job, string $aliasesRaw): string
+    {
+        $job = trim($job);
+        if ($job === '' || trim($aliasesRaw) === '') {
+            return $job;
+        }
+        foreach (preg_split('/\r?\n/', $aliasesRaw) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '' || !str_contains($line, '=')) {
+                continue;
+            }
+            [$short, $full] = array_map('trim', explode('=', $line, 2));
+            if ($short !== '' && $full !== '' && mb_strtolower($short) === mb_strtolower($job)) {
+                return $full;
+            }
+        }
+
+        return $job;
+    }
+
     public static function today(): string
     {
         return (new DateTimeImmutable('now', new DateTimeZone(self::LOCAL_TZ)))->format('Y-m-d');

@@ -30,6 +30,13 @@ final class UpdateSetting implements Tool
             . '"theme" — the visual look, one of aurora / noir / paper / lavender / blush / disco (use for '
             . '"switch to the lavender theme", "make it dark", "go disco", Danish "skift til lavendel-temaet"); '
             . '"cycle_show_fertile" — "on"/"off". '
+            . '"job_aliases" — expands a short work-log job label to a full name (e.g. the "Arbejde" '
+            . 'calendar just says "DSB" but log entries/replies should say "Danske Statsbaner"); one '
+            . 'SHORT=Full Name pair per line (\\n between lines). This value is REPLACED wholesale, not '
+            . 'merged — if get_settings shows job_aliases already has lines, include them all unchanged '
+            . 'and only add/replace the one pair the user is changing, so you never silently drop an '
+            . 'existing alias (use for "DSB should be called Danske Statsbaner", Danish "DSB skal hedde '
+            . 'Danske Statsbaner"). '
             . 'Use for "use my calendar called Vagter for work", Danish "brug min kalender Vagter til '
             . 'arbejde". Pass an empty value to reset a key to its default.';
     }

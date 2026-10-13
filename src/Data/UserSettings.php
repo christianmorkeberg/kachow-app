@@ -29,6 +29,15 @@ final class UserSettings
             'label'       => 'Work calendar',
             'description' => 'Name of the Google calendar whose events drive work-log tracking and the afternoon "what did you get done?" nudge.',
         ],
+        'job_aliases' => [
+            'default'     => '',
+            'label'       => 'Job full names',
+            'description' => 'Expands a short job label to a full name wherever it\'s logged or shown — e.g. '
+                . 'your "Arbejde" calendar titles an event just "DSB", but you want work-log entries and replies '
+                . 'to say "Danske Statsbaner". One per line, SHORT=Full Name (e.g. "DSB=Danske Statsbaner"). '
+                . 'Matched case-insensitively against the job as determined by log_work_time, and applied once '
+                . 'at that point — it does not rewrite entries already logged under the short form.',
+        ],
         'cycle_show_fertile' => [
             'default'     => 'off',
             'label'       => 'Show fertile window',
