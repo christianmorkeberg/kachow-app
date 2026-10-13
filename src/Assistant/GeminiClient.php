@@ -28,7 +28,7 @@ final class GeminiClient
      */
     public function __construct(
         private string $apiKey,
-        array|string $models = ['gemini-3.5-flash'],
+        array|string $models = ['gemini-3.6-flash'],
         ?callable $transport = null,
         // Low temperature keeps a factual, tool-grounded assistant from improvising
         // numbers/data. Override via GEMINI_TEMPERATURE if ever needed.
@@ -49,7 +49,7 @@ final class GeminiClient
         if ($key === '') {
             throw new RuntimeException('GEMINI_API_KEY missing from environment.');
         }
-        $primary   = $_ENV['GEMINI_MODEL'] ?? 'gemini-3.5-flash';
+        $primary   = $_ENV['GEMINI_MODEL'] ?? 'gemini-3.6-flash';
         $fallbacks = $_ENV['GEMINI_FALLBACK_MODELS'] ?? 'gemini-2.5-flash,gemini-3.1-flash-lite';
         $models    = array_merge([$primary], explode(',', $fallbacks));
 
@@ -167,7 +167,7 @@ final class GeminiClient
             }
         }
 
-        return $list !== [] ? $list : ['gemini-3.5-flash'];
+        return $list !== [] ? $list : ['gemini-3.6-flash'];
     }
 
     /**
