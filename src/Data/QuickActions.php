@@ -11,13 +11,15 @@ use PDO;
  * Suggests one-tap "quick action" prompts for the empty chat screen.
  *
  * Blends the user's most-repeated past prompts (learned from the messages table,
- * so it self-updates as habits form) with a seeded default set (so a fresh user
- * still gets useful buttons). Frequent ones lead; defaults fill the rest.
+ * so it self-updates as habits form) with a daily AI-personalised set and a seeded
+ * default set (so a fresh user still gets useful buttons). Real repeats lead,
+ * since that's the behavior Christian actually wants ("if I often ask for the
+ * shopping list, it should appear there"); AI/defaults only fill empty slots.
  *
  * Prompts ending in "…" are templates the UI drops into the input for the user
  * to finish (e.g. "Add to the shopping list…"); the rest send on tap.
  */
-final class QuickActions
+class QuickActions
 {
     /** Seed set shown until the user's own habits take over. */
     public const DEFAULTS = [
@@ -38,18 +40,14 @@ final class QuickActions
     }
 
     /**
-     * Blended suggestions: frequent-first, then defaults, de-duplicated, capped.
+     * Blended suggestions: real repeats lead (what "based on how I actually use it"
+     * means), then the AI-personalised set fills remaining slots, then defaults.
+     * De-duplicated (normalized) and capped.
      *
      * @return array<int, string>
      */
     public function suggestions(int $userId, int $max = 6): array
     {
-        // Prefer the daily AI-generated set (personalised + in the user's language).
-        $cached = $this->cached($userId);
-        if ($cached !== []) {
-            return array_slice($cached, 0, $max);
-        }
-
         $out  = [];
         $seen = [];
         $take = static function (string $text) use (&$out, &$seen, $max): void {
@@ -63,6 +61,9 @@ final class QuickActions
         foreach ($this->frequent($userId, $max) as $f) {
             $take($f);
         }
+        foreach ($this->cached($userId) as $c) {
+            $take($c);
+        }
         foreach (self::DEFAULTS as $d) {
             $take($d);
         }
@@ -71,38 +72,60 @@ final class QuickActions
     }
 
     /**
-     * The user's most-repeated prompts (normalized), most-used first.
+     * The user's most-repeated prompts, most-used first. Grouped by the SAME
+     * normalize() used for de-duplication elsewhere (lowercased, collapsed
+     * whitespace, trailing punctuation stripped) — done in PHP rather than SQL
+     * so "What's on the shopping list?" and "what's on the shopping list" count
+     * as the same ask instead of two singletons that never reach $minCount.
      *
      * @return array<int, string>
      */
-    public function frequent(int $userId, int $limit = 6, int $minCount = 2, int $minLen = 8, int $maxLen = 80): array
+    public function frequent(int $userId, int $limit = 6, int $minCount = 2, int $minLen = 8, int $maxLen = 80, int $scanLimit = 300): array
     {
-        // Numeric bounds are cast + inlined (LIMIT/HAVING placeholders are brittle
-        // under EMULATE_PREPARES=false); only the user id is bound.
-        $limit    = max(1, (int) $limit);
-        $minCount = max(2, (int) $minCount);
-        $minLen   = max(1, (int) $minLen);
-        $maxLen   = max($minLen, (int) $maxLen);
+        $limit    = max(1, $limit);
+        $minCount = max(2, $minCount);
+        $minLen   = max(1, $minLen);
+        $maxLen   = max($minLen, $maxLen);
+        $scanLimit = max($limit, $scanLimit);
 
-        $sql = "SELECT MAX(m.content) AS content, COUNT(*) AS n
-                FROM messages m
-                JOIN conversations c ON c.id = m.conversation_id
-                WHERE c.user_id = :uid
-                  AND m.role = 'user'
-                  AND CHAR_LENGTH(TRIM(m.content)) BETWEEN {$minLen} AND {$maxLen}
-                GROUP BY LOWER(TRIM(m.content))
-                HAVING COUNT(*) >= {$minCount}
-                ORDER BY n DESC, MAX(m.id) DESC
-                LIMIT {$limit}";
-
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db->prepare(
+            "SELECT m.content
+             FROM messages m
+             JOIN conversations c ON c.id = m.conversation_id
+             WHERE c.user_id = :uid AND m.role = 'user'
+             ORDER BY m.id DESC
+             LIMIT {$scanLimit}"
+        );
         $stmt->execute([':uid' => $userId]);
 
-        $out = [];
+        // Count occurrences per normalized key; keep the newest literal wording
+        // (rows arrive newest-first) to display, so the chip reads naturally.
+        $counts  = [];
+        $display = [];
         foreach ($stmt->fetchAll() as $row) {
             $text = trim((string) $row['content']);
-            if ($text !== '') {
-                $out[] = $text;
+            $len  = mb_strlen($text);
+            if ($len < $minLen || $len > $maxLen) {
+                continue;
+            }
+            $key = self::normalize($text);
+            if ($key === '') {
+                continue;
+            }
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+            if (!isset($display[$key])) {
+                $display[$key] = $text;
+            }
+        }
+
+        $frequent = array_filter($counts, static fn (int $n): bool => $n >= $minCount);
+        arsort($frequent);
+
+        $out = [];
+        foreach (array_keys($frequent) as $key) {
+            $out[] = $display[$key];
+            if (count($out) >= $limit) {
+                break;
             }
         }
 

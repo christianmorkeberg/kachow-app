@@ -59,7 +59,6 @@ final class QuickActionGenerator
                 self::SYSTEM,
                 $cheapest,
                 [
-                    'temperature'      => 0.8, // a little variety day to day
                     'responseMimeType' => 'application/json',
                     'responseSchema'   => ['type' => 'ARRAY', 'items' => ['type' => 'STRING']],
                 ],
