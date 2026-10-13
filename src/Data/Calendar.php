@@ -147,6 +147,13 @@ final class Calendar
      * $start/$end are RFC3339 timestamps. Times are interpreted in $timeZone
      * (default UTC — the app runs in UTC and the model is expected to pass UTC).
      *
+     * $attendees is a list of email addresses — this also covers inviting one of the
+     * user's OWN other calendars to block time on it too (a secondary Google Calendar's
+     * id is itself an email-shaped address, found via listCalendars). $notify controls
+     * whether Google actually emails those addresses (false = silent, used for the
+     * self-blocking case; true = a real invitation, for an actual guest).
+     *
+     * @param array<int, string>|null $attendees
      * @return array<string, mixed>
      */
     public function insertEvent(
@@ -158,9 +165,17 @@ final class Calendar
         ?string $location = null,
         string $timeZone = 'UTC',
         string $calendarId = self::PRIMARY,
-        bool $allDay = false
+        bool $allDay = false,
+        ?array $attendees = null,
+        bool $notify = false
     ): array {
         $service = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
+
+        $fields = [
+            'summary'     => $summary,
+            'description' => $description,
+            'location'    => $location,
+        ];
 
         if ($allDay) {
             // All-day events use date-only fields (no time, no timezone) so they never
@@ -174,25 +189,21 @@ final class Calendar
             }
             $endExclusive = (new DateTimeImmutable($endInclusive))->modify('+1 day')->format('Y-m-d');
 
-            $event = new GoogleEvent([
-                'summary'     => $summary,
-                'description' => $description,
-                'location'    => $location,
-                'start'       => ['date' => $startDate],
-                'end'         => ['date' => $endExclusive],
-            ]);
+            $fields['start'] = ['date' => $startDate];
+            $fields['end']   = ['date' => $endExclusive];
         } else {
-            $event = new GoogleEvent([
-                'summary'     => $summary,
-                'description' => $description,
-                'location'    => $location,
-                'start'       => ['dateTime' => $start, 'timeZone' => $timeZone],
-                'end'         => ['dateTime' => $end,   'timeZone' => $timeZone],
-            ]);
+            $fields['start'] = ['dateTime' => $start, 'timeZone' => $timeZone];
+            $fields['end']   = ['dateTime' => $end,   'timeZone' => $timeZone];
+        }
+
+        if ($attendees !== null && $attendees !== []) {
+            $fields['attendees'] = $this->attendeeList($attendees);
         }
 
         $targetId = $calendarId !== '' ? $calendarId : self::PRIMARY;
-        $created  = $service->events->insert($targetId, $event);
+        $created  = $service->events->insert($targetId, new GoogleEvent($fields), [
+            'sendUpdates' => $notify ? 'all' : 'none',
+        ]);
 
         return $this->normalize($created, $targetId === self::PRIMARY ? 'primary' : $targetId, $targetId);
     }
@@ -205,6 +216,11 @@ final class Calendar
      * handling as insertEvent. Returns null if the event doesn't exist (already deleted, or
      * a bad id) instead of throwing, so the tool layer can give a friendly error.
      *
+     * $attendees, when not null, REPLACES the event's whole attendee list (Google's patch
+     * semantics for this field) — pass [] to clear it, or the full desired list including
+     * anyone already on it that should stay. See insertEvent for what the values can be.
+     *
+     * @param array<int, string>|null $attendees
      * @return array<string, mixed>|null
      */
     public function updateEvent(
@@ -217,7 +233,9 @@ final class Calendar
         ?string $location = null,
         ?string $timeZone = null,
         string $calendarId = self::PRIMARY,
-        ?bool $allDay = null
+        ?bool $allDay = null,
+        ?array $attendees = null,
+        bool $notify = false
     ): ?array {
         $service  = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
         $targetId = $calendarId !== '' ? $calendarId : self::PRIMARY;
@@ -257,11 +275,17 @@ final class Calendar
                 }
             }
 
+            if ($attendees !== null) {
+                $patch['attendees'] = $this->attendeeList($attendees);
+            }
+
             if ($patch === []) {
                 return null;
             }
 
-            $updated = $service->events->patch($targetId, $eventId, new GoogleEvent($patch));
+            $updated = $service->events->patch($targetId, $eventId, new GoogleEvent($patch), [
+                'sendUpdates' => $notify ? 'all' : 'none',
+            ]);
 
             return $this->normalize($updated, $targetId === self::PRIMARY ? 'primary' : $targetId, $targetId);
         } catch (GoogleServiceException $e) {
@@ -385,6 +409,14 @@ final class Calendar
         $start = $event->getStart();
         $end   = $event->getEnd();
 
+        $attendees = [];
+        foreach ($event->getAttendees() ?? [] as $a) {
+            $attendees[] = [
+                'email'           => $a->getEmail(),
+                'response_status' => $a->getResponseStatus(),
+            ];
+        }
+
         return [
             'id'          => $event->getId(),
             'calendar'    => $calendarName,
@@ -395,7 +427,23 @@ final class Calendar
             'start'       => $start ? ($start->getDateTime() ?? $start->getDate()) : null,
             'end'         => $end ? ($end->getDateTime() ?? $end->getDate()) : null,
             'allDay'      => $start ? ($start->getDateTime() === null) : null,
+            'attendees'   => $attendees,
             'htmlLink'    => $event->getHtmlLink(),
         ];
+    }
+
+    /**
+     * Builds the plain-array form of an attendee list (email strings -> Google's
+     * {email: ...} shape) that both insertEvent and updateEvent send.
+     *
+     * @param array<int, string> $emails
+     * @return array<int, array{email: string}>
+     */
+    private function attendeeList(array $emails): array
+    {
+        return array_map(
+            static fn (string $email): array => ['email' => trim($email)],
+            array_values(array_filter($emails, static fn ($e): bool => trim((string) $e) !== ''))
+        );
     }
 }

@@ -30,7 +30,11 @@ final class UpdateCalendarEvent implements Tool
             . 'not just the start) — passing start alone leaves the old end in place. Leave out any field '
             . 'that should stay the same. For an all-day event, give start/end as plain dates with end as '
             . 'the LAST day inclusive, same as insert_calendar_event. Do NOT delete-then-recreate an event '
-            . 'to move it — this preserves its id, attendees, and any other fields untouched.';
+            . 'to move it — this preserves its id and any other field you don\'t touch. attendees REPLACES '
+            . 'the whole guest list (including one of the user\'s own other calendars invited to block '
+            . 'time on it — see insert_calendar_event) — to add one more without dropping the rest, first '
+            . 'read the event\'s current "attendees" (from get_calendar_events or this tool\'s own result) '
+            . 'and include those emails too.';
     }
 
     public function parameters(): array
@@ -79,6 +83,18 @@ final class UpdateCalendarEvent implements Tool
                     'description' => 'IANA time zone for new start/end times (e.g. "Europe/Copenhagen"). '
                         . 'Omit to keep the event\'s current zone.',
                 ],
+                'attendees' => [
+                    'type'        => 'array',
+                    'items'       => ['type' => 'string'],
+                    'description' => 'REPLACES the event\'s whole attendee list (include existing ones you '
+                        . 'want kept, from the event\'s current "attendees"). Pass [] to clear it, or omit '
+                        . 'entirely to leave attendees untouched.',
+                ],
+                'notify' => [
+                    'type'        => 'boolean',
+                    'description' => 'True to email the attendee-list change. Default false — leave it '
+                        . 'false when attendees is just the user\'s own other calendar(s).',
+                ],
             ],
             'required' => ['event_id'],
         ];
@@ -94,7 +110,8 @@ final class UpdateCalendarEvent implements Tool
         $str = static fn (string $k): ?string => isset($arguments[$k]) && $arguments[$k] !== '' ? (string) $arguments[$k] : null;
 
         $hasChange = $str('summary') !== null || $str('start') !== null || $str('end') !== null
-            || $str('description') !== null || $str('location') !== null || array_key_exists('all_day', $arguments);
+            || $str('description') !== null || $str('location') !== null || array_key_exists('all_day', $arguments)
+            || array_key_exists('attendees', $arguments);
         if (!$hasChange) {
             return ['error' => 'What should I change on it?'];
         }
@@ -112,6 +129,9 @@ final class UpdateCalendarEvent implements Tool
             $str('time_zone'),
             $calendarId,
             array_key_exists('all_day', $arguments) ? (bool) $arguments['all_day'] : null,
+            isset($arguments['attendees']) && is_array($arguments['attendees'])
+                ? array_map('strval', $arguments['attendees']) : null,
+            !empty($arguments['notify']),
         );
 
         if ($event === null) {

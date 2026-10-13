@@ -33,7 +33,11 @@ final class InsertCalendarEvent implements Tool
             . 'SAME date as start. NEVER fake an all-day event with 00:00 times (that drifts by timezone '
             . 'and spills into the next day). By default the event goes on the primary calendar; to add '
             . 'it to a specific calendar (e.g. a shared one), first call list_calendars for its id and '
-            . 'pass calendar_id.';
+            . 'pass calendar_id. To invite people (or block time on one of the user\'s OWN other '
+            . 'calendars — a secondary calendar\'s id from list_calendars is itself an email-shaped '
+            . 'address), pass their email addresses as attendees. Leave notify false (the default) when '
+            . 'this is just self-blocking between the user\'s own calendars — nobody needs an email for '
+            . 'that; set notify=true only when a real person should actually receive an invitation.';
     }
 
     public function parameters(): array
@@ -76,6 +80,19 @@ final class InsertCalendarEvent implements Tool
                     'description' => 'Optional id of the calendar to add the event to (from '
                         . 'list_calendars). Omit to use the primary calendar.',
                 ],
+                'attendees' => [
+                    'type'        => 'array',
+                    'items'       => ['type' => 'string'],
+                    'description' => 'Email addresses to invite. Also how to block time on one of the '
+                        . 'user\'s own OTHER calendars at the same time — pass that calendar\'s id (from '
+                        . 'list_calendars) here like an email address.',
+                ],
+                'notify' => [
+                    'type'        => 'boolean',
+                    'description' => 'True to actually send attendees an email invitation. Default false '
+                        . '— leave it false when attendees is just the user\'s own other calendar(s) and '
+                        . 'nobody needs to be notified.',
+                ],
             ],
             'required' => ['summary', 'start', 'end'],
         ];
@@ -100,6 +117,9 @@ final class InsertCalendarEvent implements Tool
             isset($arguments['time_zone']) && $arguments['time_zone'] !== '' ? (string) $arguments['time_zone'] : 'UTC',
             isset($arguments['calendar_id']) && $arguments['calendar_id'] !== '' ? (string) $arguments['calendar_id'] : 'primary',
             !empty($arguments['all_day']),
+            isset($arguments['attendees']) && is_array($arguments['attendees']) && $arguments['attendees'] !== []
+                ? array_map('strval', $arguments['attendees']) : null,
+            !empty($arguments['notify']),
         );
 
         return [
