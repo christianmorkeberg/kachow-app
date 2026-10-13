@@ -117,6 +117,7 @@ final class ToolSelector
         ],
         'reminders' => [
             'set_reminder', 'list_reminders', 'cancel_reminder',
+            'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',
         ],
         // Tracked movement (OwnTracks raw points; private per user).
         'location' => [
@@ -397,8 +398,11 @@ final class ToolSelector
         'reminders' => [
             'remind me', 'reminder', 'remind', 'set a reminder', 'don\'t let me forget', 'dont let me forget',
             'ping me', 'nudge me', 'wake me',
+            // Recurring/scheduled checks (schedule_task et al.)
+            'every day', 'once a day', 'every hour', 'every week', 'recurring', 'scheduled task',
             // Danish
             'mind mig', 'påmind', 'paamind', 'påmindelse', 'glem ikke at minde', 'husk mig på', 'husk mig pa',
+            'hver dag', 'hver uge', 'hver time', 'tilbagevendende', 'planlagt opgave',
         ],
         // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
         'feedback' => [

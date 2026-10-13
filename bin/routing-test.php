@@ -295,6 +295,9 @@ $cases = [
     ['msg' => 'cancel my reminder', 'expect' => 'reminders'],
     ['msg' => 'mind mig om at flytte vasketøjet om 2 timer', 'expect' => 'reminders'],
     ['msg' => 'husk mig på at ringe i morgen', 'expect' => 'reminders'],
+    ['msg' => 'once a day, check my email for invoices and notify me if you find anything', 'expect' => 'reminders'],
+    ['msg' => 'what scheduled tasks do I have?', 'expect' => 'reminders'],
+    ['msg' => 'hver dag kl 8, tjek om der er nye regninger', 'expect' => 'reminders'],
 
     // ---- connections ----
     ['msg' => 'connect me with Alex', 'expect' => 'connections'],

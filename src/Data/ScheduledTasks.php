@@ -1,0 +1,219 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Data;
+
+use App\Database;
+use DateTimeImmutable;
+use DateTimeZone;
+use PDO;
+
+/**
+ * Standing natural-language instructions the user asks the assistant to re-run on a
+ * schedule (e.g. "once a day, check my email for invoices and notify me if you find
+ * anything") — see bin/scheduled-tasks-cron.php, which feeds `instruction` back into
+ * AssistantLoop as if the user had just typed it. next_run_at is stored in UTC;
+ * time_of_day/day_of_week are the user's own wall-clock schedule (Europe/Copenhagen).
+ */
+final class ScheduledTasks
+{
+    private const LOCAL_TZ = 'Europe/Copenhagen';
+    public const FREQUENCIES = ['hourly', 'daily', 'weekly'];
+
+    private PDO $db;
+
+    public function __construct(?PDO $db = null)
+    {
+        $this->db = $db ?? Database::get();
+    }
+
+    /** Creates an active task with its first next_run_at already computed. Returns its id. */
+    public function create(
+        int $userId,
+        int $conversationId,
+        string $label,
+        string $instruction,
+        string $frequency,
+        ?string $timeOfDay,
+        ?int $dayOfWeek
+    ): int {
+        $nextRunAtUtc = self::nextRunAtUtc($frequency, $timeOfDay, $dayOfWeek);
+
+        $stmt = $this->db->prepare(
+            'INSERT INTO scheduled_tasks
+                (user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, next_run_at)
+             VALUES (:u, :conv, :label, :instr, :freq, :tod, :dow, :next)'
+        );
+        $stmt->execute([
+            ':u'     => $userId,
+            ':conv'  => $conversationId,
+            ':label' => mb_substr(trim($label), 0, 80),
+            ':instr' => trim($instruction),
+            ':freq'  => $frequency,
+            ':tod'   => $timeOfDay,
+            ':dow'   => $dayOfWeek,
+            ':next'  => $nextRunAtUtc->format('Y-m-d H:i:s'),
+        ]);
+
+        return (int) $this->db->lastInsertId();
+    }
+
+    /**
+     * A user's active tasks, soonest-next-run first.
+     *
+     * @return array<int, array{id:int, conversation_id:int, label:string, instruction:string,
+     *   frequency:string, time_of_day:?string, day_of_week:?int, next_run_at:string, last_run_at:?string}>
+     */
+    public function listForUser(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, conversation_id, label, instruction, frequency, time_of_day, day_of_week,
+                    next_run_at, last_run_at
+             FROM scheduled_tasks WHERE user_id = :u AND status = 'active'
+             ORDER BY next_run_at ASC, id ASC"
+        );
+        $stmt->execute([':u' => $userId]);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = [
+                'id'              => (int) $r['id'],
+                'conversation_id' => (int) $r['conversation_id'],
+                'label'           => (string) $r['label'],
+                'instruction'     => (string) $r['instruction'],
+                'frequency'       => (string) $r['frequency'],
+                'time_of_day'     => $r['time_of_day'] !== null ? (string) $r['time_of_day'] : null,
+                'day_of_week'     => $r['day_of_week'] !== null ? (int) $r['day_of_week'] : null,
+                'next_run_at'     => (string) $r['next_run_at'],
+                'last_run_at'     => $r['last_run_at'] !== null ? (string) $r['last_run_at'] : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** How many active tasks a user currently has (for the schedule_task cap). */
+    public function countActive(int $userId): int
+    {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) FROM scheduled_tasks WHERE user_id = :u AND status = 'active'"
+        );
+        $stmt->execute([':u' => $userId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /** Cancels a user's active task. Returns true if one was cancelled. */
+    public function cancel(int $userId, int $id): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE scheduled_tasks SET status = 'cancelled' WHERE id = :id AND user_id = :u AND status = 'active'"
+        );
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Active tasks whose time has arrived (UTC), oldest first.
+     *
+     * @return array<int, array{id:int, user_id:int, conversation_id:int, label:string,
+     *   instruction:string, frequency:string, time_of_day:?string, day_of_week:?int, next_run_at:string}>
+     */
+    public function due(int $limit = 100): array
+    {
+        $limit = max(1, min(200, $limit));
+        $stmt  = $this->db->query(
+            "SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, next_run_at
+             FROM scheduled_tasks
+             WHERE status = 'active' AND next_run_at <= UTC_TIMESTAMP()
+             ORDER BY next_run_at ASC, id ASC
+             LIMIT " . $limit
+        );
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = [
+                'id'              => (int) $r['id'],
+                'user_id'         => (int) $r['user_id'],
+                'conversation_id' => (int) $r['conversation_id'],
+                'label'           => (string) $r['label'],
+                'instruction'     => (string) $r['instruction'],
+                'frequency'       => (string) $r['frequency'],
+                'time_of_day'     => $r['time_of_day'] !== null ? (string) $r['time_of_day'] : null,
+                'day_of_week'     => $r['day_of_week'] !== null ? (int) $r['day_of_week'] : null,
+                'next_run_at'     => (string) $r['next_run_at'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Atomically claims a due task AND advances it to its next occurrence in one step —
+     * so a slow or failing run can't double-fire, and a missed run doesn't stall the
+     * schedule (it just catches up a step at a time). Returns true only if THIS call
+     * claimed it (an overlapping cron run's same update affects 0 rows).
+     */
+    public function claimAndReschedule(int $id, string $nextRunAtUtc): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE scheduled_tasks SET next_run_at = :next, last_run_at = UTC_TIMESTAMP()
+             WHERE id = :id AND status = 'active' AND next_run_at <= UTC_TIMESTAMP()"
+        );
+        $stmt->execute([':next' => $nextRunAtUtc, ':id' => $id]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * The next occurrence (UTC) strictly after $after (default now), from a wall-clock
+     * schedule in Europe/Copenhagen — so DST shifts never drift the local time of day.
+     * $timeOfDay is "HH:MM" (defaults to "08:00" for daily/weekly if omitted); $dayOfWeek
+     * is ISO 1=Mon..7=Sun (required for weekly, ignored otherwise).
+     */
+    public static function nextRunAtUtc(
+        string $frequency,
+        ?string $timeOfDay,
+        ?int $dayOfWeek,
+        ?DateTimeImmutable $after = null
+    ): DateTimeImmutable {
+        $tz    = new DateTimeZone(self::LOCAL_TZ);
+        $utc   = new DateTimeZone('UTC');
+        $after = ($after ?? new DateTimeImmutable('now', $utc))->setTimezone($tz);
+
+        if ($frequency === 'hourly') {
+            return $after->modify('+1 hour')->setTimezone($utc);
+        }
+
+        [$h, $m] = self::parseTimeOfDay($timeOfDay);
+        $candidate = $after->setTime($h, $m, 0);
+        if ($candidate <= $after) {
+            $candidate = $candidate->modify('+1 day');
+        }
+
+        if ($frequency === 'weekly') {
+            $target = $dayOfWeek ?? (int) $candidate->format('N');
+            while ((int) $candidate->format('N') !== $target) {
+                $candidate = $candidate->modify('+1 day');
+            }
+        }
+
+        return $candidate->setTimezone($utc);
+    }
+
+    /** @return array{0:int, 1:int} [hour, minute], defaulting to 08:00 on anything unparsable. */
+    private static function parseTimeOfDay(?string $timeOfDay): array
+    {
+        $s = trim((string) $timeOfDay);
+        if ($s !== '' && preg_match('/^(\d{1,2}):(\d{2})/', $s, $m) === 1) {
+            $h = max(0, min(23, (int) $m[1]));
+            $i = max(0, min(59, (int) $m[2]));
+
+            return [$h, $i];
+        }
+
+        return [8, 0];
+    }
+}

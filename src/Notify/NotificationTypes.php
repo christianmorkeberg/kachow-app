@@ -22,6 +22,7 @@ final class NotificationTypes
     public const REMINDER       = 'reminder';
     public const WFH_PROMPT     = 'wfh_prompt';
     public const TRACKING_SILENT = 'tracking_silent';
+    public const SCHEDULED_TASK  = 'scheduled_task';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -73,6 +74,14 @@ final class NotificationTypes
             'label'       => 'Tracking stopped',
             'description' => 'A heads-up when no position has arrived for several hours during the day, so a '
                 . 'stopped OwnTracks is caught the same day instead of leaving a hole in your timeline.',
+            'default'     => true,
+        ],
+        // Sent by a scheduled task's own run (bin/scheduled-tasks-cron.php), via the
+        // notify_me tool, only when that run actually found something worth reporting.
+        self::SCHEDULED_TASK => [
+            'label'       => 'Scheduled task found something',
+            'description' => 'When a recurring task you set up (schedule_task) actually finds something '
+                . 'worth telling you — silent otherwise.',
             'default'     => true,
         ],
     ];
