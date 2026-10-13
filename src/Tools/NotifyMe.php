@@ -4,20 +4,23 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\ScheduledTasks;
 use App\Notify\NotificationTypes;
 use App\Notify\Notifier;
 
 /**
  * Tool: push a notification to the user's phone. Only meaningful during an UNATTENDED
  * scheduled-task run (see bin/scheduled-tasks-cron.php) — that's the only place
- * registering this tool, bound to that run's own conversation id so the notification
- * deep-links back to it. Not available in live chat: there, replying already reaches
- * the user, so there's nothing for this to add.
+ * registering this tool, bound to that run's own task/conversation id so the
+ * notification deep-links back to it. Not available in live chat: there, replying
+ * already reaches the user, so there's nothing for this to add.
  */
 final class NotifyMe implements Tool
 {
     public function __construct(
         private Notifier $notifier,
+        private ScheduledTasks $tasks,
+        private int $taskId,
         private int $conversationId,
     ) {
     }
@@ -61,6 +64,9 @@ final class NotifyMe implements Tool
             $body,
             '/?conv=' . $this->conversationId,
         );
+        // Marked regardless of $sent — a missed/undelivered push still needs to surface as
+        // an in-app "something to see" banner (cleared when the conversation is opened).
+        $this->tasks->markResult($this->taskId, $title);
 
         return ['notified' => $sent > 0];
     }

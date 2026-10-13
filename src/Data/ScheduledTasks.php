@@ -116,6 +116,56 @@ final class ScheduledTasks
     }
 
     /**
+     * Marks a task as having a result worth seeing — called by notify_me every time it
+     * fires, regardless of whether the push itself actually reached a device, so a missed
+     * push still surfaces in-app (see unseenForUser/clearUnseenByConversation).
+     */
+    public function markResult(int $id, string $title): void
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE scheduled_tasks SET has_unseen_result = 1, last_result_title = :t WHERE id = :id'
+        );
+        $stmt->execute([':t' => mb_substr(trim($title), 0, 160), ':id' => $id]);
+    }
+
+    /**
+     * A user's tasks with an unseen result, most recently run first — for the startup
+     * "here's something to see" banner.
+     *
+     * @return array<int, array{id:int, conversation_id:int, label:string, last_result_title:?string}>
+     */
+    public function unseenForUser(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, conversation_id, label, last_result_title FROM scheduled_tasks
+             WHERE user_id = :u AND has_unseen_result = 1
+             ORDER BY last_run_at DESC, id DESC"
+        );
+        $stmt->execute([':u' => $userId]);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = [
+                'id'                => (int) $r['id'],
+                'conversation_id'   => (int) $r['conversation_id'],
+                'label'             => (string) $r['label'],
+                'last_result_title' => $r['last_result_title'] !== null ? (string) $r['last_result_title'] : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Clears the unseen flag for whichever task owns this conversation, if any. */
+    public function clearUnseenByConversation(int $userId, int $conversationId): void
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE scheduled_tasks SET has_unseen_result = 0 WHERE user_id = :u AND conversation_id = :c'
+        );
+        $stmt->execute([':u' => $userId, ':c' => $conversationId]);
+    }
+
+    /**
      * Active tasks whose time has arrived (UTC), oldest first.
      *
      * @return array<int, array{id:int, user_id:int, conversation_id:int, label:string,

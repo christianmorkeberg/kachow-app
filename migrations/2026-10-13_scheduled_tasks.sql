@@ -17,11 +17,17 @@ CREATE TABLE scheduled_tasks (
     time_of_day     TIME NULL,                         -- local wall-clock; NULL for hourly
     day_of_week     TINYINT UNSIGNED NULL,              -- ISO 1=Mon..7=Sun; only for weekly
     status          ENUM('active','cancelled') NOT NULL DEFAULT 'active',
+    -- Set by notify_me whenever it fires, regardless of whether the push itself actually
+    -- reached a device — so a missed push still surfaces as an in-app banner (cleared when
+    -- the task's own conversation is opened).
+    has_unseen_result TINYINT(1) NOT NULL DEFAULT 0,
+    last_result_title VARCHAR(160) NULL,
     next_run_at     DATETIME NOT NULL,                  -- UTC
     last_run_at     DATETIME NULL,                      -- UTC
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_due (status, next_run_at),
+    KEY idx_unseen (user_id, has_unseen_result),
     CONSTRAINT fk_schtask_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_schtask_conv FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

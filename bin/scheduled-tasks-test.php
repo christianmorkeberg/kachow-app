@@ -85,6 +85,7 @@ $db->exec("CREATE TABLE scheduled_tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, conversation_id INTEGER NOT NULL,
     label TEXT NOT NULL, instruction TEXT NOT NULL, frequency TEXT NOT NULL,
     time_of_day TEXT, day_of_week INTEGER, status TEXT NOT NULL DEFAULT 'active',
+    has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
     next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 // next_run_at in the past, so it's claimable right now.
 $db->exec("INSERT INTO scheduled_tasks (user_id, conversation_id, label, instruction, frequency, next_run_at)
@@ -99,6 +100,20 @@ check('second claim (now in the future) fails', $second === false);
 
 $row = $db->query('SELECT next_run_at FROM scheduled_tasks WHERE id = 1')->fetch();
 check('next_run_at was actually advanced', $row['next_run_at'] === $farFuture, (string) $row['next_run_at']);
+
+echo "9) markResult() / unseenForUser() / clearUnseenByConversation() — the \"missed push\" banner data\n";
+check('nothing unseen yet', $tasks->unseenForUser(1) === []);
+
+$tasks->markResult(1, 'Found an invoice email');
+$unseen = $tasks->unseenForUser(1);
+check('now one unseen task', count($unseen) === 1, (string) count($unseen));
+check('carries the result title', ($unseen[0]['last_result_title'] ?? null) === 'Found an invoice email', json_encode($unseen));
+check('carries its conversation id (for the banner to open)', ($unseen[0]['conversation_id'] ?? null) === 1, json_encode($unseen));
+
+check('a different user sees nothing (owner-scoped)', $tasks->unseenForUser(2) === []);
+
+$tasks->clearUnseenByConversation(1, 1);
+check('cleared after "opening" its conversation', $tasks->unseenForUser(1) === []);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

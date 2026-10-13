@@ -151,7 +151,7 @@ foreach ($due as $task) {
             continue;
         }
 
-        $registry->register(new NotifyMe($notifier, $task['conversation_id']));
+        $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
         $loop->handle($task['user_id'], $task['conversation_id'], UNATTENDED_PREAMBLE . $task['instruction']);
         $ran++;
     } catch (\Throwable $e) {
