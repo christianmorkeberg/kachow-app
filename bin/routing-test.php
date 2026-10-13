@@ -138,6 +138,8 @@ $cases = [
     ['msg' => 'hvad har jeg i kalenderen i morgen?', 'expect' => 'calendar'],
     ['msg' => 'har jeg et møde på fredag?', 'expect' => 'calendar'],
     ['msg' => "let's meet at 5 o'clock", 'expect' => 'calendar', 'absent' => 'worktime'],
+    ['msg' => 'can you move my dentist appointment to 3pm?', 'expect' => 'calendar'],
+    ['msg' => 'kan du flytte events i min Arbejde kalender?', 'expect' => 'calendar'],
 
     // ---- email ----
     ['msg' => 'read my latest email', 'expect' => 'email'],

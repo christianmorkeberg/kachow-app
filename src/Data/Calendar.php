@@ -198,6 +198,81 @@ final class Calendar
     }
 
     /**
+     * Partially updates an existing event — only the fields given are changed; everything
+     * else on the event is left as-is. When start, end, or all_day is given, the current
+     * event is fetched first so the untouched side of the time range (and whether it's an
+     * all-day vs timed event) carries over correctly, same inclusive/exclusive end-date
+     * handling as insertEvent. Returns null if the event doesn't exist (already deleted, or
+     * a bad id) instead of throwing, so the tool layer can give a friendly error.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function updateEvent(
+        int $userId,
+        string $eventId,
+        ?string $summary = null,
+        ?string $start = null,
+        ?string $end = null,
+        ?string $description = null,
+        ?string $location = null,
+        ?string $timeZone = null,
+        string $calendarId = self::PRIMARY,
+        ?bool $allDay = null
+    ): ?array {
+        $service  = new GoogleCalendar($this->oauth->authorizedClientForUser($userId));
+        $targetId = $calendarId !== '' ? $calendarId : self::PRIMARY;
+
+        try {
+            $patch = [];
+            if ($summary !== null) {
+                $patch['summary'] = $summary;
+            }
+            if ($description !== null) {
+                $patch['description'] = $description;
+            }
+            if ($location !== null) {
+                $patch['location'] = $location;
+            }
+
+            if ($start !== null || $end !== null || $allDay !== null) {
+                $current   = $service->events->get($targetId, $eventId);
+                $wasAllDay = $current->getStart() !== null && $current->getStart()->getDateTime() === null;
+                $nowAllDay = $allDay ?? $wasAllDay;
+                $startVal  = $start ?? ($wasAllDay ? $current->getStart()->getDate() : $current->getStart()->getDateTime());
+                $endVal    = $end   ?? ($wasAllDay ? $current->getEnd()->getDate()   : $current->getEnd()->getDateTime());
+                $tz        = $timeZone ?? ($current->getStart()->getTimeZone() ?: 'UTC');
+
+                if ($nowAllDay) {
+                    $startDate    = substr(trim((string) $startVal), 0, 10);
+                    $endInclusive = substr(trim((string) $endVal), 0, 10);
+                    if ($endInclusive < $startDate) {
+                        $endInclusive = $startDate;
+                    }
+                    $endExclusive = (new DateTimeImmutable($endInclusive))->modify('+1 day')->format('Y-m-d');
+                    $patch['start'] = ['date' => $startDate];
+                    $patch['end']   = ['date' => $endExclusive];
+                } else {
+                    $patch['start'] = ['dateTime' => $startVal, 'timeZone' => $tz];
+                    $patch['end']   = ['dateTime' => $endVal, 'timeZone' => $tz];
+                }
+            }
+
+            if ($patch === []) {
+                return null;
+            }
+
+            $updated = $service->events->patch($targetId, $eventId, new GoogleEvent($patch));
+
+            return $this->normalize($updated, $targetId === self::PRIMARY ? 'primary' : $targetId, $targetId);
+        } catch (GoogleServiceException $e) {
+            if (in_array($e->getCode(), [404, 410], true)) {
+                return null;
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * Deletes an event by id from the given calendar (default primary). Returns
      * true if deleted, false if it was already gone / not found. Any other API
      * error propagates.

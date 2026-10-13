@@ -59,8 +59,8 @@ final class ToolSelector
             'uncheck_item', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
         ],
         'calendar' => [
-            'get_calendar_events', 'insert_calendar_event', 'delete_calendar_event', 'list_calendars',
-            'get_connected_calendar',
+            'get_calendar_events', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',
+            'list_calendars', 'get_connected_calendar',
         ],
         'instructions' => [
             'remember_instruction', 'get_instructions', 'forget_instruction',

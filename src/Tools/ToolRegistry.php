@@ -119,6 +119,7 @@ final class ToolRegistry
         $registry->register(new RemoveWishlistItem($wishlist));
         $registry->register(new GetCalendarEvents($calendar));
         $registry->register(new InsertCalendarEvent($calendar));
+        $registry->register(new UpdateCalendarEvent($calendar));
         $registry->register(new DeleteCalendarEvent($calendar));
         $registry->register(new ListCalendars($calendar));
         $registry->register(new SetMyName($users));
