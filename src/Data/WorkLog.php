@@ -45,8 +45,32 @@ final class WorkLog
         return (new DateTimeImmutable('now', new DateTimeZone(self::LOCAL_TZ)))->format('Y-m-d');
     }
 
+    /**
+     * Adds a work-log entry — or, if one already exists for this user/date/job, merges
+     * the new description into it instead of creating a duplicate row. This matters
+     * because a follow-up answer about the SAME day's work (e.g. the assistant's own
+     * "how did X go?" nudge) must land on the existing entry, not spawn a second one.
+     */
     public function add(int $userId, string $date, string $job, string $description): int
     {
+        $job         = mb_substr(trim($job), 0, 64);
+        $description = trim($description);
+
+        $existing = $this->db->prepare(
+            'SELECT id, description FROM work_log WHERE user_id = :u AND log_date = :d AND LOWER(job) = LOWER(:j)'
+        );
+        $existing->execute([':u' => $userId, ':d' => $date, ':j' => $job]);
+        $row = $existing->fetch();
+
+        if ($row !== false) {
+            $id     = (int) $row['id'];
+            $merged = trim((string) $row['description']) . ' — ' . $description;
+            $stmt   = $this->db->prepare('UPDATE work_log SET description = :desc WHERE id = :id');
+            $stmt->execute([':desc' => $merged, ':id' => $id]);
+
+            return $id;
+        }
+
         // The work log is WHAT was done, not hours — hours live in work_events (the clock).
         // The legacy `hours` column is left in place (unused) to avoid a migration.
         $stmt = $this->db->prepare(
@@ -56,8 +80,8 @@ final class WorkLog
         $stmt->execute([
             ':u'    => $userId,
             ':d'    => $date,
-            ':j'    => mb_substr(trim($job), 0, 64),
-            ':desc' => trim($description),
+            ':j'    => $job,
+            ':desc' => $description,
         ]);
 
         return (int) $this->db->lastInsertId();

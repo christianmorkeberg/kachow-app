@@ -37,7 +37,10 @@ final class LogWorkTime implements Tool
             . 'never put an hours figure here. If the user gives BOTH what they did and the times they '
             . 'worked in one message, call this for the description AND log_work_event for the clock '
             . 'times — do not rely on one to cover the other. job is the workplace name; if omitted it is '
-            . 'inferred from that day\'s work-calendar event. Defaults the day to today.';
+            . 'inferred from that day\'s work-calendar event. Defaults the day to today. Calling this again '
+            . 'for the SAME job and date merges the new text into that day\'s existing entry rather than '
+            . 'duplicating it — so when a follow-up question you asked gets a real answer (not just "yes"), '
+            . 'call this again with that detail instead of letting it live only in chat.';
     }
 
     public function parameters(): array
@@ -99,7 +102,10 @@ final class LogWorkTime implements Tool
             'followup_hint'  => 'You MAY ask ONE short, natural follow-up about the work itself, grounded '
                 . 'in recent_entries when something connects (e.g. whether an ongoing task from a previous '
                 . 'day got finished). Keep it to a single light question, skip it if nothing stands out, '
-                . 'and never ask about hours (hours are tracked by the clock, not here).',
+                . 'and never ask about hours (hours are tracked by the clock, not here). If you do ask and '
+                . 'the user\'s reply adds real detail (not just "yes"/"no"/small talk), call log_work_time '
+                . 'again with that detail for the same job and date — it merges into this entry instead of '
+                . 'duplicating it. Don\'t ask and then throw the answer away.',
             '_render'        => $this->log->card($userId, $from, $to, 'Work log · this week'),
         ];
     }
