@@ -200,13 +200,16 @@ final class ShoppingLists
     /**
      * Renderable card for the chat widget (kind = shopping_list). Items are grouped
      * by whichever category scheme fits the list's own NAME — supermarket aisles for
-     * groceries, packing categories for a "Pakkeliste"/packing list — see ListCategories.
+     * groceries, packing categories for a "Pakkeliste"/packing list — unless the list's
+     * own `grouping` setting is 'none' (see setGrouping), in which case it always
+     * renders flat. See ListCategories.
      *
      * @return array{kind:string, title:string, list_id:int, items:array<int,array{id:int,label:string,done:bool}>}
      */
     public function cardForList(int $connectionId, int $listId, string $name): array
     {
         $this->purgeStaleChecked($listId);
+        $mode = $this->groupingFor($listId);
 
         $items = [];
         foreach ($this->items($listId) as $i) {
@@ -214,17 +217,44 @@ final class ShoppingLists
                 'id'       => (int) $i['id'],
                 'label'    => (string) $i['item'],
                 'done'     => (bool) $i['checked'],
-                'category' => ListCategories::categorize($name, (string) $i['item']),
+                'category' => ListCategories::categorize($name, (string) $i['item'], $mode),
             ];
         }
 
-        // Groups in that scheme's own order (only the categories actually in use).
-        $used   = array_unique(array_column($items, 'category'));
-        usort($used, static fn (string $a, string $b): int => ListCategories::order($name, $a) <=> ListCategories::order($name, $b));
-        $scheme = ListCategories::categories($name);
-        $groups = array_map(static fn (string $k): array => ['key' => $k] + $scheme[$k], $used);
+        if ($mode === ListCategories::MODE_NONE) {
+            $groups = [];
+        } else {
+            // Groups in that scheme's own order (only the categories actually in use).
+            $used   = array_unique(array_column($items, 'category'));
+            usort($used, static fn (string $a, string $b): int => ListCategories::order($name, $a, $mode) <=> ListCategories::order($name, $b, $mode));
+            $scheme = ListCategories::categories($name, $mode);
+            $groups = array_map(static fn (string $k): array => ['key' => $k] + $scheme[$k], $used);
+        }
 
         return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items, 'groups' => $groups];
+    }
+
+    /** The list's grouping mode ('auto'|'none'), defaulting to 'auto' for any unset/invalid value. */
+    public function groupingFor(int $listId): string
+    {
+        $stmt = $this->db->prepare('SELECT grouping FROM shared_lists WHERE id = :id');
+        $stmt->execute([':id' => $listId]);
+        $mode = $stmt->fetchColumn();
+
+        return is_string($mode) && in_array($mode, ListCategories::VALID_MODES, true) ? $mode : ListCategories::MODE_AUTO;
+    }
+
+    /**
+     * Sets whether a list is auto-grouped into categories or always shown flat.
+     * Scoped to the connection so one person can't change another's list.
+     */
+    public function setGrouping(int $connectionId, int $listId, string $mode): bool
+    {
+        $mode = in_array($mode, ListCategories::VALID_MODES, true) ? $mode : ListCategories::MODE_AUTO;
+        $stmt = $this->db->prepare('UPDATE shared_lists SET grouping = :g WHERE id = :id AND connection_id = :cid');
+        $stmt->execute([':g' => $mode, ':id' => $listId, ':cid' => $connectionId]);
+
+        return $stmt->rowCount() > 0;
     }
 
     /**

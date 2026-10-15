@@ -102,6 +102,8 @@ $cases = [
     ['msg' => 'tilføj mælk til indkøbslisten', 'expect' => 'shopping'],
     ['msg' => 'kryds mælk af på listen', 'expect' => 'shopping'],
     ['msg' => 'vi mangler smør', 'expect' => 'shopping'],
+    ['msg' => "don't group my to-do list", 'expect' => 'shopping'],
+    ['msg' => 'gruppér ikke min opgaveliste', 'expect' => 'shopping'],
 
     // ---- wishlist (distinct from shopping) ----
     ['msg' => 'add a drone to my wishlist', 'expect' => 'wishlist'],

@@ -57,6 +57,7 @@ final class ToolSelector
         'shopping' => [
             'list_shopping_lists', 'get_shopping_list', 'add_to_shopping_list', 'check_off_item',
             'uncheck_item', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
+            'set_list_grouping',
         ],
         'calendar' => [
             'get_calendar_events', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',
@@ -178,6 +179,8 @@ final class ToolSelector
             // Danish (køb also catches indkøb/købe/køber)
             'køb', 'indkøb', 'dagligvarer', 'mangler', 'skal bruge', 'løbet tør', 'kryds af',
             'på listen', ' liste', 'streg', 'huskeliste', 'gøremål', 'opgaveliste', 'tjekliste', 'to-do liste',
+            // Per-list grouping on/off (dev idea: lists that shouldn't be grouped into categories)
+            'group', 'ungroup', 'grouping', 'gruppér', 'gruppere', 'gruppering', 'kategoriser', 'kategorisering',
         ],
         'calendar' => [
             'calendar', 'event', 'schedule', 'appointment', 'meeting', ' meet', 'busy', ' free ', 'availab',

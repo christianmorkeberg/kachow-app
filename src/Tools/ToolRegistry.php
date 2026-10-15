@@ -146,6 +146,7 @@ final class ToolRegistry
         $registry->register(new RemoveFromShoppingList($connections, $shoppingLists));
         $registry->register(new ClearCheckedItems($connections, $shoppingLists));
         $registry->register(new DeleteShoppingList($connections, $shoppingLists));
+        $registry->register(new SetListGrouping($connections, $shoppingLists));
         // DMI with automatic Open-Meteo failover (rate limits / non-DK locations).
         $weatherService = new WeatherService($weather, new OpenMeteo());
         $registry->register(new GetCurrentWeather($weatherService));

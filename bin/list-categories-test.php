@@ -58,5 +58,20 @@ check('grocery scheme has NO "clothing" category', !isset($groceryCats['clothing
 echo "5) an unmatched packing item falls back to packing 'other', not grocery 'other'\n";
 check('"Rejsehåndbog" (unlisted) -> other', PackingCategories::categorize('Rejsehåndbog') === 'other');
 
+echo "6) mode 'none' (a list the user turned grouping off for) never buckets, regardless of name\n";
+check(
+    '"Pakkeliste" (would normally be packing-grouped) -> \'none\' category under MODE_NONE',
+    ListCategories::categorize('Pakkeliste', 'Mobiloplader', ListCategories::MODE_NONE) === 'none'
+);
+check(
+    '"Opgaver" (would normally be grocery-grouped) -> \'none\' category under MODE_NONE',
+    ListCategories::categorize('Opgaver', 'Ring til tandlæge', ListCategories::MODE_NONE) === 'none'
+);
+check('categories() is EMPTY under MODE_NONE (nothing to group by)', ListCategories::categories('Opgaver', ListCategories::MODE_NONE) === []);
+check(
+    'order() is stable (no PHP_INT_MAX surprises) under MODE_NONE',
+    ListCategories::order('Opgaver', 'none', ListCategories::MODE_NONE) === 0
+);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
