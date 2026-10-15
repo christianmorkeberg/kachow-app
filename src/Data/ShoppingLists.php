@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Database;
-use App\Support\GroceryCategories;
+use App\Support\ListCategories;
 use PDO;
 
 /**
@@ -198,7 +198,9 @@ final class ShoppingLists
     }
 
     /**
-     * Renderable card for the chat widget (kind = shopping_list).
+     * Renderable card for the chat widget (kind = shopping_list). Items are grouped
+     * by whichever category scheme fits the list's own NAME — supermarket aisles for
+     * groceries, packing categories for a "Pakkeliste"/packing list — see ListCategories.
      *
      * @return array{kind:string, title:string, list_id:int, items:array<int,array{id:int,label:string,done:bool}>}
      */
@@ -212,14 +214,15 @@ final class ShoppingLists
                 'id'       => (int) $i['id'],
                 'label'    => (string) $i['item'],
                 'done'     => (bool) $i['checked'],
-                'category' => GroceryCategories::categorize((string) $i['item']),
+                'category' => ListCategories::categorize($name, (string) $i['item']),
             ];
         }
 
-        // Aisle groups in store-walk order (only the ones in use), for the grouped card.
+        // Groups in that scheme's own order (only the categories actually in use).
         $used   = array_unique(array_column($items, 'category'));
-        usort($used, static fn (string $a, string $b): int => GroceryCategories::order($a) <=> GroceryCategories::order($b));
-        $groups = array_map(static fn (string $k): array => ['key' => $k] + GroceryCategories::CATEGORIES[$k], $used);
+        usort($used, static fn (string $a, string $b): int => ListCategories::order($name, $a) <=> ListCategories::order($name, $b));
+        $scheme = ListCategories::categories($name);
+        $groups = array_map(static fn (string $k): array => ['key' => $k] + $scheme[$k], $used);
 
         return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items, 'groups' => $groups];
     }
