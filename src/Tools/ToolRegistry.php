@@ -46,6 +46,7 @@ use App\Data\Workouts;
 use App\Email\EmailService;
 use App\Mail\Mailer;
 use App\Maps\MapDistance;
+use App\Maps\PoiNames;
 use App\Music\Discogs;
 use App\Receipts\ReceiptStorage;
 use App\Weather\Dmi;
@@ -163,7 +164,7 @@ final class ToolRegistry
         $registry->register(new GetLocationDay($timeline));
         $registry->register(new GetStays($timeline));
         $registry->register(new GetTrips($timeline));
-        $registry->register(new SuggestPlaces($timeline, $places, $locationPoints));
+        $registry->register(new SuggestPlaces($timeline, $places, $locationPoints, new PoiNames()));
         $registry->register(new GetWorkClock(new WorkClockShadow($timeline, $workEvents, $userSettings)));
         $registry->register(new GetLocationTrackingSetup($apiTokens, $locationPoints));
         $registry->register(new LogWorkTime($workLog, $calendar, $userSettings));
