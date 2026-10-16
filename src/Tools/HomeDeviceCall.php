@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
+use App\Support\HomeResponse;
 use InvalidArgumentException;
 
 /**
@@ -18,8 +19,8 @@ final class HomeDeviceCall implements Tool
     /** How long to wait for the Pico's answer. Long-polling means pickup is near-instant. */
     private const WAIT_SECONDS = 12.0;
 
-    /** Keep what we hand the model small (a full Hue light list can be large). */
-    private const MAX_RESPONSE_CHARS = 12000;
+    /** Budget for what we hand the model, applied AFTER noise is stripped (see HomeResponse). */
+    private const MAX_RESPONSE_CHARS = 20000;
 
     public function __construct(private AgentCommands $commands, private ApiTokens $tokens)
     {
@@ -93,14 +94,17 @@ final class HomeDeviceCall implements Tool
 
         $response = (string) ($result['response'] ?? '');
         $decoded  = json_decode($response, true);
-        if (strlen($response) > self::MAX_RESPONSE_CHARS) {
-            $response = mb_substr($response, 0, self::MAX_RESPONSE_CHARS) . ' …[truncated]';
-            $decoded  = null;
+
+        if (is_array($decoded)) {
+            return ['http_status' => $result['http_status']] + HomeResponse::compact($decoded, self::MAX_RESPONSE_CHARS);
         }
+
+        // Not JSON (or cut short on the way back) — hand over plain text, flagged if it was cut.
+        $cut = strlen($response) > self::MAX_RESPONSE_CHARS;
 
         return [
             'http_status' => $result['http_status'],
-            'response'    => $decoded ?? $response,
-        ];
+            'response'    => $cut ? mb_substr($response, 0, self::MAX_RESPONSE_CHARS) : $response,
+        ] + ($cut ? ['truncated' => true] : []);
     }
 }
