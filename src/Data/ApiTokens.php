@@ -85,6 +85,19 @@ final class ApiTokens
         return $secs === false || $secs === null ? null : max(0, (int) $secs);
     }
 
+    /**
+     * Every user that has a token for a scope (e.g. everyone with a home agent).
+     *
+     * @return list<int>
+     */
+    public function userIdsWithScope(string $scope): array
+    {
+        $stmt = $this->db->prepare('SELECT user_id FROM api_tokens WHERE scope = :s');
+        $stmt->execute([':s' => $scope]);
+
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     private function create(int $userId, string $scope): string
     {
         $token = bin2hex(random_bytes(24)); // 48 hex chars

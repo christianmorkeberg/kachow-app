@@ -89,24 +89,27 @@ final class ToolMemory
             . 'they mean, look it up with a read tool before writing.';
     }
 
-    /** Resource types worth remembering by name (Hue CLIP v2). */
-    private const HOME_TYPES = ['light', 'room', 'zone', 'scene', 'grouped_light', 'device'];
-
     private const HOME_MAX_ENTRIES = 60;
     private const HOME_MAX_CHARS   = 4000;
 
     /**
-     * Home-device ids (Hue lights, rooms, scenes) the assistant already LOOKED UP earlier in this
-     * conversation. Without this, a follow-up like "turn it on again" had no id to use (reads are
-     * not replayed), so the model guessed one, got a 404, re-listed everything, and only then sent
-     * the real command: three tool calls and four model calls for one light. With the ids in the
-     * prompt it is one call. A later lookup supersedes an earlier one for the same name.
+     * Home-device ids (Hue lights, rooms, scenes) the assistant already knows, as a prompt block.
+     * Without this a follow-up like "turn it on again" had no id to use (reads are not replayed), so
+     * the model guessed one, got a 404, re-listed everything, and only then sent the real command:
+     * three tool calls and four model calls for one light. With the ids in the prompt it is one call.
      *
-     * @param list<array<string, mixed>> $rows stored message rows (ASC)
+     * Two sources: $base is the SAVED list (HomeDevices — refreshed daily / on demand), and the
+     * lists looked up earlier in THIS conversation, which are newer and win for the same name.
+     *
+     * @param list<array<string, mixed>>                                          $rows stored message rows (ASC)
+     * @param list<array{type:string, name:string, id:string, group:?string}> $base saved entries
      */
-    public static function homeDevices(array $rows): string
+    public static function homeDevices(array $rows, array $base = []): string
     {
         $found = [];
+        foreach ($base as $e) {
+            $found[HueEntries::key($e)] = HueEntries::line($e);
+        }
         foreach ($rows as $row) {
             if (($row['role'] ?? '') !== 'tool' || ($row['tool_name'] ?? '') !== 'home_device_call') {
                 continue;
@@ -116,28 +119,9 @@ final class ToolMemory
             if (!is_array($items) || !array_is_list($items)) {
                 continue;
             }
-            foreach ($items as $item) {
-                if (!is_array($item)) {
-                    continue;
-                }
-                $type = (string) ($item['type'] ?? '');
-                $id   = (string) ($item['id'] ?? '');
-                $name = trim((string) ($item['metadata']['name'] ?? ''));
-                if (!in_array($type, self::HOME_TYPES, true) || $id === '' || $name === '' || mb_strlen($name) > 40) {
-                    continue;
-                }
-                $entry = $type . ' "' . $name . '" = ' . $id;
-                // A room/zone is switched through its grouped_light, not its own id.
-                if ($type === 'room' || $type === 'zone') {
-                    foreach ((array) ($item['services'] ?? []) as $svc) {
-                        if (is_array($svc) && ($svc['rtype'] ?? '') === 'grouped_light' && isset($svc['rid'])) {
-                            $entry .= ' (switch it via grouped_light ' . $svc['rid'] . ')';
-                            break;
-                        }
-                    }
-                }
-                unset($found[$type . '|' . mb_strtolower($name)]);
-                $found[$type . '|' . mb_strtolower($name)] = $entry;
+            foreach (HueEntries::fromItems($items) as $e) {
+                unset($found[HueEntries::key($e)]);
+                $found[HueEntries::key($e)] = HueEntries::line($e);
             }
         }
         if ($found === []) {
@@ -155,8 +139,8 @@ final class ToolMemory
             return '';
         }
 
-        return "Home device ids you ALREADY LOOKED UP earlier in this conversation (real Hue ids — pass them straight "
-            . "to home_device_call; do NOT guess an id and do NOT re-list everything first). Only look things up "
+        return "Home device ids you ALREADY KNOW (looked up earlier — real Hue ids: pass them straight to "
+            . "home_device_call; do NOT guess an id and do NOT re-list everything first). Only look things up "
             . "again if a call returns 404 or the user says something was added or renamed:\n"
             . rtrim($out, "\n");
     }

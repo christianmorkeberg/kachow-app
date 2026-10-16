@@ -6,11 +6,13 @@ namespace App\Assistant;
 
 use App\Data\AppFlags;
 use App\Data\Conversations;
+use App\Data\HomeDevices;
 use App\Data\Memories;
 use App\Data\Mileage;
 use App\Data\UserInstructions;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
+use App\Home\HueSync;
 use App\Support\DeviceFix;
 use App\Support\ToolMemory;
 use App\Tools\ToolRegistry;
@@ -463,7 +465,7 @@ final class AssistantLoop
         // earlier turns created (tool rows are stored but never replayed — see ToolMemory).
         $history    = $this->conversations->messages($conversationId);
         $contents   = $this->buildContents($history);
-        $toolMemory = trim(ToolMemory::digest($history) . "\n\n" . ToolMemory::homeDevices($history));
+        $toolMemory = ToolMemory::digest($history);
         $hasImage = $image !== null && isset($image['mime'], $image['data']) && $image['data'] !== '';
         if ($hasImage) {
             // Attach the uploaded photo to the current (last) user turn so the model
@@ -510,6 +512,8 @@ final class AssistantLoop
         }
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
+        // Home devices the assistant already knows by name (saved list + this conversation's lookups).
+        $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent)));
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups, $toolMemory, $openView);
 
         // Performance instrumentation for this turn.
@@ -1019,6 +1023,36 @@ final class AssistantLoop
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * The saved Hue name -> id list, but only when this message is about the home — either it
+     * matches the home keywords, or it names a saved light/room/scene ("turn off Le Klint" has no
+     * keyword at all). Keeps ~1 KB of ids out of unrelated chats.
+     *
+     * @return list<array{type:string, name:string, id:string, group:?string}>
+     */
+    private function savedHomeDevices(int $userId, string $userMessage, string $recent): array
+    {
+        try {
+            $entries = (new HomeDevices())->entries($userId, HueSync::DEVICE);
+            if ($entries === []) {
+                return [];
+            }
+            if (in_array('home', ToolSelector::matchGroups($userMessage, $recent, []), true)) {
+                return $entries;
+            }
+            $lc = mb_strtolower($userMessage);
+            foreach ($entries as $e) {
+                if (mb_strlen($e['name']) >= 3 && str_contains($lc, mb_strtolower($e['name']))) {
+                    return $entries;
+                }
+            }
+        } catch (Throwable $e) {
+            // The table may not exist yet, or the lookup failed — the saved list is only a shortcut.
+        }
+
+        return [];
+    }
+
     /**
      * The user's own workplace and driving-destination names, for keyword routing. They are
      * personal (and this repo is public), so they are read from the user's data instead of

@@ -295,6 +295,7 @@ $cases = [
     ['msg' => 'dim the lamp to 30%', 'expect' => 'home'],
     ['msg' => 'is my pico online?', 'expect' => 'home'],
     ['msg' => 'sluk lyset i stuen', 'expect' => 'home'],
+    ['msg' => 'i just added a new light, update the list', 'expect' => 'home'],
 
     // ---- reminders ----
     ['msg' => 'remind me to call mum at 18:00', 'expect' => 'reminders'],

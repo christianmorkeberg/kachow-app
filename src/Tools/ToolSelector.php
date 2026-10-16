@@ -60,7 +60,7 @@ final class ToolSelector
             'set_list_grouping',
         ],
         'home' => [
-            'home_device_call', 'get_home_agent_setup',
+            'home_device_call', 'get_home_agent_setup', 'refresh_home_devices',
         ],
         'calendar' => [
             'get_calendar_events', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',
@@ -403,7 +403,7 @@ final class ToolSelector
         // Home devices through the Pico home agent (Hue lights, later thermostats).
         'home' => [
             'hue', 'philips', ' lights', ' light ', 'the light', 'lamp', 'lamps', 'brightness', 'dim the', 'pico',
-            'home agent', 'thermostat', 'radiator', 'heating',
+            'home agent', 'thermostat', 'radiator', 'heating', 'new light', 'added a light', 'renamed a light', 'light list',
             // Danish
             'lys i', 'lyset', 'lamper', 'lampe', 'tænd lys', 'sluk lys', 'lysstyrke', 'termostat', 'varmen', 'hjemmeagent',
         ],

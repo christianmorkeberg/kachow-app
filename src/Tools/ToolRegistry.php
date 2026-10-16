@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\AgentCommands;
+use App\Data\HomeDevices;
 use App\Data\ApiTokens;
 use App\Data\BookkeepingAudit;
 use App\Data\Books;
@@ -46,6 +47,7 @@ use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Email\EmailService;
 use App\Mail\Mailer;
+use App\Home\HueSync;
 use App\Maps\MapDistance;
 use App\Maps\PoiNames;
 use App\Music\Discogs;
@@ -160,7 +162,10 @@ final class ToolRegistry
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
         $registry->register(new GetHomeAgentSetup($apiTokens));
-        $registry->register(new HomeDeviceCall(new AgentCommands(), $apiTokens));
+        $agentCommands = new AgentCommands();
+        $hueSync       = new HueSync(new HomeDevices(), HueSync::viaAgent($agentCommands));
+        $registry->register(new HomeDeviceCall($agentCommands, $apiTokens, $hueSync));
+        $registry->register(new RefreshHomeDevices($hueSync, $apiTokens));
         $locationPoints = new LocationPoints();
         $places         = new Places();
         $timeline       = new Timeline($locationPoints, $places, $userSettings);

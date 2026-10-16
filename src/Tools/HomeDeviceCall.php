@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
+use App\Home\HueSync;
 use App\Support\HomeResponse;
 use InvalidArgumentException;
 
@@ -22,7 +23,7 @@ final class HomeDeviceCall implements Tool
     /** Budget for what we hand the model, applied AFTER noise is stripped (see HomeResponse). */
     private const MAX_RESPONSE_CHARS = 20000;
 
-    public function __construct(private AgentCommands $commands, private ApiTokens $tokens)
+    public function __construct(private AgentCommands $commands, private ApiTokens $tokens, private ?HueSync $sync = null)
     {
     }
 
@@ -97,6 +98,8 @@ final class HomeDeviceCall implements Tool
         $decoded  = json_decode($response, true);
 
         if (is_array($decoded)) {
+            $this->remember($userId, $arguments, $result['http_status'], $decoded);
+
             return ['http_status' => $result['http_status']] + HomeResponse::compact($decoded, self::MAX_RESPONSE_CHARS);
         }
 
@@ -107,5 +110,18 @@ final class HomeDeviceCall implements Tool
             'http_status' => $result['http_status'],
             'response'    => $cut ? mb_substr($response, 0, self::MAX_RESPONSE_CHARS) : $response,
         ] + ($cut ? ['truncated' => true] : []);
+    }
+
+    /** A list the assistant fetched anyway also refreshes the saved name -> id list, for free. */
+    private function remember(int $userId, array $arguments, ?int $httpStatus, array $decoded): void
+    {
+        if ($this->sync === null || strtolower((string) ($arguments['device'] ?? '')) !== HueSync::DEVICE) {
+            return;
+        }
+        try {
+            $this->sync->ingest($userId, (string) ($arguments['method'] ?? ''), (string) ($arguments['path'] ?? ''), $httpStatus, $decoded);
+        } catch (\Throwable $e) {
+            // The saved list is a convenience — never let it break a light command.
+        }
     }
 }
