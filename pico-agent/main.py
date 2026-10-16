@@ -185,6 +185,11 @@ def poll():
 # --------------------------------------------------------------------------- main loop
 
 def main():
+    # A 5-second window at power-up: press Stop in Thonny now if you need to edit files. Once the
+    # polling loop starts, it keeps the Pico busy and Thonny may take a while to get its attention.
+    log("starting in 5 s — press Stop in Thonny now if you need to edit files")
+    for _ in range(5):
+        blink(1, 500, 500)
     fails = 0
     wlan = None
     while True:
