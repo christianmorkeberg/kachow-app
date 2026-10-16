@@ -513,7 +513,7 @@ final class AssistantLoop
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
         // Home devices the assistant already knows by name (saved list + this conversation's lookups).
-        $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent)));
+        $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent, ToolMemory::homeActive($history))));
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups, $toolMemory, $openView);
 
         // Performance instrumentation for this turn.
@@ -1025,19 +1025,21 @@ final class AssistantLoop
      */
     /**
      * The saved Hue name -> id list, but only when this message is about the home — either it
-     * matches the home keywords, or it names a saved light/room/scene ("turn off Le Klint" has no
-     * keyword at all). Keeps ~1 KB of ids out of unrelated chats.
+     * matches the home keywords, it names a saved light/room/scene ("turn off Le Klint" has no
+     * keyword at all), or this conversation already used the home ("on again" names nothing — report
+     * #37). Keeps ~1 KB of ids out of unrelated chats.
      *
      * @return list<array{type:string, name:string, id:string, group:?string}>
      */
-    private function savedHomeDevices(int $userId, string $userMessage, string $recent): array
+    private function savedHomeDevices(int $userId, string $userMessage, string $recent, bool $conversationUsedHome): array
     {
         try {
             $entries = (new HomeDevices())->entries($userId, HueSync::DEVICE);
             if ($entries === []) {
                 return [];
             }
-            if (in_array('home', ToolSelector::matchGroups($userMessage, $recent, []), true)) {
+            // A follow-up that names nothing ("on again") is still about the home once this chat used it.
+            if ($conversationUsedHome || in_array('home', ToolSelector::matchGroups($userMessage, $recent, []), true)) {
                 return $entries;
             }
             $lc = mb_strtolower($userMessage);

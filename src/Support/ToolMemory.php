@@ -89,6 +89,23 @@ final class ToolMemory
             . 'they mean, look it up with a read tool before writing.';
     }
 
+    /**
+     * Whether this conversation has already used home_device_call — so a follow-up that names nothing
+     * ("on again", "a bit dimmer") is still about the home and needs the ids too.
+     *
+     * @param list<array<string, mixed>> $rows stored message rows (ASC)
+     */
+    public static function homeActive(array $rows): bool
+    {
+        foreach ($rows as $row) {
+            if (($row['role'] ?? '') === 'tool' && ($row['tool_name'] ?? '') === 'home_device_call') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private const HOME_MAX_ENTRIES = 60;
     private const HOME_MAX_CHARS   = 4000;
 

@@ -148,5 +148,15 @@ for ($i = 1; $i <= 120; $i++) {
 $big = ToolMemory::homeDevices([toolRow('home_device_call', ['response' => ['data' => $many]])]);
 check('stays bounded (60 entries, 4000 chars)', substr_count($big, "\n- ") <= 60 && mb_strlen($big) < 4600, (string) mb_strlen($big));
 
+// ------------------------------------------------- report #37: follow-ups that name nothing
+echo "\na follow-up that names nothing still counts as home once the chat used it (report #37)\n";
+check('a chat that already called home_device_call is home-active', ToolMemory::homeActive([
+    row('user', 'turn off le klint'),
+    toolRow('home_device_call', ['http_status' => 200, 'response' => ['data' => [['rid' => 'x', 'rtype' => 'light']]]]),
+]));
+check('a chat with only other tools is not', !ToolMemory::homeActive([toolRow('get_shopping_list', ['count' => 1])]));
+check('a chat with no tools at all is not', !ToolMemory::homeActive([row('user', 'hej'), row('assistant', 'hej!')]));
+check('an empty history is not', !ToolMemory::homeActive([]));
+
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);
