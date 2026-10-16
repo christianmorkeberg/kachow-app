@@ -109,5 +109,44 @@ check('empty', ToolMemory::digest([]) === '');
 check('chat only', ToolMemory::digest([row('user', 'hej'), row('assistant', 'hej!')]) === '');
 check('malformed json', ToolMemory::digest([row('tool', 'not json', 'add_income')]) === '');
 
+// ------------------------------------------------- report #36: Hue ids across turns
+echo "\nHue light ids looked up earlier are remembered (report #36: guessed id -> 404 -> re-list)\n";
+$lights = ['http_status' => 200, 'response' => ['errors' => [], 'data' => [
+    ['id' => '0b4bf16a-6220-4687-b7c2-fbbf91490039', 'type' => 'light', 'metadata' => ['name' => 'Donut']],
+    ['id' => '838e97fe-37bc-4939-a866-9391eb659777', 'type' => 'light', 'metadata' => ['name' => 'Le klint']],
+    ['id' => 'room-1', 'type' => 'room', 'metadata' => ['name' => 'Stue'],
+        'services' => [['rid' => 'gl-1', 'rtype' => 'grouped_light']]],
+    ['id' => 'x', 'type' => 'bridge', 'metadata' => ['name' => 'Not a thing we remember']],
+]], 'item_count' => 4];
+$h = ToolMemory::homeDevices([
+    row('user', 'turn off le klint'),
+    toolRow('home_device_call', $lights),
+    row('assistant', 'I have turned off Le Klint.'),
+]);
+check('remembers the light by name with its REAL id', str_contains($h, 'light "Le klint" = 838e97fe-37bc-4939-a866-9391eb659777'), $h);
+check('remembers the other lights too', str_contains($h, 'light "Donut" = 0b4bf16a-6220-4687-b7c2-fbbf91490039'));
+check('a room is switched via its grouped_light id', str_contains($h, 'room "Stue" = room-1 (switch it via grouped_light gl-1)'), $h);
+check('ignores resource types it has no use for', !str_contains($h, 'Not a thing'));
+check('tells the model not to guess or re-list', str_contains($h, 'do NOT guess an id') && str_contains($h, '404'));
+
+echo "\nHue memory edge cases\n";
+check('a plain PUT result (no list) adds nothing', ToolMemory::homeDevices([toolRow('home_device_call',
+    ['http_status' => 200, 'response' => ['data' => [['rid' => 'abc', 'rtype' => 'light']], 'errors' => []]])]) === '');
+check('a 404 result adds nothing', ToolMemory::homeDevices([toolRow('home_device_call',
+    ['http_status' => 404, 'response' => ['data' => [], 'errors' => [['description' => 'resource not found']]]])]) === '');
+check('other tools are ignored', ToolMemory::homeDevices([toolRow('get_shopping_list', $lights)]) === '');
+check('empty history', ToolMemory::homeDevices([]) === '');
+$renamed = ToolMemory::homeDevices([
+    toolRow('home_device_call', ['response' => ['data' => [['id' => 'old-id', 'type' => 'light', 'metadata' => ['name' => 'Le klint']]]]]),
+    toolRow('home_device_call', ['response' => ['data' => [['id' => 'new-id', 'type' => 'light', 'metadata' => ['name' => 'Le Klint']]]]]),
+]);
+check('a later lookup supersedes an earlier one for the same name', str_contains($renamed, 'new-id') && !str_contains($renamed, 'old-id'), $renamed);
+$many = [];
+for ($i = 1; $i <= 120; $i++) {
+    $many[] = ['id' => 'id-' . $i, 'type' => 'light', 'metadata' => ['name' => 'Lampe ' . $i]];
+}
+$big = ToolMemory::homeDevices([toolRow('home_device_call', ['response' => ['data' => $many]])]);
+check('stays bounded (60 entries, 4000 chars)', substr_count($big, "\n- ") <= 60 && mb_strlen($big) < 4600, (string) mb_strlen($big));
+
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);

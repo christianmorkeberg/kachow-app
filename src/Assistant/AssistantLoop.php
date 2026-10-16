@@ -463,7 +463,7 @@ final class AssistantLoop
         // earlier turns created (tool rows are stored but never replayed — see ToolMemory).
         $history    = $this->conversations->messages($conversationId);
         $contents   = $this->buildContents($history);
-        $toolMemory = ToolMemory::digest($history);
+        $toolMemory = trim(ToolMemory::digest($history) . "\n\n" . ToolMemory::homeDevices($history));
         $hasImage = $image !== null && isset($image['mime'], $image['data']) && $image['data'] !== '';
         if ($hasImage) {
             // Attach the uploaded photo to the current (last) user turn so the model

@@ -89,6 +89,78 @@ final class ToolMemory
             . 'they mean, look it up with a read tool before writing.';
     }
 
+    /** Resource types worth remembering by name (Hue CLIP v2). */
+    private const HOME_TYPES = ['light', 'room', 'zone', 'scene', 'grouped_light', 'device'];
+
+    private const HOME_MAX_ENTRIES = 60;
+    private const HOME_MAX_CHARS   = 4000;
+
+    /**
+     * Home-device ids (Hue lights, rooms, scenes) the assistant already LOOKED UP earlier in this
+     * conversation. Without this, a follow-up like "turn it on again" had no id to use (reads are
+     * not replayed), so the model guessed one, got a 404, re-listed everything, and only then sent
+     * the real command: three tool calls and four model calls for one light. With the ids in the
+     * prompt it is one call. A later lookup supersedes an earlier one for the same name.
+     *
+     * @param list<array<string, mixed>> $rows stored message rows (ASC)
+     */
+    public static function homeDevices(array $rows): string
+    {
+        $found = [];
+        foreach ($rows as $row) {
+            if (($row['role'] ?? '') !== 'tool' || ($row['tool_name'] ?? '') !== 'home_device_call') {
+                continue;
+            }
+            $data  = json_decode((string) ($row['content'] ?? ''), true);
+            $items = is_array($data) ? ($data['response']['data'] ?? null) : null;
+            if (!is_array($items) || !array_is_list($items)) {
+                continue;
+            }
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $type = (string) ($item['type'] ?? '');
+                $id   = (string) ($item['id'] ?? '');
+                $name = trim((string) ($item['metadata']['name'] ?? ''));
+                if (!in_array($type, self::HOME_TYPES, true) || $id === '' || $name === '' || mb_strlen($name) > 40) {
+                    continue;
+                }
+                $entry = $type . ' "' . $name . '" = ' . $id;
+                // A room/zone is switched through its grouped_light, not its own id.
+                if ($type === 'room' || $type === 'zone') {
+                    foreach ((array) ($item['services'] ?? []) as $svc) {
+                        if (is_array($svc) && ($svc['rtype'] ?? '') === 'grouped_light' && isset($svc['rid'])) {
+                            $entry .= ' (switch it via grouped_light ' . $svc['rid'] . ')';
+                            break;
+                        }
+                    }
+                }
+                unset($found[$type . '|' . mb_strtolower($name)]);
+                $found[$type . '|' . mb_strtolower($name)] = $entry;
+            }
+        }
+        if ($found === []) {
+            return '';
+        }
+
+        $out = '';
+        foreach (array_slice(array_values($found), -self::HOME_MAX_ENTRIES) as $line) {
+            if (mb_strlen($out) + mb_strlen($line) > self::HOME_MAX_CHARS) {
+                break;
+            }
+            $out .= '- ' . $line . "\n";
+        }
+        if ($out === '') {
+            return '';
+        }
+
+        return "Home device ids you ALREADY LOOKED UP earlier in this conversation (real Hue ids — pass them straight "
+            . "to home_device_call; do NOT guess an id and do NOT re-list everything first). Only look things up "
+            . "again if a call returns 404 or the user says something was added or renamed:\n"
+            . rtrim($out, "\n");
+    }
+
     /** One digest line, or null when the row carries nothing identifying. */
     private static function line(string $tool, array $data): ?string
     {

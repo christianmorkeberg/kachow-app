@@ -40,7 +40,8 @@ final class HomeDeviceCall implements Tool
             . '/clip/v2/resource/light/<id> with {"on":{"on":true},"dimming":{"brightness":50}} to change one; '
             . 'PUT /clip/v2/resource/grouped_light/<id> for a whole room; PUT /clip/v2/resource/scene/<id> with '
             . '{"recall":{"action":"active"}} to activate a scene); "pico" = the agent itself (GET /ping to '
-            . 'test the connection). Look ids up with a GET first — never guess them. The Pico only allows '
+            . 'test the connection). Look ids up with a GET first — never guess them — but ids you already looked '
+            . 'up earlier in this conversation are listed in your context: reuse those and skip the lookup. The Pico only allows '
             . 'paths it was configured for, so a refused path is final. A timeout means the Pico is offline '
             . '(see get_home_agent_setup) or the device did not answer; the change may still have applied.';
     }
