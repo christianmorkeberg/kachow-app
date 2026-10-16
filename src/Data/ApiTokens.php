@@ -68,6 +68,23 @@ final class ApiTokens
         return (int) $id;
     }
 
+    /**
+     * Seconds since the user's token for a scope was last used (null = never used / no token).
+     * For a device that polls continuously this doubles as a heartbeat. Computed in SQL so it
+     * compares the DB's own clock with the DB's own timestamp (no PHP timezone involved).
+     */
+    public function secondsSinceUse(int $userId, string $scope): ?int
+    {
+        $stmt = $this->db->prepare(
+            'SELECT TIMESTAMPDIFF(SECOND, last_used_at, NOW()) FROM api_tokens
+             WHERE user_id = :u AND scope = :s AND last_used_at IS NOT NULL LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId, ':s' => $scope]);
+        $secs = $stmt->fetchColumn();
+
+        return $secs === false || $secs === null ? null : max(0, (int) $secs);
+    }
+
     private function create(int $userId, string $scope): string
     {
         $token = bin2hex(random_bytes(24)); // 48 hex chars

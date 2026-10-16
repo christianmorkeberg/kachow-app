@@ -59,6 +59,9 @@ final class ToolSelector
             'uncheck_item', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
             'set_list_grouping',
         ],
+        'home' => [
+            'home_device_call', 'get_home_agent_setup',
+        ],
         'calendar' => [
             'get_calendar_events', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',
             'list_calendars', 'get_connected_calendar',
@@ -396,6 +399,13 @@ final class ToolSelector
             'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
             'personlighed', 'din tone', 'vær neutral', 'mere neutral', 'skru op for',
             'tema', 'udseende', 'farvetema', 'mørk tilstand', 'lyst tema',
+        ],
+        // Home devices through the Pico home agent (Hue lights, later thermostats).
+        'home' => [
+            'hue', 'philips', ' lights', ' light ', 'the light', 'lamp', 'lamps', 'brightness', 'dim the', 'pico',
+            'home agent', 'thermostat', 'radiator', 'heating',
+            // Danish
+            'lys i', 'lyset', 'lamper', 'lampe', 'tænd lys', 'sluk lys', 'lysstyrke', 'termostat', 'varmen', 'hjemmeagent',
         ],
         // One-off push reminders ("remind me to … at …").
         'reminders' => [

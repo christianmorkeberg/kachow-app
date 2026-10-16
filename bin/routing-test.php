@@ -290,6 +290,12 @@ $cases = [
     ['msg' => 'mark report 3 as done', 'expect' => 'feedback'],
     ['msg' => 'hvad har brugerne rapporteret?', 'expect' => 'feedback'],
 
+    // ---- home devices (Pico agent: Hue etc.) ----
+    ['msg' => 'turn on the hue lights in the living room', 'expect' => 'home'],
+    ['msg' => 'dim the lamp to 30%', 'expect' => 'home'],
+    ['msg' => 'is my pico online?', 'expect' => 'home'],
+    ['msg' => 'sluk lyset i stuen', 'expect' => 'home'],
+
     // ---- reminders ----
     ['msg' => 'remind me to call mum at 18:00', 'expect' => 'reminders'],
     ['msg' => 'set a reminder for tomorrow at 9', 'expect' => 'reminders'],

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\AgentCommands;
 use App\Data\ApiTokens;
 use App\Data\BookkeepingAudit;
 use App\Data\Books;
@@ -158,6 +159,8 @@ final class ToolRegistry
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
+        $registry->register(new GetHomeAgentSetup($apiTokens));
+        $registry->register(new HomeDeviceCall(new AgentCommands(), $apiTokens));
         $locationPoints = new LocationPoints();
         $places         = new Places();
         $timeline       = new Timeline($locationPoints, $places, $userSettings);

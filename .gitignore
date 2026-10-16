@@ -1,3 +1,5 @@
 *.env
 vendor/
    .env
+# Pico home agent: real Wi-Fi password, token and Hue key live here — never commit
+pico-agent/config.py
