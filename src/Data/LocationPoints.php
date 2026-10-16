@@ -119,6 +119,18 @@ final class LocationPoints
         return $stmt->rowCount();
     }
 
+    /** UTC timestamp of the oldest point still stored for this user, or null if none. */
+    public function earliestTs(int $userId): ?int
+    {
+        $stmt = $this->db->prepare('SELECT MIN(recorded_at) FROM location_points WHERE user_id = :u');
+        $stmt->execute([':u' => $userId]);
+        $at = $stmt->fetchColumn();
+
+        return $at === false || $at === null
+            ? null
+            : (new DateTimeImmutable((string) $at, new DateTimeZone('UTC')))->getTimestamp();
+    }
+
     /** The latest point (taken at, UTC; device; battery; position), or null if none yet. */
     public function latest(int $userId): ?array
     {

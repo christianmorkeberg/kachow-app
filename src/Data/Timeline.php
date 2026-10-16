@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace App\Data;
 
+use App\Support\DayFreeze;
 use App\Support\StayDetector;
 use DateTimeImmutable;
 use DateTimeZone;
 
 /**
  * The user's movement as STAYS and TRIPS (location tracking phase 3), computed on demand from
- * the raw points with StayDetector and matched to their places. Nothing derived is stored
- * yet, so tuning the thresholds (user settings location_*) re-computes past days too.
- * Persisting derived stays beyond the 60-day raw retention is a later step (see the spec).
+ * the raw points with StayDetector and matched to their places, so tuning the thresholds (user
+ * settings location_*) re-computes every day that still has raw points. Days older than the 60-day
+ * raw retention come from frozen_location_days (bin/location-freeze-cron.php) instead.
  *
  * Everything returned for the MODEL is coordinate-free (place names, times, km); coordinates
  * only go into cards.
@@ -29,7 +30,108 @@ final class Timeline
         private LocationPoints $points,
         private Places $places,
         private UserSettings $settings,
+        private ?FrozenDays $frozen = null,
     ) {
+    }
+
+    /**
+     * Saves one finished local day's stays, trips and gaps (see bin/location-freeze-cron.php), so
+     * the day survives its raw points being purged. Detected with the user's current settings.
+     *
+     * @return array{stays: int, trips: int, gaps: int}
+     */
+    public function freezeDay(int $userId, string $localDate): array
+    {
+        [$from, $to] = LocationPoints::dayBounds($localDate);
+        $pts = $this->points->between($userId, $from - self::PAD_S, $to + self::PAD_S);
+        $det = StayDetector::detect($pts, $this->params($userId), null);
+        $pack = DayFreeze::pack($det, $from, $to);
+        ($this->frozen ??= new FrozenDays())->save($userId, $localDate, $pack);
+
+        return ['stays' => count($pack['stays']), 'trips' => count($pack['trips']), 'gaps' => count($pack['gaps'])];
+    }
+
+    /**
+     * Stays/trips/gaps for [fromTs, toTs): computed live from the raw points while they exist, and
+     * taken from the frozen days for the stretch whose raw points have been purged. The seam sits
+     * at the end of the local day holding the oldest remaining point; anything straddling it is
+     * the live detector's.
+     *
+     * @return array{stays: list<array<string, mixed>>, trips: list<array<string, mixed>>, gaps: list<array<string, mixed>>}
+     */
+    private function detection(int $userId, int $fromTs, int $toTs, array $params): array
+    {
+        $earliest = $this->points->earliestTs($userId);
+        $liveFrom = $earliest === null ? PHP_INT_MAX : LocationPoints::dayBounds(self::local($earliest, 'Y-m-d'))[1];
+
+        $set = ['stays' => [], 'trips' => [], 'gaps' => []];
+        if ($fromTs < $liveFrom) {
+            $set = $this->frozenSet($userId, $fromTs, min($toTs, $liveFrom - 1));
+            if ($liveFrom < $toTs) {
+                $set = DayFreeze::cutAt($set, $liveFrom);
+            }
+        }
+
+        $liveStart = max($fromTs, $liveFrom);
+        if ($liveStart < $toTs) {
+            $now = time();
+            $pts = $this->points->between($userId, $liveStart - self::PAD_S, $toTs + self::PAD_S);
+            $det = StayDetector::detect($pts, $params, $toTs + self::PAD_S >= $now ? $now : null);
+            foreach ($det['stays'] as $s) {
+                if ($s['depart'] > $liveStart) {
+                    $set['stays'][] = $s;
+                }
+            }
+            foreach ($det['trips'] as $t) {
+                if ($t['end'] > $liveStart) {
+                    $a = $det['stays'][$t['from_stay']];
+                    $b = $det['stays'][$t['to_stay']];
+                    $set['trips'][] = $t + ['a' => [$a['lat'], $a['lon']], 'b' => [$b['lat'], $b['lon']]];
+                }
+            }
+            foreach ($det['gaps'] as $g) {
+                if ($g['end'] > $liveStart) {
+                    $set['gaps'][] = $g;
+                }
+            }
+        }
+
+        return $set;
+    }
+
+    /** The frozen part of a range, or nothing at all if the table isn't there yet. */
+    private function frozenSet(int $userId, int $fromTs, int $toTs): array
+    {
+        $empty = ['stays' => [], 'trips' => [], 'gaps' => []];
+        if ($toTs <= $fromTs) {
+            return $empty;
+        }
+        try {
+            $days = ($this->frozen ??= new FrozenDays())->between($userId, self::local($fromTs, 'Y-m-d'), self::local($toTs - 1, 'Y-m-d'));
+        } catch (\Throwable $e) {
+            error_log('Timeline frozen days: ' . $e->getMessage());
+
+            return $empty;
+        }
+        $set = DayFreeze::merge(array_values($days));
+        // Stays carry no ongoing flag or point count when frozen; the rest of analyse() expects them.
+        $set['stays'] = array_map(static fn (array $s): array => $s + ['ongoing' => false], $set['stays']);
+        $set['gaps']  = array_map(static fn (array $g): array => $g + [
+            'minutes' => (int) round(($g['end'] - $g['start']) / 60), 'ongoing' => false,
+        ], $set['gaps']);
+
+        return $set;
+    }
+
+    private static function placeAt(array $places, float $lat, float $lon): ?array
+    {
+        foreach ($places as $pl) {
+            if (Places::matchesStay($pl, $lat, $lon)) {
+                return $pl;
+            }
+        }
+
+        return null;
     }
 
     /** The user's detection thresholds (settings, clamped to sane ranges). */
@@ -57,21 +159,12 @@ final class Timeline
     public function analyse(int $userId, int $fromTs, int $toTs): array
     {
         $params = $this->params($userId);
-        $pts    = $this->points->between($userId, $fromTs - self::PAD_S, $toTs + self::PAD_S);
-        $now    = time();
-        $det    = StayDetector::detect($pts, $params, $toTs + self::PAD_S >= $now ? $now : null);
+        $det    = $this->detection($userId, $fromTs, $toTs, $params);
         $places = $this->places->list($userId);
 
         $stays = [];
         foreach ($det['stays'] as $k => $s) {
-            $place = null;
-            foreach ($places as $pl) {
-                if (Places::matchesStay($pl, $s['lat'], $s['lon'])) {
-                    $place = $pl;
-                    break;
-                }
-            }
-            $det['stays'][$k]['place'] = $place;
+            $place = self::placeAt($places, $s['lat'], $s['lon']);
             if ($s['depart'] <= $fromTs || $s['arrive'] >= $toTs) {
                 continue;
             }
@@ -96,8 +189,8 @@ final class Timeline
             if ($t['end'] <= $fromTs || $t['start'] >= $toTs) {
                 continue;
             }
-            $a = $det['stays'][$t['from_stay']];
-            $b = $det['stays'][$t['to_stay']];
+            $pa = self::placeAt($places, $t['a'][0], $t['a'][1]);
+            $pb = self::placeAt($places, $t['b'][0], $t['b'][1]);
             $trips[] = [
                 'start'   => $t['start'],
                 'end'     => $t['end'],
@@ -105,14 +198,14 @@ final class Timeline
                 'km'      => $t['km'],
                 'mode'    => $t['mode'],
                 'max_kmh' => $t['max_kmh'],
-                'from'    => $a['place']['name'] ?? null,
-                'to'      => $b['place']['name'] ?? null,
-                'from_type' => $a['place']['type'] ?? null,
-                'to_type'   => $b['place']['type'] ?? null,
-                'from_place_id' => $a['place']['id'] ?? null,
-                'to_place_id'   => $b['place']['id'] ?? null,
-                'from_ll' => [$a['lat'], $a['lon']],
-                'to_ll'   => [$b['lat'], $b['lon']],
+                'from'    => $pa['name'] ?? null,
+                'to'      => $pb['name'] ?? null,
+                'from_type' => $pa['type'] ?? null,
+                'to_type'   => $pb['type'] ?? null,
+                'from_place_id' => $pa['id'] ?? null,
+                'to_place_id'   => $pb['id'] ?? null,
+                'from_ll' => $t['a'],
+                'to_ll'   => $t['b'],
             ];
         }
 
