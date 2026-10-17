@@ -69,6 +69,7 @@ final class NotifyMe implements Tool
         // an in-app "something to see" banner (cleared when the conversation is opened).
         $this->tasks->markResult($this->taskId, $title);
 
-        return ['notified' => $sent > 0];
+        // title/body ride in the stored tool row, so opening the run from the push shows what it said.
+        return ['notified' => $sent > 0, 'title' => $title, 'body' => $body];
     }
 }

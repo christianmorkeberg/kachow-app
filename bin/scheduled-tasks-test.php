@@ -147,5 +147,18 @@ check('a finished one-off is no longer active', !in_array($id, array_column($tas
 $listed = array_column($tasks->listForUser(1), null, 'id');
 check('list carries interval and notify flag', ($listed[$every]['interval_minutes'] ?? null) === 10 && ($listed[$every]['notify_always'] ?? null) === false);
 
+echo "13) opening a run from its notification: boilerplate stripped, task found by conversation\n";
+$old = "[Scheduled task — this is an unattended run, nobody is watching live. Do ONLY what the instruction below "
+    . "specifically asks (e.g. which lights you turned on). If the home agent was unreachable (offline / no answer), do not notify.]\n\n"
+    . "Get the weather forecast and send a notification.";
+check('an old stored run loses its rules', ScheduledTasks::stripRunPreamble($old) === 'Get the weather forecast and send a notification.', ScheduledTasks::stripRunPreamble($old));
+check('a retry preamble too', ScheduledTasks::stripRunPreamble("[Scheduled task — RETRY. Try once more.]\n\nTurn on the lights.") === 'Turn on the lights.');
+check('a plain instruction is untouched', ScheduledTasks::stripRunPreamble('Check my email for invoices.') === 'Check my email for invoices.');
+check('only a leading preamble is removed', ScheduledTasks::stripRunPreamble('Say "[Scheduled task]" back to me') === 'Say "[Scheduled task]" back to me');
+$task = $tasks->byConversation(1, 1);
+check('the task that owns a conversation is found', ($task['label'] ?? '') === 'Test' && ($task['id'] ?? 0) === 1, json_encode($task));
+check('an ordinary chat is not a task', $tasks->byConversation(1, 999) === null);
+check('another user cannot see it', $tasks->byConversation(2, 1) === null);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

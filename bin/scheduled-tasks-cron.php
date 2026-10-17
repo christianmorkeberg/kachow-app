@@ -81,19 +81,21 @@ const UNATTENDED_PREAMBLE = "[Scheduled task — this is an unattended run, nobo
 
 /** Appended per task: how the run should report back. */
 const REPORT_QUIET = "Call notify_me only if there's something worth telling the user; "
-    . "otherwise finish quietly without calling it.]\n\n";
+    . "otherwise finish quietly without calling it. After notify_me, end with a few words at most — "
+    . "the notification already holds the content.]";
 const REPORT_ALWAYS = "When you have done what the instruction asks, call notify_me ONCE with a "
     . "short title and one sentence on what you did (e.g. which lights you turned on). If the "
     . "instruction's condition was not met and you did nothing, finish quietly without calling it. "
     . "If the home agent was unreachable (offline / no answer), do not notify: the run is retried "
-    . "automatically. For any other failure, call notify_me to say what went wrong.]\n\n";
+    . "automatically. For any other failure, call notify_me to say what went wrong. After notify_me, end "
+    . "with a few words at most — the notification already holds the content.]";
 
 /** One retry when the home agent could not be reached: a Wi-Fi blip is gone within a minute or two. */
 const RETRY_AFTER_SECONDS = 90;
 const RETRY_PREAMBLE = "[Scheduled task — RETRY. This is an unattended run. The previous attempt "
     . "could not reach the home agent. Try the instruction below once more, doing only what it asks. "
     . "If the home agent is still unreachable, call notify_me ONCE saying what could not be done "
-    . "and that it will not be tried again.]\n\n";
+    . "and that it will not be tried again.]";
 
 $tasks     = new ScheduledTasks();
 $notifier  = Notifier::fromEnv();
@@ -177,13 +179,15 @@ foreach ($due as $task) {
         $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
         $seen = count($conversations->messages($task['conversation_id']));
         $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
-        $loop->handle($task['user_id'], $task['conversation_id'], UNATTENDED_PREAMBLE . $report . $task['instruction']);
+        // The rules go to the model as context for this run only; the conversation keeps just the instruction,
+        // so opening the run from a notification doesn't show the boilerplate as "your" message.
+        $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, UNATTENDED_PREAMBLE . $report);
 
         // The home agent (the Pico) not answering is usually a blip: wait, then try once more.
         $fresh = array_slice($conversations->messages($task['conversation_id']), $seen);
         if (ToolMemory::homeUnreachable($fresh)) {
             sleep(RETRY_AFTER_SECONDS);
-            $loop->handle($task['user_id'], $task['conversation_id'], RETRY_PREAMBLE . $task['instruction']);
+            $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
         }
         $ran++;
     } catch (\Throwable $e) {

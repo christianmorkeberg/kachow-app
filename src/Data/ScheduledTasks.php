@@ -106,6 +106,31 @@ final class ScheduledTasks
         return $out;
     }
 
+    /**
+     * The task (any status) that owns this conversation, or null for an ordinary chat.
+     *
+     * @return array{id:int, label:string, status:string}|null
+     */
+    public function byConversation(int $userId, int $conversationId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, label, status FROM scheduled_tasks WHERE user_id = :u AND conversation_id = :c LIMIT 1'
+        );
+        $stmt->execute([':u' => $userId, ':c' => $conversationId]);
+        $r = $stmt->fetch();
+
+        return $r === false ? null : ['id' => (int) $r['id'], 'label' => (string) $r['label'], 'status' => (string) $r['status']];
+    }
+
+    /**
+     * Older runs stored the cron's unattended-run rules ("[Scheduled task — …]") at the start of the
+     * user message. They are boilerplate for the model, not something the user wrote — drop them for display.
+     */
+    public static function stripRunPreamble(string $content): string
+    {
+        return ltrim((string) preg_replace('/^\[Scheduled task\b.*?\]\s*/su', '', $content, 1));
+    }
+
     /** How many active tasks a user currently has (for the schedule_task cap). */
     public function countActive(int $userId): int
     {
