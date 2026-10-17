@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notify;
 
+use App\Data\NotificationHistory;
 use App\Data\NotificationPrefs;
 use App\Data\PushSubscriptions;
 
@@ -19,23 +20,29 @@ final class Notifier
         private PushSubscriptions $subscriptions,
         private NotificationPrefs $prefs,
         private Sender $sender,
+        private ?NotificationHistory $history = null,
     ) {
     }
 
     public static function fromEnv(): self
     {
-        return new self(new PushSubscriptions(), new NotificationPrefs(), WebPush::fromEnv());
+        return new self(new PushSubscriptions(), new NotificationPrefs(), WebPush::fromEnv(), new NotificationHistory());
     }
 
     /**
      * Sends a notification of $type to a user, if they have it enabled and have at
-     * least one device. Returns how many devices it actually reached.
+     * least one device. Returns how many devices it actually reached. An enabled
+     * notification is also kept in the in-app history, whether or not a device was reached,
+     * so a missed push can still be read from the bell.
      */
     public function notify(int $userId, string $type, string $title, string $body, ?string $url = null): int
     {
         if (!NotificationTypes::exists($type) || !$this->prefs->isEnabled($userId, $type)) {
             return 0;
         }
+
+        $url ??= NotificationTypes::deepLink($type);
+        $this->record($userId, $type, $title, $body, $url);
 
         return $this->deliver($userId, $type, $title, $body, $url);
     }
@@ -53,6 +60,16 @@ final class Notifier
     public function sendTestCard(int $userId, string $cardKey = 'work_week'): int
     {
         return $this->deliver($userId, 'test', 'Kachow', 'Tap to open your card 👉', '/?card=' . $cardKey);
+    }
+
+    /** History is a convenience on top of the push — a failure (e.g. the table not created yet) never blocks it. */
+    private function record(int $userId, string $type, string $title, string $body, ?string $url): void
+    {
+        try {
+            $this->history?->add($userId, $type, $title, $body, $url);
+        } catch (\Throwable $e) {
+            error_log('notification history: ' . $e->getMessage());
+        }
     }
 
     /** Fans a payload out to every device, pruning any that have expired. */
