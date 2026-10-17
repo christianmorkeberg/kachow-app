@@ -231,7 +231,7 @@ final class ShoppingLists
             $groups = array_map(static fn (string $k): array => ['key' => $k] + $scheme[$k], $used);
         }
 
-        return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items, 'groups' => $groups];
+        return ['kind' => 'shopping_list', 'title' => $name, 'list_id' => $listId, 'items' => $items, 'groups' => $groups, 'grouping' => $mode];
     }
 
     /** The list's grouping mode ('auto'|'none'), defaulting to 'auto' for any unset/invalid value. */
@@ -255,6 +255,32 @@ final class ShoppingLists
         $stmt->execute([':g' => $mode, ':id' => $listId, ':cid' => $connectionId]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * The grouping switch on the list card: sets 'auto' (grouped) or 'none' (flat) for a list the
+     * user shares through an accepted connection. Returns the list's connection/name for
+     * rebuilding the card, or null if not found/authorised.
+     *
+     * @return array{list_id:int, connection_id:int, name:string}|null
+     */
+    public function setGroupingForUser(int $userId, int $listId, string $mode): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT l.connection_id, l.name
+             FROM shared_lists l
+             JOIN user_connections c ON c.id = l.connection_id
+             WHERE l.id = :lid AND c.status = "accepted" AND (c.requester_id = :u1 OR c.addressee_id = :u2)
+             LIMIT 1'
+        );
+        $stmt->execute([':lid' => $listId, ':u1' => $userId, ':u2' => $userId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+        $this->setGrouping((int) $row['connection_id'], $listId, $mode);
+
+        return ['list_id' => $listId, 'connection_id' => (int) $row['connection_id'], 'name' => (string) $row['name']];
     }
 
     /**
