@@ -108,15 +108,27 @@ final class FeedbackReports
         return (int) $stmt->fetchColumn();
     }
 
-    /** Sets a report's status. Returns true if the row exists. */
+    /**
+     * Sets a report's status. Returns true if the report exists — including when it already has that status
+     * (MySQL reports 0 changed rows for a no-op UPDATE, which used to read as "No such report" when resolving a
+     * report that was already resolved, e.g. from a card that had gone stale).
+     */
     public function setStatus(int $reportId, string $status): bool
     {
         if (!in_array($status, self::STATUSES, true)) {
             return false;
         }
-        $stmt = $this->db->prepare('UPDATE feedback_reports SET status = :s WHERE id = :id');
-        $stmt->execute([':s' => $status, ':id' => $reportId]);
+        $cur = $this->db->prepare('SELECT status FROM feedback_reports WHERE id = :id');
+        $cur->execute([':id' => $reportId]);
+        $current = $cur->fetchColumn();
+        if ($current === false) {
+            return false;
+        }
+        if ((string) $current !== $status) {
+            $this->db->prepare('UPDATE feedback_reports SET status = :s WHERE id = :id')
+                ->execute([':s' => $status, ':id' => $reportId]);
+        }
 
-        return $stmt->rowCount() > 0;
+        return true;
     }
 }
