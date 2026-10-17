@@ -182,6 +182,7 @@ final class ToolRegistry
         $registry->register(new ExportWorkLog($workLog));
         $registry->register(new NoteDevIdea($devIdeas, $users));
         $registry->register(new ListDevIdeas($devIdeas, $users));
+        $registry->register(new SetDevIdeaStatus($devIdeas, $users));
         $registry->register(new RemoveDevIdea($devIdeas, $users));
         $registry->register(new AddExpense($receipts));
         $registry->register(new UpdateReceipt($receipts));

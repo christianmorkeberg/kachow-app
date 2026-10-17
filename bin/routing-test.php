@@ -297,6 +297,9 @@ $cases = [
     ['msg' => 'sluk lyset i stuen', 'expect' => 'home'],
     ['msg' => 'i just added a new light, update the list', 'expect' => 'home'],
 
+    ['msg' => 'mark idea #38 as done', 'expect' => 'devideas'],
+    ['msg' => 'sæt idé #41 til i gang', 'expect' => 'devideas'],
+
     // ---- reminders ----
     ['msg' => 'remind me to call mum at 18:00', 'expect' => 'reminders'],
     ['msg' => 'set a reminder for tomorrow at 9', 'expect' => 'reminders'],

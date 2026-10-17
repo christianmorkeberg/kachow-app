@@ -97,7 +97,7 @@ final class ToolSelector
             'log_work_time', 'get_work_log', 'export_work_log',
         ],
         'devideas' => [
-            'note_dev_idea', 'list_dev_ideas', 'remove_dev_idea',
+            'note_dev_idea', 'list_dev_ideas', 'set_dev_idea_status', 'remove_dev_idea',
         ],
         'receipts' => [
             'add_expense', 'update_receipt', 'delete_receipt', 'get_expenses', 'export_expenses_csv',
@@ -274,6 +274,8 @@ final class ToolSelector
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
             'feature idea', 'app idea', 'idea for the app', 'note this idea', 'note an idea',
             'improvement idea', 'build later', 'develop', 'my ideas', 'noted ideas',
+            'idea #', 'ideas #', 'ideas in progress', 'mark idea',
+            'idé #', 'ide #', 'ideer #', 'udviklingsliste',
             // Danish (udviklingside* covers udviklingsidé/-ideer plain-e; udviklingsidé has the
             // accented é so it needs its own entry; assistenten skal = "the assistant should …")
             'til senere', 'til backlog', 'ide til app', 'app-ide', 'funktion senere', 'mine ideer',
