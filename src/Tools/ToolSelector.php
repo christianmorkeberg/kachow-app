@@ -120,7 +120,7 @@ final class ToolSelector
             'list_feedback', 'resolve_feedback', 'set_diagnostics',
         ],
         'reminders' => [
-            'set_reminder', 'list_reminders', 'cancel_reminder',
+            'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
             'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',
         ],
         // Tracked movement (OwnTracks raw points; private per user).
@@ -413,6 +413,9 @@ final class ToolSelector
         'reminders' => [
             'remind me', 'reminder', 'remind', 'set a reminder', 'don\'t let me forget', 'dont let me forget',
             'ping me', 'nudge me', 'wake me',
+            // Location-triggered reminders (set_place_reminder)
+            'next time i\'m at', 'next time im at', 'next time i am at', 'next time i get to', 'when i arrive at',
+            'when i get to', 'næste gang jeg er', 'næste gang jeg kommer', 'når jeg kommer til', 'når jeg ankommer',
             // Recurring/scheduled checks (schedule_task et al.)
             'every day', 'once a day', 'every hour', 'every week', 'recurring', 'scheduled task',
             'every weekday', 'weekdays at', 'every morning', 'every evening', 'every night', 'every 15 minutes',

@@ -245,6 +245,7 @@ final class ToolRegistry
         $registry->register(new AssessVinyl($vinyls, $discogs));
         $reminders = new Reminders();
         $registry->register(new SetReminder($reminders, new PushSubscriptions()));
+        $registry->register(new SetPlaceReminder($reminders, $places, $locationPoints, new PushSubscriptions()));
         $registry->register(new ListReminders($reminders));
         $registry->register(new CancelReminder($reminders));
         $scheduledTasks = new ScheduledTasks();

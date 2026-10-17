@@ -26,7 +26,8 @@ final class ListReminders implements Tool
 
     public function description(): string
     {
-        return 'Lists the user\'s upcoming reminders (the ones not yet fired). Use for "what reminders '
+        return 'Lists the user\'s upcoming reminders (the ones not yet fired) — timed ones and place ones '
+            . '("next time at <place>"). Use for "what reminders '
             . 'do I have?", "my reminders", Danish "hvilke påmindelser har jeg?". Give the id when the '
             . 'user might want to cancel one.';
     }
@@ -41,6 +42,11 @@ final class ListReminders implements Tool
         $tz  = new DateTimeZone(self::LOCAL_TZ);
         $out = [];
         foreach ($this->reminders->upcoming($userId) as $r) {
+            if ($r['remind_at'] === null) {
+                // A location-triggered one: fires on arrival, not at a time.
+                $out[] = ['id' => $r['id'], 'text' => $r['text'], 'when' => 'next time at ' . $r['place']];
+                continue;
+            }
             $when = (new DateTimeImmutable($r['remind_at'], new DateTimeZone('UTC')))->setTimezone($tz);
             $out[] = ['id' => $r['id'], 'text' => $r['text'], 'when' => $when->format('D j M, H:i')];
         }
