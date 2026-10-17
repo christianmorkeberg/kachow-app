@@ -28,10 +28,9 @@ final class AcceptConnectionRequest implements Tool
     public function description(): string
     {
         return 'Accepts a pending incoming connection request. Identify the requester by their email '
-            . 'or name (see list_connections). Specify what YOU want to share back via "share" (any of: '
-            . 'workouts, wishlist, calendar, cycle, workouts_log, home; defaults to workouts). "home" lets them control your home devices (lights) through your home agent — only if asked. "cycle" shares your '
-            . 'menstrual cycle status — only add it if the user explicitly asks to. "workouts_log" lets '
-            . 'them LOG workouts for you (a write grant, separate from viewing) — only add it if asked. '
+            . 'or name (see list_connections). Specify what YOU want to share back via "share" — any of: '
+            . Connections::scopeGuide() . '. Defaults to workouts. Beyond workouts, add a scope only when '
+            . 'the user names it; "cycle", "workouts_log" and "home" only on an explicit ask. '
             . 'Only pending requests sent to you can be accepted.';
     }
 
@@ -46,8 +45,7 @@ final class AcceptConnectionRequest implements Tool
                 ],
                 'share' => [
                     'type'        => 'array',
-                    'description' => 'What you want to share back: any of "workouts", "wishlist", "calendar", '
-                        . '"cycle", "workouts_log" (lets them log workouts for you), "home" (lets them control your home devices).',
+                    'description' => 'What you want to share back: any of ' . Connections::scopeList() . '.',
                     'items'       => ['type' => 'string'],
                 ],
             ],

@@ -36,7 +36,9 @@ final class GetConnectedWorkouts implements Tool
             . 'read it from the `records`. The result includes `records` per exercise: `heaviest`, '
             . '`tested_1rm` (best actual 1-rep max, or null), and `est_1rm` (best Epley estimate). USE '
             . 'these computed records for 1RM / PR / percentage answers — never re-derive from the raw '
-            . 'sets — and attribute them to THIS person only, never mixing with your own numbers.';
+            . 'sets — and attribute them to THIS person only, never mixing with your own numbers. This is '
+            . 'what they have DONE; for what they have PLANNED to train (a day or the week) use '
+            . 'get_connected_workout_plan.';
     }
 
     public function parameters(): array

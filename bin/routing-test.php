@@ -333,6 +333,19 @@ $cases = [
     ['msg' => 'give Alex permission to log workouts for me', 'expect' => 'connections'],
     ['msg' => 'lad Alex logge for mig', 'expect' => 'connections'],
     ['msg' => 'log a workout on my behalf', 'expect' => 'connections'],
+    // Everything is shareable over a connection: planned workouts, vinyls, work hours (report #40:
+    // "can't share plans" — there was no read path, so the assistant said the app couldn't).
+    ['msg' => "Kan du se Alex' træningsplanlægning", 'expect' => 'workouts'],
+    ['msg' => "what is Alex training today?", 'expect' => 'workouts'],
+    ['msg' => 'can Alex give me access to her workout plan?', 'expect' => 'connections'],
+    ['msg' => 'Kan hun give mig adgang?', 'expect' => 'connections'],
+    ['msg' => 'what vinyl records does Alex have?', 'expect' => 'vinyls'],
+    ['msg' => 'share my vinyls with Alex', 'expect' => 'connections'],
+    ['msg' => 'del min pladesamling med Alex', 'expect' => 'connections'],
+    ['msg' => 'del mine arbejdstimer med Alex', 'expect' => 'connections'],
+    ['msg' => 'is Alex still at work?', 'expect' => 'worktime'],
+    ['msg' => 'er Alex på arbejde?', 'expect' => 'worktime'],
+    ['msg' => 'hvor mange timer har Alex arbejdet i denne uge?', 'expect' => 'worktime'],
 
     // ---- admin (invites) ----
     ['msg' => 'invite Alex to Kachow', 'expect' => 'admin'],

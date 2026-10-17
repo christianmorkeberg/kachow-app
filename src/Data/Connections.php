@@ -25,13 +25,46 @@ final class Connections
      * two distinct, explicit opt-ins. `home` is also a grant to ACT: the other person's home-device
      * commands (lights, thermostats) ride YOUR home agent when they have none of their own.
      */
-    public const APPS = ['workouts', 'workouts_log', 'wishlist', 'calendar', 'cycle', 'home'];
+    public const APPS = ['workouts', 'workouts_log', 'wishlist', 'calendar', 'cycle', 'home', 'vinyls', 'work_hours'];
+
+    /**
+     * What each scope lets the OTHER person do — the one place the sharing tools take their wording
+     * from, so a new scope shows up in send/accept/update_connection_sharing without touching them.
+     * Sharing is always opt-in per scope and per direction; nothing here is on by default.
+     */
+    public const SCOPE_HELP = [
+        'workouts'     => 'view your workout history, progress charts and planned workouts (read-only)',
+        'workouts_log' => 'LOG workouts for you (a write grant, separate from viewing)',
+        'wishlist'     => 'view your gift wishlist',
+        'calendar'     => 'view your calendar events',
+        'cycle'        => 'view your menstrual cycle status (sensitive)',
+        'home'         => 'control your home devices (lights) through your home agent (a grant to act)',
+        'vinyls'       => 'view your vinyl record collection',
+        'work_hours'   => 'view your clocked work hours (whether you are at work, hours per day or week)',
+    ];
 
     private PDO $db;
 
     public function __construct(?PDO $db = null)
     {
         $this->db = $db ?? Database::get();
+    }
+
+    /** The scopes with their meaning, as one sentence for a tool description ("workouts (…); wishlist (…)"). */
+    public static function scopeGuide(): string
+    {
+        $parts = [];
+        foreach (self::APPS as $app) {
+            $parts[] = $app . ' (lets them ' . self::SCOPE_HELP[$app] . ')';
+        }
+
+        return implode('; ', $parts);
+    }
+
+    /** `"workouts", "wishlist", …` for a parameter description. */
+    public static function scopeList(): string
+    {
+        return '"' . implode('", "', self::APPS) . '"';
     }
 
     /** Normalizes an arbitrary list of app names to a clean CSV of valid apps. */

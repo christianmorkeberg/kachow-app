@@ -46,7 +46,8 @@ final class ToolSelector
         'workouts' => [
             'log_workout', 'get_workout_history', 'get_workout_progress', 'merge_exercises',
             'update_workout', 'delete_workout',
-            'get_connected_workouts', 'get_connected_workout_progress', 'log_connected_workout', 'training_load',
+            'get_connected_workouts', 'get_connected_workout_progress', 'get_connected_workout_plan',
+            'log_connected_workout', 'training_load',
             'create_workout_plan', 'get_workout_plan', 'get_week_plan', 'check_off_exercise',
             'uncheck_exercise', 'add_plan_exercise', 'remove_plan_exercise', 'delete_workout_plan',
         ],
@@ -84,14 +85,14 @@ final class ToolSelector
         ],
         'vinyls' => [
             'add_vinyl', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'remove_vinyl',
-            'recommend_vinyl', 'assess_vinyl',
+            'recommend_vinyl', 'assess_vinyl', 'get_connected_vinyls',
         ],
         'weather' => [
             'get_current_weather', 'get_weather_forecast',
         ],
         'worktime' => [
             'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
-            'get_work_clock',
+            'get_work_clock', 'get_connected_work_hours',
         ],
         'worklog' => [
             'log_work_time', 'get_work_log', 'export_work_log',
@@ -224,6 +225,10 @@ final class ToolSelector
             'forbind', 'del med', 'deler', 'anmodning', 'accepter', 'afbryd', 'kæreste', 'makker',
             // "giv X lov til …", "tilladelse", "adgang til", "på mine/hans vegne", "logge for mig"
             'lov til', 'tilladelse', 'giv adgang', 'adgang til', 'vegne', 'logge for mig', 'logge træning for',
+            // Asking someone to share: "give me access", "kan hun give mig adgang", "få adgang"
+            ' me access', 'get access', 'mig adgang', 'få adgang',
+            // "del mine/min/mit … med X" / "dele mine …" (share my …) — padded so "del" alone never matches
+            ' del mine ', ' del min ', ' del mit ', ' dele mine ', ' dele min ', ' dele mit ',
         ],
         'admin' => [
             'invite', 'new user', 'add user', 'create account', 'sign up', 'signup',

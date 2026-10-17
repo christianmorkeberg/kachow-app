@@ -49,4 +49,20 @@ final class ConnectionAccess
 
         return ['owner_id' => $ownerId, 'person' => $entry['person']];
     }
+
+    /**
+     * Marks a card as showing ANOTHER person's data: the page titles it with their name and must not
+     * offer controls or refreshes that would act on (or fetch) the viewer's own data instead.
+     *
+     * @param array<string, mixed> $card
+     * @param array<string, mixed> $person
+     * @return array<string, mixed>
+     */
+    public static function attribute(array $card, array $person): array
+    {
+        $card['person']   = ['name' => (string) ($person['name'] ?? ''), 'email' => (string) ($person['email'] ?? '')];
+        $card['readonly'] = true;
+
+        return $card;
+    }
 }
