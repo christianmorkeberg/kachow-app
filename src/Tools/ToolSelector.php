@@ -420,6 +420,10 @@ final class ToolSelector
             'every day', 'once a day', 'every hour', 'every week', 'recurring', 'scheduled task',
             'every weekday', 'weekdays at', 'every morning', 'every evening', 'every night', 'every 15 minutes',
             'every 30 minutes', 'every 10 minutes', 'every 5 minutes',
+            // Website watching = a scheduled task that opens the page each run.
+            'watch this page', 'watch the page', 'watch this site', 'watch the site', 'monitor this', 'monitor the',
+            'keep an eye on', 'back in stock', 'tell me when the price', 'tell me if the price',
+            'hold øje med', 'overvåg', 'på lager igen', 'sig til når prisen',
             // Danish
             'mind mig', 'påmind', 'paamind', 'påmindelse', 'glem ikke at minde', 'husk mig på', 'husk mig pa',
             'hver dag', 'hver uge', 'hver time', 'tilbagevendende', 'planlagt opgave',

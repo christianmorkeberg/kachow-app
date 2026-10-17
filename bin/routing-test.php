@@ -311,6 +311,8 @@ $cases = [
     ['msg' => 'what scheduled tasks do I have?', 'expect' => 'reminders'],
     ['msg' => 'hver dag kl 8, tjek om der er nye regninger', 'expect' => 'reminders'],
     ['msg' => 'next time I\'m at Netto, tell me to buy batteries', 'expect' => 'reminders'],
+    ['msg' => 'keep an eye on https://shop.example/item and tell me when it is back in stock', 'expect' => 'reminders'],
+    ['msg' => 'overvåg den her side en gang om dagen https://example.dk/job', 'expect' => 'reminders'],
     ['msg' => 'mind mig om fakturaen næste gang jeg er på arbejde', 'expect' => 'reminders'],
     ['msg' => 'næste gang jeg kommer til kontoret skal jeg huske nøglen', 'expect' => 'reminders'],
     ['msg' => 'every weekday at 7 check the weather and tell me if I need a coat', 'expect' => 'reminders'],

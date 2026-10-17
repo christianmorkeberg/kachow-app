@@ -47,7 +47,9 @@ use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Email\EmailService;
 use App\Mail\Mailer;
+use App\Data\WebSnapshots;
 use App\Home\HomeOwner;
+use App\Web\PageFetcher;
 use App\Home\HueSync;
 use App\Maps\MapDistance;
 use App\Maps\PoiNames;
@@ -246,6 +248,8 @@ final class ToolRegistry
         $reminders = new Reminders();
         $registry->register(new SetReminder($reminders, new PushSubscriptions()));
         $registry->register(new SetPlaceReminder($reminders, $places, $locationPoints, new PushSubscriptions()));
+        // Only handed to the model on a turn that carries a link or approved going online (AssistantLoop).
+        $registry->register(new FetchWebpage(new PageFetcher(), new WebSnapshots()));
         $registry->register(new ListReminders($reminders));
         $registry->register(new CancelReminder($reminders));
         $scheduledTasks = new ScheduledTasks();

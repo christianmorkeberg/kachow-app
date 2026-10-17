@@ -85,7 +85,9 @@ check('none when there is no grounding', GeminiClient::extractSources(['candidat
 echo "7) the tool\n";
 $tool = new WebSearch($client);
 $r = $tool->execute(['query' => 'Cafe X Copenhagen opening hours'], 1);
-check('returns the answer and the site names', $r['answer'] === 'Open 11-22 daily.' && $r['sources'] === ['cafex.example', 'maps.example'], json_encode($r));
+check('returns the answer (labelled untrusted) and the site names', ($r[\App\Support\WebSafety::UNTRUSTED_KEY] ?? '') === 'Open 11-22 daily.' && $r['sources'] === ['cafex.example', 'maps.example'], json_encode($r));
+check('says what it searched for', ($r['searched_for'] ?? '') === 'Cafe X Copenhagen opening hours');
+check('a query with an email address never reaches Google', isset($tool->execute(['query' => 'who is alex@example.com'], 1)['error']));
 check('tells the model to present it as from the web', str_contains($r['note'], 'from the web'));
 check('an empty query is refused', isset($tool->execute(['query' => ' '], 1)['error']));
 $noSources = new WebSearch(new GeminiClient('k', ['m1'], fn () => [200, json_encode(['candidates' => [['content' => ['parts' => [['text' => 'Maybe.']]]]]])]));
