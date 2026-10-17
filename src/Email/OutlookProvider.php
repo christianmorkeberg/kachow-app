@@ -28,29 +28,78 @@ final class OutlookProvider implements EmailProvider
         $this->accessToken = $access;
     }
 
-    public function listRecent(int $limit = 15, ?string $query = null): array
+    /**
+     * The Graph request for a list/search. The tools phrase "unread only" Gmail-style (`is:unread`), which Graph
+     * does not understand inside $search — so it is pulled out of the text and applied as a real filter:
+     *   - unread, no text  → inbox with $filter=isRead eq false (newest first);
+     *   - text (± unread)  → $search (relevance order; $search can't be combined with $filter/$orderby), and for
+     *                        unread the page is over-fetched and filtered afterwards ('after_unread').
+     *
+     * @return array{path:string, after_unread:bool, fallback:?string}
+     */
+    public static function listRequest(int $limit, ?string $query): array
     {
         $limit  = max(1, min($limit, 25));
         $select = 'id,conversationId,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead';
+        $text   = trim((string) $query);
+        $unread = false;
+        if ($text !== '' && preg_match('/(?<![\w:])is:unread(?![\w])/i', $text) === 1) {
+            $unread = true;
+            $text   = trim((string) preg_replace('/(?<![\w:])is:unread(?![\w])/i', '', $text));
+        }
+        $base   = '$select=' . rawurlencode($select);
+        $newest = '$orderby=' . rawurlencode('receivedDateTime desc');
 
-        if ($query !== null && trim($query) !== '') {
-            // $search can't be combined with $orderby; Graph returns by relevance.
-            $path = '/me/messages?$select=' . rawurlencode($select)
-                . '&$top=' . $limit
-                . '&$search=' . rawurlencode('"' . trim($query) . '"');
-        } else {
-            $path = '/me/mailFolders/inbox/messages?$select=' . rawurlencode($select)
-                . '&$top=' . $limit
-                . '&$orderby=' . rawurlencode('receivedDateTime desc');
+        if ($text !== '') {
+            $top = $unread ? min(50, $limit * 4) : $limit;
+
+            return [
+                'path' => '/me/messages?' . $base . '&$top=' . $top . '&$search=' . rawurlencode('"' . $text . '"'),
+                'after_unread' => $unread,
+                'fallback' => null,
+            ];
+        }
+        if ($unread) {
+            // Graph wants the $orderby property to appear in $filter too (else "InefficientFilter").
+            $filter = '$filter=' . rawurlencode('receivedDateTime ge 1900-01-01T00:00:00Z and isRead eq false');
+
+            return [
+                'path' => '/me/mailFolders/inbox/messages?' . $base . '&$top=' . $limit . '&' . $filter . '&' . $newest,
+                'after_unread' => false,
+                // If Graph still refuses the combined filter: newest inbox page, filtered here.
+                'fallback' => '/me/mailFolders/inbox/messages?' . $base . '&$top=' . min(50, $limit * 4) . '&' . $newest,
+            ];
         }
 
-        $res = MsGraph::request($this->accessToken, 'GET', $path);
+        return ['path' => '/me/mailFolders/inbox/messages?' . $base . '&$top=' . $limit . '&' . $newest, 'after_unread' => false, 'fallback' => null];
+    }
+
+    public function listRecent(int $limit = 15, ?string $query = null): array
+    {
+        $limit = max(1, min($limit, 25));
+        $req   = self::listRequest($limit, $query);
+
+        try {
+            $res = MsGraph::request($this->accessToken, 'GET', $req['path']);
+            $fallbackUsed = false;
+        } catch (\Throwable $e) {
+            if ($req['fallback'] === null) {
+                throw $e;
+            }
+            error_log('outlook unread filter refused, filtering client-side: ' . $e->getMessage());
+            $res          = MsGraph::request($this->accessToken, 'GET', $req['fallback']);
+            $fallbackUsed = true;
+        }
+
         $out = [];
         foreach ($res['value'] ?? [] as $m) {
+            if (($req['after_unread'] || $fallbackUsed) && ($m['isRead'] ?? true)) {
+                continue;
+            }
             $out[] = $this->summaryFrom($m);
         }
 
-        return $out;
+        return array_slice($out, 0, $limit);
     }
 
     public function get(string $messageId): ?EmailMessage

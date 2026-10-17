@@ -24,7 +24,8 @@ final class ReadEmail implements Tool
     public function description(): string
     {
         return 'Fetches the full text of one email by id (from get_emails) so you can summarise it or '
-            . 'answer questions about it. account is optional when the user has several mailboxes. Read-only.';
+            . 'answer questions about it. Pass the email\'s "account" from get_emails (if you omit it, every '
+            . 'mailbox is tried). Read-only.';
     }
 
     public function parameters(): array
@@ -52,7 +53,14 @@ final class ReadEmail implements Tool
         $accountId = $this->email->matchAccount($userId, isset($arguments['account']) ? (string) $arguments['account'] : null);
 
         try {
-            $msg = $this->email->get($userId, $accountId, $id);
+            if ($accountId === null) {
+                // No mailbox named: the id came from a merged list, so find whichever mailbox holds it.
+                $found     = $this->email->locate($userId, $id);
+                $msg       = $found['message'] ?? null;
+                $accountId = $found['account_id'] ?? null;
+            } else {
+                $msg = $this->email->get($userId, $accountId, $id);
+            }
         } catch (\Throwable $e) {
             error_log('read_email: ' . $e->getMessage());
             return ['error' => 'I could not open that email just now.'];

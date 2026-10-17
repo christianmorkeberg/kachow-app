@@ -15,12 +15,17 @@ use RuntimeException;
  */
 final class EmailService
 {
+    /**
+     * @param (\Closure(array):EmailProvider)|null $providerFactory builds a provider from an account's public
+     *        meta — only for tests (a fake mailbox); production leaves it null and gets the real backends.
+     */
     public function __construct(
         private EmailAccounts $accounts,
         private string $googleClientId = '',
         private string $googleClientSecret = '',
         private string $msClientId = '',
         private string $msClientSecret = '',
+        private ?\Closure $providerFactory = null,
     ) {
     }
 
@@ -102,6 +107,75 @@ final class EmailService
         [$account, $provider] = $this->resolve($userId, $accountId);
 
         return $provider->listRecent($limit, $query);
+    }
+
+    /**
+     * List or search across ALL of the user's active mailboxes (or only $onlyAccountId), newest first, each
+     * message tagged with the mailbox it lives in. Report #33: without an account the old path looked at the
+     * FIRST mailbox only, and the assistant then claimed to have searched all three. A mailbox that cannot be
+     * reached is reported in `failed` (and logged) instead of failing the whole search.
+     *
+     * @return array{messages: list<array{message: EmailMessage, account: array{id:int, provider:string, email:string, display_name:?string, status:string}}>,
+     *               searched: list<array{account:string, found:int}>, failed: list<array{account:string, error:string}>}
+     */
+    public function listAcross(int $userId, ?int $onlyAccountId, int $limit = 12, ?string $query = null): array
+    {
+        $accounts = $this->accounts->listForUser($userId);
+        if ($onlyAccountId !== null) {
+            $accounts = array_values(array_filter($accounts, static fn (array $a): bool => $a['id'] === $onlyAccountId));
+        }
+        if ($accounts === []) {
+            throw new RuntimeException($onlyAccountId !== null ? 'That email account is not available.' : 'No email account is connected yet.');
+        }
+
+        $rows = $searched = $failed = [];
+        foreach ($accounts as $meta) {
+            try {
+                $found = $this->providerFor($userId, $meta)->listRecent($limit, $query);
+            } catch (\Throwable $e) {
+                error_log('listAcross ' . $meta['provider'] . ': ' . $e->getMessage());
+                $failed[] = ['account' => $meta['email'], 'error' => 'could not be reached'];
+                continue;
+            }
+            $searched[] = ['account' => $meta['email'], 'found' => count($found)];
+            foreach ($found as $m) {
+                $rows[] = ['message' => $m, 'account' => $meta];
+            }
+        }
+        if ($searched === []) {
+            throw new RuntimeException('None of the mailboxes could be reached.');
+        }
+
+        // Newest first across mailboxes. (Outlook search comes back by relevance, Gmail by date — one order for all.)
+        usort($rows, static fn (array $a, array $b): int => (strtotime($b['message']->date) ?: 0) <=> (strtotime($a['message']->date) ?: 0));
+
+        return ['messages' => array_slice($rows, 0, max(1, $limit)), 'searched' => $searched, 'failed' => $failed];
+    }
+
+    /**
+     * Finds one message when the caller doesn't know which mailbox it is in: tries each active mailbox in turn.
+     * IMAP ids are plain numbers, so an IMAP mailbox is only asked for an all-digit id (a Gmail id that happens
+     * to start with digits must never be read as an IMAP UID).
+     *
+     * @return array{account_id:int, message:EmailMessage}|null
+     */
+    public function locate(int $userId, string $messageId): ?array
+    {
+        foreach ($this->accounts->listForUser($userId) as $meta) {
+            if ($meta['provider'] === 'imap' && !ctype_digit($messageId)) {
+                continue;
+            }
+            try {
+                $msg = $this->providerFor($userId, $meta)->get($messageId);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($msg !== null) {
+                return ['account_id' => $meta['id'], 'message' => $msg];
+            }
+        }
+
+        return null;
     }
 
     public function get(int $userId, ?int $accountId, string $messageId): ?EmailMessage
@@ -232,6 +306,9 @@ final class EmailService
      */
     private function providerFor(int $userId, array $meta): EmailProvider
     {
+        if ($this->providerFactory !== null) {
+            return ($this->providerFactory)($meta);
+        }
         $creds = $this->accounts->credentials($userId, $meta['id']);
         if ($creds === null) {
             throw new RuntimeException('Missing credentials for that email account.');

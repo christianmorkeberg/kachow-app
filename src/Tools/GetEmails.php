@@ -26,8 +26,11 @@ final class GetEmails implements Tool
         return 'Lists recent emails from the user\'s connected mailbox (most recent first). '
             . 'Use for "check my email", "any new mail", "unread emails", or searching ("emails from X"). '
             . 'Set unread_only for just unread. Provide query for a search (Gmail syntax, e.g. "from:bank"). '
-            . 'account is optional (email address or "gmail") when they have more than one mailbox. '
-            . 'Each result has an id used by read_email and draft_email. Read-only — never sends anything.';
+            . 'WITHOUT account it looks in EVERY connected mailbox (Gmail, Hotmail, IMAP …) and merges the '
+            . 'results by date; pass account (email address or "gmail"/"hotmail") only when the user names one. '
+            . 'The result lists "searched" (each mailbox and how many it returned) and "failed" (mailboxes that '
+            . 'could not be reached) — never say you searched a mailbox that is not in "searched". '
+            . 'Each email has an id plus its "account"; pass both to read_email. Read-only — never sends anything.';
     }
 
     public function parameters(): array
@@ -38,7 +41,7 @@ final class GetEmails implements Tool
                 'unread_only' => ['type' => 'boolean', 'description' => 'Only unread messages.'],
                 'query'       => ['type' => 'string', 'description' => 'Optional search (Gmail query syntax).'],
                 'limit'       => ['type' => 'integer', 'description' => 'Max messages (default 12, max 25).'],
-                'account'     => ['type' => 'string', 'description' => 'Which mailbox (email or provider), if several.'],
+                'account'     => ['type' => 'string', 'description' => 'Only this mailbox (email or provider). Omit to search all of them.'],
             ],
             'required' => [],
         ];
@@ -55,7 +58,8 @@ final class GetEmails implements Tool
             ];
         }
 
-        $accountId = $this->email->matchAccount($userId, isset($arguments['account']) ? (string) $arguments['account'] : null);
+        $hint      = isset($arguments['account']) ? trim((string) $arguments['account']) : '';
+        $accountId = $this->email->matchAccount($userId, $hint !== '' ? $hint : null);
         $limit     = (int) ($arguments['limit'] ?? 12);
 
         $query = isset($arguments['query']) ? trim((string) $arguments['query']) : null;
@@ -64,24 +68,43 @@ final class GetEmails implements Tool
         }
 
         try {
-            $messages = $this->email->listRecent($userId, $accountId, $limit, $query !== '' ? $query : null);
+            $res = $this->email->listAcross($userId, $accountId, $limit, $query !== '' ? $query : null);
         } catch (\Throwable $e) {
             error_log('get_emails: ' . $e->getMessage());
-            return ['error' => 'I could not reach that mailbox just now.'];
+            return ['error' => 'I could not reach ' . ($accountId !== null ? 'that mailbox' : 'your mailboxes') . ' just now.'];
         }
 
-        $items = array_map(static fn ($m) => $m->toArray(false), $messages);
+        // Every message says which mailbox it is in — read_email / mark_emails_read need it, and the card opens
+        // the right one even when the list mixes mailboxes.
+        $items = array_map(
+            static fn (array $r): array => $r['message']->toArray(false)
+                + ['account' => $r['account']['email'], 'account_id' => $r['account']['id']],
+            $res['messages']
+        );
 
-        return [
+        $out = [
             'connected' => true,
             'count'     => count($items),
+            'searched'  => $res['searched'],
             'emails'    => $items,
             '_render'   => [
-                'kind'      => 'email_list',
-                'title'     => $query !== null && $query !== '' ? 'Email search' : 'Recent email',
+                'kind'       => 'email_list',
+                'title'      => $query !== null && $query !== '' ? 'Email search' : 'Recent email',
                 'account_id' => $accountId,
-                'items'     => $items,
+                'items'      => $items,
             ],
         ];
+        if ($res['failed'] !== []) {
+            $out['failed'] = $res['failed'];
+        }
+        $unmatched = $hint !== '' && $accountId === null;
+        if ($unmatched || $res['failed'] !== [] || count($res['searched']) > 1) {
+            $out['note'] = ($unmatched ? 'No mailbox matched "' . $hint . '", so every connected mailbox was searched. ' : '')
+                . 'Only claim to have searched the mailboxes listed in "searched"'
+                . ($res['failed'] !== [] ? ' — and say plainly that those in "failed" could not be reached, so nothing is known about them' : '')
+                . '. Each email shows its mailbox in "account": pass that to read_email / mark_emails_read.';
+        }
+
+        return $out;
     }
 }
