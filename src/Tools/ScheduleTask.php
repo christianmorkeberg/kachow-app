@@ -37,15 +37,19 @@ final class ScheduleTask implements Tool
 
     public function description(): string
     {
-        return 'Saves a standing instruction that runs AGAIN AND AGAIN on a schedule (hourly/daily/weekly) — '
-            . 'use for "once a day, check my email for invoices and notify me if you find anything", "every '
-            . 'Monday, summarise my week", Danish "hver dag kl 8, tjek...". On each run, YOUR FUTURE SELF '
-            . 'receives `instruction` as a fresh message with FULL tool access (get_emails, read_email, '
-            . 'everything) but NOBODY IS WATCHING LIVE — so write `instruction` narrowly: say exactly what '
-            . 'to check and what is worth telling the user about, and call notify_me only when there is '
-            . 'actually something to report (stay quiet otherwise). Do NOT instruct a future run to take an '
-            . 'irreversible action (sending, deleting) unless the user explicitly asked for that. This is '
-            . 'for a RECURRING check — use set_reminder instead for a one-off "remind me at X".';
+        return 'Saves an instruction that the assistant runs ITSELF later, on a schedule: every N minutes, hourly, '
+            . 'daily, on weekdays, weekly, or once at a set time. Use for "once a day, check my email for '
+            . 'invoices and notify me", "every weekday at 07:00 turn on the kitchen lights", "at 13:00 check if '
+            . 'I\'m home and if so turn on the living room lights", "tomorrow at 7 turn on the heating", '
+            . 'Danish "hver dag kl 8, tjek...", "hver hverdag kl 7...". On each run, YOUR FUTURE SELF receives '
+            . '`instruction` as a fresh message with FULL tool access (email, calendar, location, home '
+            . 'devices, everything) but NOBODY IS WATCHING LIVE — so write `instruction` self-contained: '
+            . 'exactly what to check, what to do when the condition holds, and what to do (usually nothing) '
+            . 'when it does not. Set notify_always=true when the run ACTS (turns something on, changes '
+            . 'something) so the user is told what happened; leave it off for a pure check that should only '
+            . 'speak up when it finds something. Do NOT instruct a future run to take an irreversible action '
+            . '(sending, deleting) unless the user explicitly asked for that. A one-off "remind me at X" with '
+            . 'no action behind it is set_reminder; this tool is for something the assistant must DO or CHECK.';
     }
 
     public function parameters(): array
@@ -62,12 +66,28 @@ final class ScheduleTask implements Tool
                 ],
                 'frequency' => [
                     'type' => 'string', 'enum' => ScheduledTasks::FREQUENCIES,
-                    'description' => 'How often to run.',
+                    'description' => 'How often to run: "minutes" (every interval_minutes), "hourly", "daily", '
+                        . '"weekdays" (Monday to Friday), "weekly" (needs day_of_week), or "once" (needs run_at).',
+                ],
+                'interval_minutes' => [
+                    'type'        => 'integer',
+                    'description' => 'For frequency "minutes": run every this many minutes (5 to 1440).',
+                ],
+                'run_at' => [
+                    'type'        => 'string',
+                    'description' => 'For frequency "once": local date and time "YYYY-MM-DD HH:MM" (24h), in '
+                        . 'the future. Work out the date from today\'s date.',
+                ],
+                'notify_always' => [
+                    'type'        => 'boolean',
+                    'description' => 'true = each run tells the user what it did (use when the task acts on '
+                        . 'something, e.g. turns lights on). false/omitted = only speak up when a check finds '
+                        . 'something.',
                 ],
                 'time_of_day' => [
                     'type'        => 'string',
-                    'description' => 'Local time of day "HH:MM" (24h) for daily/weekly. Defaults to "08:00" '
-                        . 'if omitted. Ignored for hourly.',
+                    'description' => 'Local time of day "HH:MM" (24h) for daily/weekdays/weekly. Defaults to '
+                        . '"08:00" if omitted. Ignored for minutes, hourly and once.',
                 ],
                 'day_of_week' => [
                     'type'        => 'string',
@@ -108,6 +128,34 @@ final class ScheduleTask implements Tool
             ? trim((string) $arguments['time_of_day'])
             : null;
 
+        $interval = null;
+        if ($frequency === 'minutes') {
+            $interval = (int) ($arguments['interval_minutes'] ?? 0);
+            if ($interval < ScheduledTasks::MIN_INTERVAL_MINUTES || $interval > ScheduledTasks::MAX_INTERVAL_MINUTES) {
+                return ['error' => 'interval_minutes must be between ' . ScheduledTasks::MIN_INTERVAL_MINUTES
+                    . ' and ' . ScheduledTasks::MAX_INTERVAL_MINUTES . ' (every run is a full assistant turn).'];
+            }
+        }
+
+        $onceAt = null;
+        if ($frequency === 'once') {
+            $raw = trim((string) ($arguments['run_at'] ?? ''));
+            try {
+                $local = $raw === '' ? null : new \DateTimeImmutable($raw, new \DateTimeZone('Europe/Copenhagen'));
+            } catch (\Throwable) {
+                $local = null;
+            }
+            if ($local === null) {
+                return ['error' => 'A one-off task needs run_at as "YYYY-MM-DD HH:MM" (local time).'];
+            }
+            $onceAt = $local->setTimezone(new \DateTimeZone('UTC'));
+            if ($onceAt <= new \DateTimeImmutable('now', new \DateTimeZone('UTC'))) {
+                return ['error' => 'That time has already passed — ask the user for a time in the future.'];
+            }
+        }
+
+        $notifyAlways = filter_var($arguments['notify_always'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
         if ($this->tasks->countActive($userId) >= self::MAX_ACTIVE_PER_USER) {
             return ['error' => 'You already have ' . self::MAX_ACTIVE_PER_USER . ' scheduled tasks running — '
                 . 'cancel one (cancel_scheduled_task) before adding another.'];
@@ -121,8 +169,11 @@ final class ScheduleTask implements Tool
         $conversationId = $this->conversations->start($userId);
         $this->conversations->setTitle($userId, $conversationId, 'Scheduled: ' . $label);
 
-        $id = $this->tasks->create($userId, $conversationId, $label, $instruction, $frequency, $timeOfDay, $dayOfWeek);
-        $next = ScheduledTasks::nextRunAtUtc($frequency, $timeOfDay, $dayOfWeek)
+        $id = $this->tasks->create(
+            $userId, $conversationId, $label, $instruction, $frequency, $timeOfDay, $dayOfWeek,
+            $interval, $notifyAlways, $onceAt,
+        );
+        $next = ($onceAt ?? ScheduledTasks::nextRunAtUtc($frequency, $timeOfDay, $dayOfWeek, null, $interval))
             ->setTimezone(new \DateTimeZone('Europe/Copenhagen'));
 
         return [
@@ -130,10 +181,12 @@ final class ScheduleTask implements Tool
             'id'               => $id,
             'label'            => $label,
             'first_run_local'  => $next->format('D j M, H:i'),
+            'notify_always'    => $notifyAlways,
             'has_device'       => $this->subscriptions->hasAny($userId),
             'note'             => $this->subscriptions->hasAny($userId)
-                ? 'Confirm briefly — mention when it first runs and that it will only notify if it finds '
-                    . 'something worth reporting.'
+                ? 'Confirm briefly — mention when it first runs and ' . ($notifyAlways
+                    ? 'that it will send a notification each time saying what it did.'
+                    : 'that it will only notify if it finds something worth reporting.')
                 : 'Saved and will run on schedule, but the user has NO notification device enabled — tell '
                     . 'them it can\'t actually notify them yet; turn on notifications (topbar menu) first.',
         ];

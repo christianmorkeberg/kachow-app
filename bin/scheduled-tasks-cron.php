@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Scheduled-task runner — run every 30 minutes by cron.
+ * Scheduled-task runner — run every MINUTE by cron (a task set for 13:00 fires at 13:00; with
+ * nothing due a run is one indexed query).
  *
  * For each due task (set up via schedule_task), re-invokes the SAME AssistantLoop used
  * for live chat, feeding the task's stored instruction back in as if the user had just
@@ -19,8 +20,8 @@ declare(strict_types=1);
  * task, right before each handle() call).
  */
 
-// Crontab (kept out of the block comment above so the "* / 30" doesn't close it):
-//   */30 * * * * php /home/kachowdk/assistant-app/bin/scheduled-tasks-cron.php >/dev/null 2>&1
+// Crontab (kept out of the block comment above so a "* /" can't close it):
+//   * * * * * php /home/kachowdk/assistant-app/bin/scheduled-tasks-cron.php >/dev/null 2>&1
 
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../config.php';
@@ -57,6 +58,7 @@ use App\Music\Discogs;
 use App\Notify\Notifier;
 use App\Notify\WebPush;
 use App\Receipts\ReceiptStorage;
+use App\Support\ToolMemory;
 use App\Tools\NotifyMe;
 use App\Tools\ToolRegistry;
 use App\Weather\Dmi;
@@ -75,8 +77,23 @@ if (!WebPush::isConfigured()) {
 const UNATTENDED_PREAMBLE = "[Scheduled task — this is an unattended run, nobody is "
     . "watching live. Do ONLY what the instruction below specifically asks. If it's a "
     . "check/notify instruction, don't also send messages, delete anything, or take any "
-    . "other action on your own initiative. Call notify_me only if there's something "
-    . "worth telling the user; otherwise finish quietly without calling it.]\n\n";
+    . "other action on your own initiative. ";
+
+/** Appended per task: how the run should report back. */
+const REPORT_QUIET = "Call notify_me only if there's something worth telling the user; "
+    . "otherwise finish quietly without calling it.]\n\n";
+const REPORT_ALWAYS = "When you have done what the instruction asks, call notify_me ONCE with a "
+    . "short title and one sentence on what you did (e.g. which lights you turned on). If the "
+    . "instruction's condition was not met and you did nothing, finish quietly without calling it. "
+    . "If the home agent was unreachable (offline / no answer), do not notify: the run is retried "
+    . "automatically. For any other failure, call notify_me to say what went wrong.]\n\n";
+
+/** One retry when the home agent could not be reached: a Wi-Fi blip is gone within a minute or two. */
+const RETRY_AFTER_SECONDS = 90;
+const RETRY_PREAMBLE = "[Scheduled task — RETRY. This is an unattended run. The previous attempt "
+    . "could not reach the home agent. Try the instruction below once more, doing only what it asks. "
+    . "If the home agent is still unreachable, call notify_me ONCE saying what could not be done "
+    . "and that it will not be tried again.]\n\n";
 
 $tasks     = new ScheduledTasks();
 $notifier  = Notifier::fromEnv();
@@ -88,6 +105,7 @@ try {
     $instructions = new UserInstructions();
     $memories     = new Memories();
     $workouts     = new Workouts();
+    $conversations = new Conversations();
     $registry     = ToolRegistry::createStandard(
         $workouts,
         new Wishlist(),
@@ -120,7 +138,7 @@ try {
     $loop   = new AssistantLoop(
         $gemini,
         $registry,
-        new Conversations(),
+        $conversations,
         $instructions,
         $memories,
         new UserSettings(),
@@ -136,23 +154,37 @@ $ran = 0;
 
 foreach ($due as $task) {
     try {
-        $currentNext = new DateTimeImmutable($task['next_run_at'], $utc);
-        $next = ScheduledTasks::nextRunAtUtc(
-            $task['frequency'],
-            $task['time_of_day'],
-            $task['day_of_week'],
-            $currentNext,
-        );
-
         // Claim (and reschedule) FIRST — only the run that wins this advances next_run_at,
         // so an overlapping cron run skips it, and this task's slot moves on regardless
-        // of whether the run below succeeds.
-        if (!$tasks->claimAndReschedule($task['id'], $next->format('Y-m-d H:i:s'))) {
-            continue;
+        // of whether the run below succeeds. A one-off is finished by its claim.
+        if ($task['frequency'] === 'once') {
+            if (!$tasks->claimOnce($task['id'])) {
+                continue;
+            }
+        } else {
+            $args = [$task['frequency'], $task['time_of_day'], $task['day_of_week']];
+            $next = ScheduledTasks::nextRunAtUtc(...$args, after: new DateTimeImmutable($task['next_run_at'], $utc),
+                intervalMinutes: $task['interval_minutes']);
+            // Cron was down for a while: skip the missed slots instead of replaying them one a minute.
+            if ($next <= new DateTimeImmutable('now', $utc)) {
+                $next = ScheduledTasks::nextRunAtUtc(...$args, intervalMinutes: $task['interval_minutes']);
+            }
+            if (!$tasks->claimAndReschedule($task['id'], $next->format('Y-m-d H:i:s'))) {
+                continue;
+            }
         }
 
         $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
-        $loop->handle($task['user_id'], $task['conversation_id'], UNATTENDED_PREAMBLE . $task['instruction']);
+        $seen = count($conversations->messages($task['conversation_id']));
+        $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
+        $loop->handle($task['user_id'], $task['conversation_id'], UNATTENDED_PREAMBLE . $report . $task['instruction']);
+
+        // The home agent (the Pico) not answering is usually a blip: wait, then try once more.
+        $fresh = array_slice($conversations->messages($task['conversation_id']), $seen);
+        if (ToolMemory::homeUnreachable($fresh)) {
+            sleep(RETRY_AFTER_SECONDS);
+            $loop->handle($task['user_id'], $task['conversation_id'], RETRY_PREAMBLE . $task['instruction']);
+        }
         $ran++;
     } catch (\Throwable $e) {
         error_log('scheduled-tasks-cron task ' . $task['id'] . ': ' . $e->getMessage());

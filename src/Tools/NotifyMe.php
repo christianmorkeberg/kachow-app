@@ -32,9 +32,10 @@ final class NotifyMe implements Tool
 
     public function description(): string
     {
-        return 'Sends the user a phone push notification. Use ONLY when you have something worth telling '
-            . 'them right now — a scheduled check actually found something. Stay quiet (don\'t call this) '
-            . 'when there is nothing to report; silence is the normal, expected outcome of most runs.';
+        return 'Sends the user a phone push notification. Use when you have something worth telling them right '
+            . 'now — a scheduled check actually found something, or this run\'s instructions say to report what '
+            . 'it did. Otherwise stay quiet (don\'t call this); silence is the normal outcome of a check that '
+            . 'found nothing.';
     }
 
     public function parameters(): array

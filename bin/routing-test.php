@@ -307,6 +307,10 @@ $cases = [
     ['msg' => 'once a day, check my email for invoices and notify me if you find anything', 'expect' => 'reminders'],
     ['msg' => 'what scheduled tasks do I have?', 'expect' => 'reminders'],
     ['msg' => 'hver dag kl 8, tjek om der er nye regninger', 'expect' => 'reminders'],
+    ['msg' => 'every weekday at 7 check the weather and tell me if I need a coat', 'expect' => 'reminders'],
+    ['msg' => 'every 15 minutes check if the front door is open', 'expect' => 'reminders'],
+    ['msg' => 'hver hverdag kl 7 skal du tjekke kalenderen', 'expect' => 'reminders'],
+    ['msg' => 'hvert kvarter, tjek om der er nye mails', 'expect' => 'reminders'],
 
     // ---- connections ----
     ['msg' => 'connect me with Alex', 'expect' => 'connections'],

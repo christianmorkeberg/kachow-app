@@ -19,7 +19,10 @@ use PDO;
 final class ScheduledTasks
 {
     private const LOCAL_TZ = 'Europe/Copenhagen';
-    public const FREQUENCIES = ['hourly', 'daily', 'weekly'];
+    public const FREQUENCIES = ['minutes', 'hourly', 'daily', 'weekdays', 'weekly', 'once'];
+    /** Every run is a full model turn, so "every N minutes" has a floor. */
+    public const MIN_INTERVAL_MINUTES = 5;
+    public const MAX_INTERVAL_MINUTES = 1440;
 
     private PDO $db;
 
@@ -36,14 +39,20 @@ final class ScheduledTasks
         string $instruction,
         string $frequency,
         ?string $timeOfDay,
-        ?int $dayOfWeek
+        ?int $dayOfWeek,
+        ?int $intervalMinutes = null,
+        bool $notifyAlways = false,
+        ?DateTimeImmutable $onceAtUtc = null
     ): int {
-        $nextRunAtUtc = self::nextRunAtUtc($frequency, $timeOfDay, $dayOfWeek);
+        $nextRunAtUtc = $frequency === 'once' && $onceAtUtc !== null
+            ? $onceAtUtc
+            : self::nextRunAtUtc($frequency, $timeOfDay, $dayOfWeek, null, $intervalMinutes);
 
         $stmt = $this->db->prepare(
             'INSERT INTO scheduled_tasks
-                (user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, next_run_at)
-             VALUES (:u, :conv, :label, :instr, :freq, :tod, :dow, :next)'
+                (user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week,
+                 interval_minutes, notify_always, next_run_at)
+             VALUES (:u, :conv, :label, :instr, :freq, :tod, :dow, :int, :always, :next)'
         );
         $stmt->execute([
             ':u'     => $userId,
@@ -53,6 +62,8 @@ final class ScheduledTasks
             ':freq'  => $frequency,
             ':tod'   => $timeOfDay,
             ':dow'   => $dayOfWeek,
+            ':int'   => $intervalMinutes,
+            ':always' => $notifyAlways ? 1 : 0,
             ':next'  => $nextRunAtUtc->format('Y-m-d H:i:s'),
         ]);
 
@@ -69,7 +80,7 @@ final class ScheduledTasks
     {
         $stmt = $this->db->prepare(
             "SELECT id, conversation_id, label, instruction, frequency, time_of_day, day_of_week,
-                    next_run_at, last_run_at
+                    interval_minutes, notify_always, next_run_at, last_run_at
              FROM scheduled_tasks WHERE user_id = :u AND status = 'active'
              ORDER BY next_run_at ASC, id ASC"
         );
@@ -85,6 +96,8 @@ final class ScheduledTasks
                 'frequency'       => (string) $r['frequency'],
                 'time_of_day'     => $r['time_of_day'] !== null ? (string) $r['time_of_day'] : null,
                 'day_of_week'     => $r['day_of_week'] !== null ? (int) $r['day_of_week'] : null,
+                'interval_minutes' => $r['interval_minutes'] !== null ? (int) $r['interval_minutes'] : null,
+                'notify_always'   => (bool) $r['notify_always'],
                 'next_run_at'     => (string) $r['next_run_at'],
                 'last_run_at'     => $r['last_run_at'] !== null ? (string) $r['last_run_at'] : null,
             ];
@@ -175,7 +188,8 @@ final class ScheduledTasks
     {
         $limit = max(1, min(200, $limit));
         $stmt  = $this->db->query(
-            "SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, next_run_at
+            "SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week,
+                    interval_minutes, notify_always, next_run_at
              FROM scheduled_tasks
              WHERE status = 'active' AND next_run_at <= UTC_TIMESTAMP()
              ORDER BY next_run_at ASC, id ASC
@@ -193,11 +207,25 @@ final class ScheduledTasks
                 'frequency'       => (string) $r['frequency'],
                 'time_of_day'     => $r['time_of_day'] !== null ? (string) $r['time_of_day'] : null,
                 'day_of_week'     => $r['day_of_week'] !== null ? (int) $r['day_of_week'] : null,
+                'interval_minutes' => $r['interval_minutes'] !== null ? (int) $r['interval_minutes'] : null,
+                'notify_always'   => (bool) $r['notify_always'],
                 'next_run_at'     => (string) $r['next_run_at'],
             ];
         }
 
         return $out;
+    }
+
+    /** Claims a due one-shot task and finishes it in the same step. True only for the call that won it. */
+    public function claimOnce(int $id): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE scheduled_tasks SET status = 'done', last_run_at = UTC_TIMESTAMP()
+             WHERE id = :id AND status = 'active' AND next_run_at <= UTC_TIMESTAMP()"
+        );
+        $stmt->execute([':id' => $id]);
+
+        return $stmt->rowCount() > 0;
     }
 
     /**
@@ -221,17 +249,25 @@ final class ScheduledTasks
      * The next occurrence (UTC) strictly after $after (default now), from a wall-clock
      * schedule in Europe/Copenhagen — so DST shifts never drift the local time of day.
      * $timeOfDay is "HH:MM" (defaults to "08:00" for daily/weekly if omitted); $dayOfWeek
-     * is ISO 1=Mon..7=Sun (required for weekly, ignored otherwise).
+     * is ISO 1=Mon..7=Sun (required for weekly, ignored otherwise). 'weekdays' is daily minus
+     * Saturday and Sunday; 'minutes' is $after + $intervalMinutes (clamped to the allowed range).
      */
     public static function nextRunAtUtc(
         string $frequency,
         ?string $timeOfDay,
         ?int $dayOfWeek,
-        ?DateTimeImmutable $after = null
+        ?DateTimeImmutable $after = null,
+        ?int $intervalMinutes = null
     ): DateTimeImmutable {
         $tz    = new DateTimeZone(self::LOCAL_TZ);
         $utc   = new DateTimeZone('UTC');
         $after = ($after ?? new DateTimeImmutable('now', $utc))->setTimezone($tz);
+
+        if ($frequency === 'minutes') {
+            $n = max(self::MIN_INTERVAL_MINUTES, min(self::MAX_INTERVAL_MINUTES, $intervalMinutes ?? 60));
+
+            return $after->modify('+' . $n . ' minutes')->setTimezone($utc);
+        }
 
         if ($frequency === 'hourly') {
             return $after->modify('+1 hour')->setTimezone($utc);
@@ -241,6 +277,12 @@ final class ScheduledTasks
         $candidate = $after->setTime($h, $m, 0);
         if ($candidate <= $after) {
             $candidate = $candidate->modify('+1 day');
+        }
+
+        if ($frequency === 'weekdays') {
+            while ((int) $candidate->format('N') >= 6) {
+                $candidate = $candidate->modify('+1 day');
+            }
         }
 
         if ($frequency === 'weekly') {

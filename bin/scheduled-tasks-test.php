@@ -85,6 +85,7 @@ $db->exec("CREATE TABLE scheduled_tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, conversation_id INTEGER NOT NULL,
     label TEXT NOT NULL, instruction TEXT NOT NULL, frequency TEXT NOT NULL,
     time_of_day TEXT, day_of_week INTEGER, status TEXT NOT NULL DEFAULT 'active',
+    interval_minutes INTEGER, notify_always INTEGER NOT NULL DEFAULT 0,
     has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
     next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 // next_run_at in the past, so it's claimable right now.
@@ -114,6 +115,37 @@ check('a different user sees nothing (owner-scoped)', $tasks->unseenForUser(2) =
 
 $tasks->clearUnseenByConversation(1, 1);
 check('cleared after "opening" its conversation', $tasks->unseenForUser(1) === []);
+
+echo "10) every N minutes: +N from \$after, clamped to the allowed range\n";
+$after = new DateTimeImmutable('2026-10-13 12:00:00', $utc);
+check('+15 minutes', ScheduledTasks::nextRunAtUtc('minutes', null, null, $after, 15)->getTimestamp() - $after->getTimestamp() === 900);
+check('below the floor -> 5 minutes', ScheduledTasks::nextRunAtUtc('minutes', null, null, $after, 1)->getTimestamp() - $after->getTimestamp() === 300);
+check('above the ceiling -> 24 hours', ScheduledTasks::nextRunAtUtc('minutes', null, null, $after, 99999)->getTimestamp() - $after->getTimestamp() === 86400);
+
+echo "11) weekdays: Monday to Friday only, at the local time\n";
+// 2026-10-16 is a Friday. After 08:00 on Friday the next run is MONDAY the 19th.
+$after = new DateTimeImmutable('2026-10-16 12:00:00', $utc);
+$next  = ScheduledTasks::nextRunAtUtc('weekdays', '07:00', null, $after);
+check('Friday afternoon -> Monday', $next->setTimezone($tz)->format('Y-m-d') === '2026-10-19', $next->format('c'));
+check('at 07:00 local', $localTime($next) === '07:00', $localTime($next));
+$after = new DateTimeImmutable('2026-10-14 12:00:00', $utc); // Wednesday
+check('Wednesday afternoon -> Thursday', ScheduledTasks::nextRunAtUtc('weekdays', '07:00', null, $after)->setTimezone($tz)->format('Y-m-d') === '2026-10-15');
+$after = new DateTimeImmutable('2026-10-17 06:00:00', $utc); // Saturday morning
+check('Saturday -> Monday', ScheduledTasks::nextRunAtUtc('weekdays', '07:00', null, $after)->setTimezone($tz)->format('Y-m-d') === '2026-10-19');
+
+echo "12) create() stores the new fields; a one-off runs once and is then done\n";
+$id = $tasks->create(1, 1, 'Lights', 'Turn on the lights if I am home.', 'once', null, null, null, true, new DateTimeImmutable('2000-01-02 00:00:00', $utc));
+$row = $db->query("SELECT frequency, notify_always, next_run_at FROM scheduled_tasks WHERE id = $id")->fetch();
+check('one-off keeps its own run time', $row['next_run_at'] === '2000-01-02 00:00:00' && $row['frequency'] === 'once', json_encode($row));
+check('notify_always is saved', (int) $row['notify_always'] === 1);
+$every = $tasks->create(1, 1, 'Poll', 'Check.', 'minutes', null, null, 10);
+$poll  = $db->query("SELECT interval_minutes FROM scheduled_tasks WHERE id = $every")->fetch();
+check('the interval is saved', (int) $poll['interval_minutes'] === 10);
+check('first claim of the one-off wins', $tasks->claimOnce($id) === true);
+check('second claim of the one-off loses', $tasks->claimOnce($id) === false);
+check('a finished one-off is no longer active', !in_array($id, array_column($tasks->listForUser(1), 'id'), true));
+$listed = array_column($tasks->listForUser(1), null, 'id');
+check('list carries interval and notify flag', ($listed[$every]['interval_minutes'] ?? null) === 10 && ($listed[$every]['notify_always'] ?? null) === false);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

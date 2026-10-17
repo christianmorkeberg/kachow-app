@@ -24,9 +24,10 @@ final class ListScheduledTasks implements Tool
 
     public function description(): string
     {
-        return 'Lists the user\'s active recurring scheduled tasks (set up via schedule_task) — what each one '
-            . 'does, how often, and when it next runs. Use for "what have I scheduled?", "what are my '
-            . 'recurring checks?". Each result\'s id is used by cancel_scheduled_task.';
+        return 'Lists the user\'s active scheduled tasks (set up via schedule_task) — what each one does, how '
+            . 'often (every N minutes, hourly, daily, weekdays, weekly, or once), and when it next runs. Use '
+            . 'for "what have I scheduled?", "what are my recurring checks?". Each result\'s id is used by '
+            . 'cancel_scheduled_task.';
     }
 
     public function parameters(): array
@@ -46,6 +47,8 @@ final class ListScheduledTasks implements Tool
                 'instruction'      => $t['instruction'],
                 'frequency'        => $t['frequency'],
                 'time_of_day'      => $t['time_of_day'],
+                'interval_minutes' => $t['interval_minutes'],
+                'notify_always'    => $t['notify_always'],
                 'next_run_local'   => $next->format('D j M, H:i'),
             ];
         }, $this->tasks->listForUser($userId));

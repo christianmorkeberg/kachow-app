@@ -106,6 +106,27 @@ final class ToolMemory
         return false;
     }
 
+    /**
+     * Whether the LAST home_device_call in these rows failed because the home agent could not be
+     * reached (never connected, offline, or no answer in time) — the cue for a scheduled run to
+     * try once more. A refused path or a device error is not "unreachable": retrying won't help.
+     *
+     * @param list<array<string, mixed>> $rows stored message rows (ASC)
+     */
+    public static function homeUnreachable(array $rows): bool
+    {
+        $last = null;
+        foreach ($rows as $row) {
+            if (($row['role'] ?? '') === 'tool' && ($row['tool_name'] ?? '') === 'home_device_call') {
+                $last = json_decode((string) ($row['content'] ?? ''), true);
+            }
+        }
+        $err = is_array($last) && is_string($last['error'] ?? null) ? $last['error'] : '';
+
+        return $err !== '' && (str_contains($err, 'never connected') || str_contains($err, 'is offline')
+            || str_contains($err, 'No answer from the home agent'));
+    }
+
     private const HOME_MAX_ENTRIES = 60;
     private const HOME_MAX_CHARS   = 4000;
 

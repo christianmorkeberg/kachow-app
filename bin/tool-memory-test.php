@@ -158,5 +158,20 @@ check('a chat with only other tools is not', !ToolMemory::homeActive([toolRow('g
 check('a chat with no tools at all is not', !ToolMemory::homeActive([row('user', 'hej'), row('assistant', 'hej!')]));
 check('an empty history is not', !ToolMemory::homeActive([]));
 
+// ------------------------------------------------- scheduled runs: retry only when the Pico was unreachable
+echo "\na scheduled run retries only when the home agent could not be reached\n";
+$err = static fn (string $m): array => [toolRow('home_device_call', ['error' => $m])];
+check('offline', ToolMemory::homeUnreachable($err('The home agent (Pico) is offline — last contact 300 seconds ago.')));
+check('never connected', ToolMemory::homeUnreachable($err('The home agent has never connected. Offer get_home_agent_setup to set up the Pico.')));
+check('no answer in time', ToolMemory::homeUnreachable($err('No answer from the home agent in 8 seconds. It may be offline.')));
+check('a refused path is final, not retried', !ToolMemory::homeUnreachable($err('That path is not allowed for this device.')));
+check('a device error is not retried', !ToolMemory::homeUnreachable($err('The home agent could not complete that: HTTP 404')));
+check('a success is not a failure', !ToolMemory::homeUnreachable([toolRow('home_device_call', ['http_status' => 200, 'response' => []])]));
+check('only the LAST home call counts (the model already recovered)', !ToolMemory::homeUnreachable([
+    toolRow('home_device_call', ['error' => 'The home agent (Pico) is offline — last contact 90 seconds ago.']),
+    toolRow('home_device_call', ['http_status' => 200, 'response' => []]),
+]));
+check('no home call at all', !ToolMemory::homeUnreachable([row('user', 'hej'), toolRow('get_shopping_list', ['count' => 1])]));
+
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);

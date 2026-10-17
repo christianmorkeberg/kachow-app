@@ -413,9 +413,13 @@ final class ToolSelector
             'ping me', 'nudge me', 'wake me',
             // Recurring/scheduled checks (schedule_task et al.)
             'every day', 'once a day', 'every hour', 'every week', 'recurring', 'scheduled task',
+            'every weekday', 'weekdays at', 'every morning', 'every evening', 'every night', 'every 15 minutes',
+            'every 30 minutes', 'every 10 minutes', 'every 5 minutes',
             // Danish
             'mind mig', 'påmind', 'paamind', 'påmindelse', 'glem ikke at minde', 'husk mig på', 'husk mig pa',
             'hver dag', 'hver uge', 'hver time', 'tilbagevendende', 'planlagt opgave',
+            'hver hverdag', 'alle hverdage', 'hver morgen', 'hver aften', 'hver nat', 'hvert kvarter',
+            'hvert 15. minut', 'hvert 30. minut',
         ],
         // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
         'feedback' => [
