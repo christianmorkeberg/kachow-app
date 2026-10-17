@@ -18,6 +18,8 @@ use App\Home\HomeOwner;
 use App\Home\HueSync;
 use App\Support\DeviceFix;
 use App\Support\ToolMemory;
+use App\Support\WebSearchConsent;
+use App\Tools\WebSearch;
 use App\Tools\ToolRegistry;
 use App\Tools\ToolSelector;
 use DateTimeImmutable;
@@ -195,7 +197,19 @@ final class AssistantLoop
         . 'save it with remember_about_me — proactively, without being asked — and then briefly '
         . 'tell them you\'ll remember it. Do not save trivia, temporary details, or clearly '
         . 'sensitive information without a clear reason, and do not re-save something you already '
-        . 'know. Use what you know about the user to help them, but do not recite it back unprompted.';
+        . 'know. Use what you know about the user to help them, but do not recite it back unprompted. '
+        . 'BE HONEST ABOUT WHAT YOU DO NOT KNOW. Facts that change or that you cannot be sure of from memory — '
+        . 'opening hours, prices, addresses and phone numbers, whether a place is open or still exists, '
+        . 'schedules and availability, news and anything recent, other people\'s details — must NOT be stated '
+        . 'as fact unless they came from a tool result or from what the user told you. A confident wrong '
+        . 'answer (e.g. a restaurant\'s opening hours recalled from memory) is worse than saying "I don\'t '
+        . 'know". If you are not sure, say so plainly in one sentence, say which part you are unsure of, and '
+        . 'if looking it up online would help, OFFER a web search and wait: end the message with '
+        . '[[suggest: Search the web | No thanks]] (Danish: [[suggest: Søg på nettet | Nej tak]]) — use exactly '
+        . 'those labels. You never search the web on your own; you only have the web_search tool in a turn '
+        . 'where the user has asked for a search or tapped that offer. Offer it when the answer would '
+        . 'genuinely benefit from fresh information or you do not know; do not offer it for things your own '
+        . 'tools or their data can answer, or for general knowledge that does not change.';
 
     /** Meta / "what can you do" triggers → inject the capability summary that turn. */
     private const HELP_TRIGGERS = [
@@ -303,6 +317,8 @@ final class AssistantLoop
         // "no router" architecture reversibly. See bin/wide-chain-test.php.
         private bool $wideTools = false,
     ) {
+        // Always registered, but only handed to the model on a turn the user approved (see handle()).
+        $this->tools->register(new WebSearch($gemini));
     }
 
     /**
@@ -513,11 +529,35 @@ final class AssistantLoop
             $groups       = ToolSelector::matchGroups($userMessage, $recent, $userTerms);
             $declarations = ToolSelector::select($this->tools->declarations(), $userMessage, $recent, $userTerms);
         }
+        // The web is opt-in per turn: web_search is only on the table when the user just asked for a
+        // search or agreed to the assistant's offer. (A scheduled task whose instruction itself says to search counts as that request.)
+        $previousReply = '';
+        for ($i = count($history) - 2; $i >= 0; $i--) {   // -2: skip the user message just stored
+            if (($history[$i]['role'] ?? '') === 'assistant') {
+                $previousReply = (string) ($history[$i]['content'] ?? '');
+                break;
+            }
+        }
+        $webAllowed   = WebSearchConsent::granted($userMessage, $previousReply);
+        $declarations = array_values(array_filter($declarations, static fn (array $d): bool => ($d['name'] ?? '') !== 'web_search'));
+        if ($webAllowed) {
+            foreach ($this->tools->declarations() as $d) {
+                if (($d['name'] ?? '') === 'web_search') {
+                    $declarations[] = $d;
+                    $groups[]       = 'web';
+                }
+            }
+        }
         error_log('routing: [' . ($groups === [] ? 'ALL (fallback)' : implode(',', $groups)) . '] <- '
             . mb_substr($userMessage, 0, 80));
         // Home devices the assistant already knows by name (saved list + this conversation's lookups).
         $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent, ToolMemory::homeActive($history))));
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups, $toolMemory, $openView);
+        if ($webAllowed) {
+            $system .= "\n\nThe user has just asked for, or agreed to, a WEB SEARCH. Call web_search now with a precise "
+                . 'query (name, place and what is needed), then answer from its result, naming the sites. If it fails '
+                . 'or finds nothing, say so — never fall back to answering from memory as if it had been looked up.';
+        }
 
         // Performance instrumentation for this turn.
         $reqKb       = (int) round((strlen($system) + strlen((string) json_encode($declarations))

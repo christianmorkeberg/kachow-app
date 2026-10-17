@@ -96,6 +96,7 @@ final class GeminiClient
         ?array $generationConfig = null,
         ?int $timeoutMs = null,
         ?string $functionCallingMode = null,
+        bool $googleSearch = false,
     ): array {
         $model ??= $this->models[0];
 
@@ -134,6 +135,12 @@ final class GeminiClient
             if ($functionCallingMode !== null) {
                 $payload['tool_config'] = ['function_calling_config' => ['mode' => $functionCallingMode]];
             }
+        }
+
+        if ($googleSearch) {
+            // Gemini's built-in Google Search grounding. Used on its OWN call (WebSearch), never
+            // alongside the app's function tools, so it works whatever the model allows mixing.
+            $payload['tools'][] = ['google_search' => new \stdClass()];
         }
 
         $url = self::BASE . '/models/' . rawurlencode($model) . ':generateContent';
@@ -221,6 +228,28 @@ final class GeminiClient
         }
 
         return $text;
+    }
+
+    /**
+     * The sites a grounded (Google Search) answer drew on: [{title, url}], de-duplicated by title.
+     * The url is Google's redirect link; the title is normally the site's domain.
+     *
+     * @return list<array{title: string, url: string}>
+     */
+    public static function extractSources(array $response): array
+    {
+        $out = [];
+        $chunks = $response['candidates'][0]['groundingMetadata']['groundingChunks'] ?? [];
+        foreach (is_array($chunks) ? $chunks : [] as $chunk) {
+            $title = trim((string) ($chunk['web']['title'] ?? ''));
+            $url   = trim((string) ($chunk['web']['uri'] ?? ''));
+            if ($title === '' || $url === '' || isset($out[$title])) {
+                continue;
+            }
+            $out[$title] = ['title' => $title, 'url' => $url];
+        }
+
+        return array_values($out);
     }
 
     /**
