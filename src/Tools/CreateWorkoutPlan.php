@@ -28,7 +28,9 @@ final class CreateWorkoutPlan implements Tool
             . '(creating that day\'s plan if needed). Use for "today I\'ll do X, then Y" and for '
             . 'building a week\'s program (call once per training day). Give targets (sets/reps/'
             . 'weight) when known so they can be logged on tick; use note for things like "5k run". '
-            . 'Dates are YYYY-MM-DD; omit for today. This is PLANNING, separate from logging done sets.';
+            . 'Dates are YYYY-MM-DD; omit for today. This is PLANNING, separate from logging done sets. An '
+            . 'exercise already in that day\'s plan is not added twice (its missing targets are filled in), so '
+            . 'sending the same program again is harmless.';
     }
 
     public function parameters(): array
@@ -66,13 +68,13 @@ final class CreateWorkoutPlan implements Tool
 
         $planId = $this->plans->ensurePlanForDate($userId, $date, $title !== '' ? $title : null);
 
-        $added = [];
+        $added = $filled = $already = [];
         foreach ($exs as $ex) {
             $name = trim((string) ($ex['exercise'] ?? ''));
             if ($name === '') {
                 continue;
             }
-            $this->plans->addItem(
+            $res = $this->plans->addOrMergeItem(
                 $planId,
                 $name,
                 isset($ex['sets']) && $ex['sets'] !== '' ? (int) $ex['sets'] : null,
@@ -80,18 +82,31 @@ final class CreateWorkoutPlan implements Tool
                 isset($ex['weight']) && $ex['weight'] !== '' ? (float) $ex['weight'] : null,
                 isset($ex['note']) ? trim((string) $ex['note']) : null
             );
-            $added[] = $name;
+            match ($res['result']) {
+                'added'  => $added[] = $name,
+                'filled' => $filled[] = $name,
+                default  => $already[] = $name,
+            };
         }
 
-        if ($added === []) {
+        if ($added === [] && $filled === [] && $already === []) {
             return ['error' => 'Give at least one exercise to plan.'];
         }
 
-        return [
+        $result = [
             'planned_for' => $date,
             'added'       => $added,
             '_render'     => $this->plans->cardForDate($userId, $date),
         ];
+        if ($filled !== [] || $already !== []) {
+            $result['filled_in']       = $filled;
+            $result['already_planned'] = $already;
+            $result['note']            = 'Exercises already in this day\'s plan are never duplicated: "filled_in" got the '
+                . 'targets they were missing, "already_planned" were left as they are. Tell the user plainly which were '
+                . 'already there instead of saying you added them.';
+        }
+
+        return $result;
     }
 
     public static function resolveDate(mixed $raw): string

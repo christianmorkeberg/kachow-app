@@ -110,6 +110,73 @@ final class WorkoutPlans
         return (int) $this->db->lastInsertId();
     }
 
+    /**
+     * Adds an exercise to a plan UNLESS it is already there (report #39: a plan was written twice, once as
+     * bare names and once with targets, and both copies stayed). Compared by name, case-insensitively,
+     * against the plan's not-yet-done items:
+     *   - same exercise whose targets/note don't contradict the new ones → no second row; any targets the
+     *     existing row lacked are filled in ('filled'), otherwise nothing changes ('exists');
+     *   - same exercise but different targets (3×5 @100 and 3×8 @80) → a genuine second block ('added');
+     *   - a ticked-off exercise is history, so the same name again is a new item ('added').
+     *
+     * @return array{id:int, result:string} result: 'added' | 'filled' | 'exists'
+     */
+    public function addOrMergeItem(
+        int $planId,
+        string $exercise,
+        ?int $sets = null,
+        ?int $reps = null,
+        ?float $weight = null,
+        ?string $note = null
+    ): array {
+        $note = $note !== null && trim($note) !== '' ? trim($note) : null;
+        $key  = mb_strtolower(trim($exercise));
+        $new  = ['target_sets' => $sets, 'target_reps' => $reps, 'target_weight' => $weight, 'note' => $note];
+
+        foreach ($this->itemsForPlan($planId) as $row) {
+            if ((int) $row['done'] === 1 || mb_strtolower(trim((string) $row['exercise'])) !== $key) {
+                continue;
+            }
+            $fill     = [];
+            $conflict = false;
+            foreach ($new as $col => $val) {
+                if ($val === null) {
+                    continue;
+                }
+                $cur = $row[$col];
+                if ($cur === null || $cur === '') {
+                    $fill[$col] = $val;
+                    continue;
+                }
+                $same = match ($col) {
+                    'target_weight' => abs((float) $cur - (float) $val) < 0.005,
+                    'note'          => mb_strtolower(trim((string) $cur)) === mb_strtolower((string) $val),
+                    default         => (int) $cur === (int) $val,
+                };
+                if (!$same) {
+                    $conflict = true;
+                    break;
+                }
+            }
+            if ($conflict) {
+                continue;
+            }
+            if ($fill === []) {
+                return ['id' => (int) $row['id'], 'result' => 'exists'];
+            }
+            // Column names come from the fixed list above, never from input.
+            $sql = 'UPDATE workout_plan_items SET ' . implode(', ', array_map(static fn (string $c): string => "{$c} = :{$c}", array_keys($fill))) . ' WHERE id = :id';
+            $this->db->prepare($sql)->execute([':id' => (int) $row['id']] + array_combine(
+                array_map(static fn (string $c): string => ":{$c}", array_keys($fill)),
+                array_values($fill)
+            ));
+
+            return ['id' => (int) $row['id'], 'result' => 'filled'];
+        }
+
+        return ['id' => $this->addItem($planId, $exercise, $sets, $reps, $weight, $note), 'result' => 'added'];
+    }
+
     /** @return array<int, array<string,mixed>> */
     public function itemsForPlan(int $planId): array
     {

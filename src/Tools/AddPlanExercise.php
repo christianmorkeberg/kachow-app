@@ -24,7 +24,7 @@ final class AddPlanExercise implements Tool
     {
         return 'Adds one exercise to a day\'s workout plan (creating the day\'s plan if needed). '
             . 'Give sets/reps/weight when known. Date is YYYY-MM-DD; omit for today. For adding '
-            . 'several at once, use create_workout_plan.';
+            . 'several at once, use create_workout_plan. An exercise already in the plan is not added twice.';
     }
 
     public function parameters(): array
@@ -52,7 +52,7 @@ final class AddPlanExercise implements Tool
         $date   = CreateWorkoutPlan::resolveDate($arguments['date'] ?? null);
         $planId = $this->plans->ensurePlanForDate($userId, $date);
 
-        $this->plans->addItem(
+        $res = $this->plans->addOrMergeItem(
             $planId,
             $name,
             isset($arguments['sets']) && $arguments['sets'] !== '' ? (int) $arguments['sets'] : null,
@@ -60,7 +60,12 @@ final class AddPlanExercise implements Tool
             isset($arguments['weight']) && $arguments['weight'] !== '' ? (float) $arguments['weight'] : null,
             isset($arguments['note']) ? trim((string) $arguments['note']) : null
         );
+        $card = $this->plans->cardForDate($userId, $date);
 
-        return ['added' => $name, 'date' => $date, '_render' => $this->plans->cardForDate($userId, $date)];
+        return match ($res['result']) {
+            'added'  => ['added' => $name, 'date' => $date, '_render' => $card],
+            'filled' => ['filled_in' => $name, 'date' => $date, 'note' => 'It was already in the plan; its missing targets were filled in. Nothing was duplicated.', '_render' => $card],
+            default  => ['already_planned' => $name, 'date' => $date, 'note' => 'It was already in the plan, so nothing was added. Tell the user.', '_render' => $card],
+        };
     }
 }
