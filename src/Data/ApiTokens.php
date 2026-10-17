@@ -85,6 +85,15 @@ final class ApiTokens
         return $secs === false || $secs === null ? null : max(0, (int) $secs);
     }
 
+    /** Whether the user has a token for this scope (without creating one, unlike ensure()). */
+    public function has(int $userId, string $scope): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM api_tokens WHERE user_id = :u AND scope = :s LIMIT 1');
+        $stmt->execute([':u' => $userId, ':s' => $scope]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
     /**
      * Every user that has a token for a scope (e.g. everyone with a home agent).
      *

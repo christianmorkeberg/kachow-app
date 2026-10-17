@@ -22,9 +22,10 @@ final class Connections
      * Scopes that can be shared over a connection. Most are READ scopes ("they can
      * see my X"); `workouts_log` is a WRITE grant ("they may log workouts FOR me") —
      * deliberately separate from the `workouts` read scope so viewing and writing are
-     * two distinct, explicit opt-ins.
+     * two distinct, explicit opt-ins. `home` is also a grant to ACT: the other person's home-device
+     * commands (lights, thermostats) ride YOUR home agent when they have none of their own.
      */
-    public const APPS = ['workouts', 'workouts_log', 'wishlist', 'calendar', 'cycle'];
+    public const APPS = ['workouts', 'workouts_log', 'wishlist', 'calendar', 'cycle', 'home'];
 
     private PDO $db;
 

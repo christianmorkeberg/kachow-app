@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
+use App\Home\HomeOwner;
 
 /**
  * Tool: the user's private home-agent (Raspberry Pi Pico W) connection details + whether the
@@ -16,7 +17,7 @@ final class GetHomeAgentSetup implements Tool
     /** The Pico long-polls every ≤25 s; no contact for this long means it is offline. */
     public const ONLINE_WITHIN_SECONDS = 60;
 
-    public function __construct(private ApiTokens $tokens)
+    public function __construct(private ApiTokens $tokens, private ?HomeOwner $owner = null)
     {
     }
 
@@ -47,6 +48,22 @@ final class GetHomeAgentSetup implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
+        // Using a connected person's shared home agent: nothing to set up, and never hand out THEIR token.
+        $home = $this->owner?->resolve($userId);
+        if ($home !== null && $home['shared']) {
+            $ago = $this->tokens->secondsSinceUse($home['owner_id'], AgentCommands::SCOPE);
+
+            return [
+                'shared_home_agent' => true,
+                'owner'             => $home['name'] ?? 'a connected person',
+                'online'            => $ago !== null && $ago <= self::ONLINE_WITHIN_SECONDS,
+                'last_contact'      => $ago === null ? 'never' : $ago . ' seconds ago',
+                'note'              => 'This user controls the home through ' . ($home['name'] ?? 'a connected person')
+                    . '\'s home agent (shared with the "home" scope), so there is nothing to set up. If it is offline, '
+                    . 'only that person can fix the Pico.',
+            ];
+        }
+
         $rotate = !empty($arguments['rotate']);
         $token  = $rotate ? $this->tokens->rotate($userId, AgentCommands::SCOPE) : $this->tokens->ensure($userId, AgentCommands::SCOPE);
         $host   = $_SERVER['HTTP_HOST'] ?? 'assistant.kachow.dk';

@@ -47,6 +47,7 @@ use App\Data\WorkoutPlans;
 use App\Data\Workouts;
 use App\Email\EmailService;
 use App\Mail\Mailer;
+use App\Home\HomeOwner;
 use App\Home\HueSync;
 use App\Maps\MapDistance;
 use App\Maps\PoiNames;
@@ -161,11 +162,12 @@ final class ToolRegistry
         $registry->register(new LogWorkEvent($workEvents));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
-        $registry->register(new GetHomeAgentSetup($apiTokens));
+        $homeOwner = new HomeOwner($apiTokens, $connections);   // whose Pico a user talks to (own, or a shared one)
+        $registry->register(new GetHomeAgentSetup($apiTokens, $homeOwner));
         $agentCommands = new AgentCommands();
         $hueSync       = new HueSync(new HomeDevices(), HueSync::viaAgent($agentCommands));
-        $registry->register(new HomeDeviceCall($agentCommands, $apiTokens, $hueSync));
-        $registry->register(new RefreshHomeDevices($hueSync, $apiTokens));
+        $registry->register(new HomeDeviceCall($agentCommands, $apiTokens, $hueSync, $homeOwner));
+        $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner));
         $locationPoints = new LocationPoints();
         $places         = new Places();
         $timeline       = new Timeline($locationPoints, $places, $userSettings);

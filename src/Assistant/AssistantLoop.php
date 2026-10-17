@@ -12,6 +12,9 @@ use App\Data\Mileage;
 use App\Data\UserInstructions;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
+use App\Data\ApiTokens;
+use App\Data\Connections;
+use App\Home\HomeOwner;
 use App\Home\HueSync;
 use App\Support\DeviceFix;
 use App\Support\ToolMemory;
@@ -1034,7 +1037,9 @@ final class AssistantLoop
     private function savedHomeDevices(int $userId, string $userMessage, string $recent, bool $conversationUsedHome): array
     {
         try {
-            $entries = (new HomeDevices())->entries($userId, HueSync::DEVICE);
+            // The saved list belongs to whoever owns the Pico (a connected person's, if shared with this user).
+            $ownerId = (new HomeOwner(new ApiTokens(), new Connections()))->resolve($userId)['owner_id'];
+            $entries = (new HomeDevices())->entries($ownerId, HueSync::DEVICE);
             if ($entries === []) {
                 return [];
             }

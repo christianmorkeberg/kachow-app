@@ -23,10 +23,10 @@ final class UpdateConnectionSharing implements Tool
     public function description(): string
     {
         return 'Changes what YOU share with a connected person (by their email or name). Provide the '
-            . 'full new list in "share" (any of: workouts, wishlist, calendar, cycle, workouts_log) — it '
+            . 'full new list in "share" (any of: workouts, wishlist, calendar, cycle, workouts_log, home) — it '
             . 'replaces your previous choice. "workouts_log" is a WRITE grant: it lets them LOG workouts '
             . 'for you (e.g. a gym partner recording your sets); it is separate from "workouts" (which only '
-            . 'lets them view yours). Pass an empty list to stop sharing anything with them (without '
+            . 'lets them view yours). "home" is also a grant to ACT: it lets them control your home devices (lights) through your home agent, so they need no Pico of their own. Pass an empty list to stop sharing anything with them (without '
             . 'removing the connection). Only affects your side of the sharing.';
     }
 
@@ -42,7 +42,7 @@ final class UpdateConnectionSharing implements Tool
                 'share' => [
                     'type'        => 'array',
                     'description' => 'The full set you want to share with them now: any of "workouts", '
-                        . '"wishlist", "calendar", "cycle", "workouts_log" (lets them log workouts for you). '
+                        . '"wishlist", "calendar", "cycle", "workouts_log" (lets them log workouts for you), "home" (lets them control your home devices). '
                         . 'Empty to share nothing.',
                     'items'       => ['type' => 'string'],
                 ],

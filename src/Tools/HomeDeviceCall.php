@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
+use App\Home\HomeOwner;
 use App\Home\HueSync;
 use App\Support\HomeResponse;
 use InvalidArgumentException;
@@ -23,8 +24,12 @@ final class HomeDeviceCall implements Tool
     /** Budget for what we hand the model, applied AFTER noise is stripped (see HomeResponse). */
     private const MAX_RESPONSE_CHARS = 20000;
 
-    public function __construct(private AgentCommands $commands, private ApiTokens $tokens, private ?HueSync $sync = null)
-    {
+    public function __construct(
+        private AgentCommands $commands,
+        private ApiTokens $tokens,
+        private ?HueSync $sync = null,
+        private ?HomeOwner $owner = null,
+    ) {
     }
 
     public function name(): string
@@ -63,6 +68,8 @@ final class HomeDeviceCall implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
+        // A person without a Pico of their own uses the one a connected person shares ("home" scope).
+        $userId = $this->owner?->resolve($userId)['owner_id'] ?? $userId;
         $ago = $this->tokens->secondsSinceUse($userId, AgentCommands::SCOPE);
         if ($ago === null) {
             return ['error' => 'The home agent has never connected. Offer get_home_agent_setup to set up the Pico.'];

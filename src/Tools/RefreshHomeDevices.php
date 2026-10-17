@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
+use App\Home\HomeOwner;
 use App\Home\HueSync;
 
 /**
@@ -15,7 +16,7 @@ use App\Home\HueSync;
  */
 final class RefreshHomeDevices implements Tool
 {
-    public function __construct(private HueSync $sync, private ApiTokens $tokens)
+    public function __construct(private HueSync $sync, private ApiTokens $tokens, private ?HomeOwner $owner = null)
     {
     }
 
@@ -39,6 +40,7 @@ final class RefreshHomeDevices implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
+        $userId = $this->owner?->resolve($userId)['owner_id'] ?? $userId;   // the shared home agent, if that's whose it is
         $ago = $this->tokens->secondsSinceUse($userId, AgentCommands::SCOPE);
         if ($ago === null || $ago > GetHomeAgentSetup::ONLINE_WITHIN_SECONDS) {
             return ['error' => 'The home agent (Pico) is offline, so I can\'t read the bridge right now. '
