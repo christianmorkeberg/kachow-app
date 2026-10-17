@@ -300,6 +300,9 @@ $cases = [
     ['msg' => 'mark idea #38 as done', 'expect' => 'devideas'],
     ['msg' => 'sæt idé #41 til i gang', 'expect' => 'devideas'],
 
+    ['msg' => 'show my month', 'expect' => 'calendar'],
+    ['msg' => 'vis månedsoversigten for november', 'expect' => 'calendar'],
+
     // ---- reminders ----
     ['msg' => 'remind me to call mum at 18:00', 'expect' => 'reminders'],
     ['msg' => 'set a reminder for tomorrow at 9', 'expect' => 'reminders'],

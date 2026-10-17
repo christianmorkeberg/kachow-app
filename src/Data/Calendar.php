@@ -127,6 +127,111 @@ final class Calendar
     }
 
     /**
+     * The local dates a month grid shows: Monday of the week holding the 1st through Sunday of the
+     * week holding the last day (5 or 6 rows). $month is "YYYY-MM".
+     *
+     * @return array{0: string, 1: string} inclusive local dates
+     */
+    public static function monthGrid(string $month): array
+    {
+        $tz    = new \DateTimeZone('Europe/Copenhagen');
+        $first = new \DateTimeImmutable($month . '-01', $tz);
+        $last  = $first->modify('last day of this month');
+        $start = $first->modify('-' . ((int) $first->format('N') - 1) . ' days');
+        $end   = $last->modify('+' . (7 - (int) $last->format('N')) . ' days');
+
+        return [$start->format('Y-m-d'), $end->format('Y-m-d')];
+    }
+
+    /**
+     * Renderable month card (kind = calendar_month): the events of every day the grid shows,
+     * keyed by local date. A multi-day event appears on each of its days. Display-only, like
+     * the agenda; times come verbatim from each event's own RFC3339 string.
+     *
+     * @param array<int, array<string, mixed>> $events as returned by getEvents()
+     * @return array<string, mixed>
+     */
+    public function buildMonthCard(array $events, string $month): array
+    {
+        [$gridFrom, $gridTo] = self::monthGrid($month);
+        $days = [];
+        foreach ($events as $e) {
+            $start = (string) ($e['start'] ?? '');
+            if ($start === '' || $this->isWeekNumberMarker($e)) {
+                continue;
+            }
+            $allDay  = (bool) ($e['allDay'] ?? false);
+            $end     = (string) ($e['end'] ?? '');
+            $first   = substr($start, 0, 10);
+            // All-day ends are exclusive dates; a timed event ending exactly at midnight ends the day before.
+            $lastDay = $first;
+            if ($end !== '') {
+                $endDay = substr($end, 0, 10);
+                if ($allDay || substr($end, 11, 5) === '00:00') {
+                    $endDay = date('Y-m-d', (int) strtotime($endDay . ' -1 day'));
+                }
+                $lastDay = max($first, $endDay);
+            }
+            $time = 'All day';
+            if (!$allDay) {
+                $time = substr($start, 11, 5);
+                if (strlen($end) >= 16 && substr($end, 0, 10) === $first) {
+                    $time .= '–' . substr($end, 11, 5);
+                }
+            }
+            $entry = [
+                'time'     => $time,
+                'all_day'  => $allDay,
+                'summary'  => (string) ($e['summary'] ?? '(no title)'),
+                'location' => ($e['location'] ?? null) ? (string) $e['location'] : null,
+                'calendar' => ($e['calendar'] ?? null) ? (string) $e['calendar'] : null,
+            ];
+            for ($d = max($first, $gridFrom), $n = 0; $d <= min($lastDay, $gridTo) && $n < 62; $n++) {
+                $days[$d][] = $d === $first ? $entry : ['time' => $allDay ? 'All day' : 'cont.'] + $entry;
+                $d = date('Y-m-d', (int) strtotime($d . ' +1 day'));
+            }
+        }
+        foreach ($days as $k => $list) {
+            // All-day first, then by time.
+            usort($list, static fn (array $a, array $b): int => [!$a['all_day'], $a['time']] <=> [!$b['all_day'], $b['time']]);
+            $days[$k] = $list;
+        }
+        ksort($days);
+
+        $tz = new \DateTimeZone('Europe/Copenhagen');
+        $m  = new \DateTimeImmutable($month . '-01', $tz);
+
+        return [
+            'kind'      => 'calendar_month',
+            'month'     => $m->format('Y-m'),
+            'title'     => $m->format('F Y'),
+            'grid_from' => $gridFrom,
+            'grid_to'   => $gridTo,
+            'today'     => (new \DateTimeImmutable('now', $tz))->format('Y-m-d'),
+            'prev'      => $m->modify('-1 month')->format('Y-m'),
+            'next'      => $m->modify('+1 month')->format('Y-m'),
+            'days'      => $days === [] ? new \stdClass() : $days,
+        ];
+    }
+
+    /**
+     * The UTC RFC3339 range to fetch for a month grid (its first to last shown day, local time).
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function monthRangeUtc(string $month): array
+    {
+        [$from, $to] = self::monthGrid($month);
+        $tz  = new \DateTimeZone('Europe/Copenhagen');
+        $utc = new \DateTimeZone('UTC');
+
+        return [
+            (new \DateTimeImmutable($from, $tz))->setTimezone($utc)->format('Y-m-d\TH:i:s\Z'),
+            (new \DateTimeImmutable($to, $tz))->modify('+1 day')->setTimezone($utc)->format('Y-m-d\TH:i:s\Z'),
+        ];
+    }
+
+    /**
      * True for the all-day "week number" events some calendars publish on Mondays
      * (e.g. "Week 28 of 2026", Danish "Uge 28") — noise we drop from the agenda.
      */

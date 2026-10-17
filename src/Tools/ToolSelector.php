@@ -63,7 +63,7 @@ final class ToolSelector
             'home_device_call', 'get_home_agent_setup', 'refresh_home_devices',
         ],
         'calendar' => [
-            'get_calendar_events', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',
+            'get_calendar_events', 'get_calendar_month', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',
             'list_calendars', 'get_connected_calendar',
         ],
         'instructions' => [
@@ -189,8 +189,10 @@ final class ToolSelector
             'calendar', 'event', 'schedule', 'appointment', 'meeting', ' meet', 'busy', ' free ', 'availab',
             'remind', 'agenda', 'plans', 'today', 'tomorrow', 'tonight', 'this week', 'next week',
             'weekend', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'my month', 'this month', 'next month', 'month view', 'month overview',
             // Danish
             'kalender', 'aftale', 'møde', 'begivenhed', 'påmind', 'i dag', 'i morgen', 'i aften',
+            'min måned', 'denne måned', 'næste måned', 'månedsoversigt', 'måneden',
             'i weekenden', 'næste uge', 'denne uge', 'travlt', 'ledig', 'planer',
             'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag',
         ],
