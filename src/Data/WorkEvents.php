@@ -25,6 +25,9 @@ final class WorkEvents
     /** A repeat of the same punch within this many minutes is treated as a bounce. */
     public const DEDUP_MINUTES = 5;
 
+    /** work_events.source for punches the automatic location clock writes. */
+    public const SOURCE_LOCATION = 'location';
+
     /** Selectable bucketings for the work-hours bar chart. */
     public const CHART_MODES = ['week', '4w', '12w', 'year'];
 
@@ -95,13 +98,83 @@ final class WorkEvents
         ];
     }
 
-    /** Deletes one event by id, scoped to the user. Returns true if removed. */
+    /**
+     * Deletes one event by id, scoped to the user. Returns true if removed. Deleting a punch the
+     * location clock made marks that day as fixed by hand, so the clock never puts it back.
+     */
     public function delete(int $userId, int $eventId): bool
     {
+        $src = $this->db->prepare('SELECT source, occurred_at FROM work_events WHERE id = :id AND user_id = :u');
+        $src->execute([':id' => $eventId, ':u' => $userId]);
+        $row = $src->fetch();
+        if ($row !== false && (string) $row['source'] === self::SOURCE_LOCATION) {
+            $this->markManualDay($userId, $this->toLocal((string) $row['occurred_at'])->format('Y-m-d'));
+        }
+
         $stmt = $this->db->prepare('DELETE FROM work_events WHERE id = :id AND user_id = :u');
         $stmt->execute([':id' => $eventId, ':u' => $userId]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /** Removes a punch the location clock itself made (its own correction — not a manual edit). */
+    public function removeLocationEvent(int $userId, int $eventId): bool
+    {
+        $stmt = $this->db->prepare('DELETE FROM work_events WHERE id = :id AND user_id = :u AND source = :s');
+        $stmt->execute([':id' => $eventId, ':u' => $userId, ':s' => self::SOURCE_LOCATION]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Every punch in [fromUtc, toUtc) with where it came from (for the location clock).
+     *
+     * @return list<array{id:int, kind:string, occurred_at:string, location:?string, source:string}>
+     */
+    public function eventsWithSource(int $userId, string $fromUtc, string $toUtc): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, kind, occurred_at, location, source FROM work_events
+             WHERE user_id = :u AND occurred_at >= :from AND occurred_at < :to
+             ORDER BY occurred_at ASC, id ASC'
+        );
+        $stmt->execute([':u' => $userId, ':from' => $fromUtc, ':to' => $toUtc]);
+
+        return array_map(static fn (array $r): array => [
+            'id'          => (int) $r['id'],
+            'kind'        => (string) $r['kind'],
+            'occurred_at' => (string) $r['occurred_at'],
+            'location'    => $r['location'] !== null ? (string) $r['location'] : null,
+            'source'      => (string) $r['source'],
+        ], $stmt->fetchAll());
+    }
+
+    /** Records that the user fixed this local day by hand (location clock keeps out). */
+    public function markManualDay(int $userId, string $localDate): void
+    {
+        try {
+            $chk = $this->db->prepare('SELECT 1 FROM work_clock_manual_days WHERE user_id = :u AND day = :d');
+            $chk->execute([':u' => $userId, ':d' => $localDate]);
+            if ($chk->fetchColumn() === false) {
+                $this->db->prepare('INSERT INTO work_clock_manual_days (user_id, day) VALUES (:u, :d)')
+                    ->execute([':u' => $userId, ':d' => $localDate]);
+            }
+        } catch (\Throwable $e) {
+            error_log('work_clock_manual_days: ' . $e->getMessage());   // table missing before the migration
+        }
+    }
+
+    /** Whether the user marked this local day as fixed by hand (see markManualDay). */
+    public function isManualDay(int $userId, string $localDate): bool
+    {
+        try {
+            $chk = $this->db->prepare('SELECT 1 FROM work_clock_manual_days WHERE user_id = :u AND day = :d');
+            $chk->execute([':u' => $userId, ':d' => $localDate]);
+
+            return $chk->fetchColumn() !== false;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**

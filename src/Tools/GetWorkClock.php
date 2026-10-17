@@ -26,11 +26,12 @@ final class GetWorkClock implements Tool
 
     public function description(): string
     {
-        return 'Shows the AUTOMATIC work clock in shadow mode: work hours derived from location (time at '
-            . 'work-type places) compared day-by-day with the user\'s recorded punches, so they can check it '
-            . 'before we switch over from the manual/Shortcut clock. Use for "how does the automatic clock '
-            . 'compare", "location work clock", "auto-stempling", "shadow work hours". Read-only — it does not '
-            . 'change any recorded hours. Defaults to the last 7 days; optionally pass a from/to date range. '
+        return 'Shows the AUTOMATIC work clock: work hours derived from location (time at work-type places) '
+            . 'compared day-by-day with the user\'s recorded punches. While the work_clock setting is "shortcut" this '
+            . 'is a shadow check before switching; once it is "location" the location clock WRITES the punches '
+            . '(update_setting work_clock), and differences show days fixed by hand or visits skipped for a tracking '
+            . 'gap. Use for "how does the automatic clock compare", "location work clock", "auto-stempling", '
+            . '"shadow work hours". This view is read-only. Defaults to the last 7 days; optionally pass a from/to date range. '
             . 'It only reads places typed "work"; if there are none, tell the user to mark their workplace(s) '
             . 'on the places map with type work.';
     }

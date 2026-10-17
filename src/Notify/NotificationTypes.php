@@ -23,6 +23,7 @@ final class NotificationTypes
     public const WFH_PROMPT     = 'wfh_prompt';
     public const TRACKING_SILENT = 'tracking_silent';
     public const SCHEDULED_TASK  = 'scheduled_task';
+    public const WORK_CLOCK_GAP  = 'work_clock_gap';
 
     /** @var array<string, array{label:string, description:string, default:bool}> */
     private const CATALOGUE = [
@@ -84,6 +85,14 @@ final class NotificationTypes
                 . 'worth telling you — silent otherwise.',
             'default'     => true,
         ],
+        // Sent by notify-cron the morning after, when the location work clock skipped a work
+        // visit because the phone stopped reporting around it (arrival or leaving unknown).
+        self::WORK_CLOCK_GAP => [
+            'label'       => 'Hours to fill in',
+            'description' => 'With the location work clock on: a morning heads-up when a work visit yesterday '
+                . 'could not be clocked because of a tracking gap, so you can add the hours yourself.',
+            'default'     => true,
+        ],
     ];
 
     /**
@@ -96,6 +105,7 @@ final class NotificationTypes
         self::WORK_LOG_NUDGE => 'work_log',   // this week's work log
         self::CYCLE_UPCOMING => 'cycle',      // cycle status
         self::MOMS_DEADLINE  => 'moms',       // the quarter awaiting filing
+        self::WORK_CLOCK_GAP => 'work_yesterday', // yesterday's hours, to fill in the skipped visit
     ];
 
     public static function exists(string $key): bool

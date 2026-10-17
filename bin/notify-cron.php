@@ -26,6 +26,7 @@ use App\Data\Calendar;
 use App\Data\CycleTracker;
 use App\Data\Income;
 use App\Data\LocationPoints;
+use App\Data\LocationWorkClock;
 use App\Data\Moms;
 use App\Data\NotificationLog;
 use App\Data\Places;
@@ -262,6 +263,42 @@ try {
     }
 } catch (\Throwable $e) {
     error_log('notify-cron tracking-silent: ' . $e->getMessage());
+}
+
+// ---------- Location work clock: finalise yesterday, ask about skipped visits ----------
+// For users who switched the work clock to location: one last sync of yesterday (the day is
+// complete now), and if a work visit was skipped because the phone stopped reporting around it,
+// one push asking them to fill it in. Runs in the 07:xx slots; the ledger keeps it to one push.
+const WORK_CLOCK_FINAL_HOUR = 7;
+try {
+    if ((int) $nowLocal->format('G') === WORK_CLOCK_FINAL_HOUR) {
+        $clock     = LocationWorkClock::standard();
+        $yesterday = $nowLocal->modify('-1 day');
+        foreach ((new Users())->allIds() as $uid) {
+            if (!$clock->isOn($uid)) {
+                continue;
+            }
+            $r = $clock->sync($uid, $yesterday->format('Y-m-d'));
+            if (($r['uncertain'] ?? []) === [] || !isset($subscribed[$uid])) {
+                continue;
+            }
+            if (!$log->claim($uid, NotificationTypes::WORK_CLOCK_GAP, $yesterday->format('Y-m-d'))) {
+                continue;
+            }
+            $visits = implode(', ', array_map(static fn (array $u): string =>
+                ($u['place'] ?? 'work') . ' (' . $u['in'] . '–' . ($u['out'] ?? '?') . ')', $r['uncertain']));
+            $notifier->notify(
+                $uid,
+                NotificationTypes::WORK_CLOCK_GAP,
+                'Hours to fill in for ' . $yesterday->format('D j M'),
+                'Your phone stopped reporting around ' . $visits . ', so I did not clock it. '
+                    . 'Tell me when you arrived and left and I will add it.',
+                NotificationTypes::deepLink(NotificationTypes::WORK_CLOCK_GAP)
+            );
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron work clock: ' . $e->getMessage());
 }
 
 // ---------- Cycle: "register your period" reminder ----------

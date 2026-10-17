@@ -41,6 +41,30 @@ final class WorkClockShadow
     }
 
     /**
+     * One local day as the location clock sees it: work sessions (stays at work-type places, with
+     * the dwell + bridge rules) and the day's no-data gaps. Shared by this comparison and by the
+     * live location clock (LocationWorkClock), so both judge a day the same way.
+     *
+     * @return array{sessions: list<array<string, mixed>>, gaps: list<array<string, mixed>>}
+     */
+    public function daySessions(int $userId, string $date, ?array $params = null): array
+    {
+        [$from, $to] = LocationPoints::dayBounds($date);
+        $a = $this->timeline->analyse($userId, $from, $to);
+        $workStays = [];
+        foreach ($a['stays'] as $s) {
+            if (($s['type'] ?? null) === 'work') {
+                $workStays[] = $s;
+            }
+        }
+
+        return [
+            'sessions' => WorkClock::sessions($workStays, $from, $to, $params ?? $this->params($userId)),
+            'gaps'     => $a['gaps'],
+        ];
+    }
+
+    /**
      * Per-day comparison of the location clock vs the recorded punches over an inclusive local
      * date range (capped at 31 days), newest day first, plus a renderable card.
      *
@@ -65,21 +89,13 @@ final class WorkClockShadow
         $totLoc = 0; $totPunch = 0; $agree = 0; $dayCount = 0; $incomplete = 0;
         for ($d = $start; $d <= $end; $d = $d->modify('+1 day')) {
             $date = $d->format('Y-m-d');
-            [$from, $to] = LocationPoints::dayBounds($date);
-
-            $a = $this->timeline->analyse($userId, $from, $to);
-            $workStays = [];
-            foreach ($a['stays'] as $s) {
-                if (($s['type'] ?? null) === 'work') {
-                    $workStays[] = $s;
-                }
-            }
-            $sessions = WorkClock::sessions($workStays, $from, $to, $params);
+            $day  = $this->daySessions($userId, $date, $params);
+            $sessions = $day['sessions'];
 
             // Minutes the phone reported nothing: on such a day the location clock is reading
             // incomplete data, so a mismatch says nothing about the rules (see the gap rule).
             $gapMin = 0;
-            foreach ($a['gaps'] as $g) {
+            foreach ($day['gaps'] as $g) {
                 $gapMin += (int) $g['minutes_in_range'];
             }
 
@@ -150,8 +166,11 @@ final class WorkClockShadow
             'incomplete_days' => $incomplete,
             'params'      => $params,
             'days'        => $rows,
-            'note'        => 'Shadow only — not counted in your hours yet. The location clock reads work-type '
-                . 'places; punches are your current clock.',
+            'note'        => $this->settings->get($userId, 'work_clock') === 'location'
+                ? 'The location clock is ON — it writes your hours. Days you fixed by hand, and visits with a '
+                    . 'tracking gap, show as differences here.'
+                : 'Shadow only — not counted in your hours yet. The location clock reads work-type '
+                    . 'places; punches are your current clock.',
         ];
 
         return [

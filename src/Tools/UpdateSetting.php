@@ -30,6 +30,11 @@ final class UpdateSetting implements Tool
             . '"theme" — the visual look, one of aurora / noir / paper / lavender / blush / disco (use for '
             . '"switch to the lavender theme", "make it dark", "go disco", Danish "skift til lavendel-temaet"); '
             . '"cycle_show_fertile" — "on"/"off". '
+            . '"work_clock" — "location" switches the work clock to the automatic location clock (hours written '
+            . 'from stays at work-type places; Shortcut punches ignored from then on), "shortcut" switches back '
+            . '(use for "switch my work clock to location", Danish "brug lokation til arbejdsuret"). After switching '
+            . 'to location, tell them to turn off the Shortcut automations, that a day they fix by hand is left '
+            . 'alone, and that a visit with a tracking gap is skipped and they get a push to fill it in. '
             . '"job_aliases" — expands a short work-log job label to a full name (e.g. the "Arbejde" '
             . 'calendar just says "DSB" but log entries/replies should say "Danske Statsbaner"); one '
             . 'SHORT=Full Name pair per line (\\n between lines). This value is REPLACED wholesale, not '
@@ -66,6 +71,16 @@ final class UpdateSetting implements Tool
         }
         if ($key === 'theme' && $value !== '') {
             $value = UserSettings::normalizeTheme($value);
+        }
+        if ($key === 'work_clock' && $value !== '') {
+            $v = mb_strtolower(trim($value));
+            if (in_array($v, ['location', 'gps', 'auto', 'automatic', 'on', 'lokation', 'automatisk'], true)) {
+                $value = 'location';
+            } elseif (in_array($v, ['shortcut', 'shortcuts', 'ios', 'off', 'manual', 'genvej'], true)) {
+                $value = 'shortcut';
+            } else {
+                return ['error' => 'work_clock must be "location" or "shortcut".'];
+            }
         }
 
         $this->settings->set($userId, $key, $value);

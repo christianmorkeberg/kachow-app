@@ -177,6 +177,13 @@ final class UserSettings
             'description' => 'Automatic work clock: a stay at a work place shorter than this is a drive-by and '
                 . 'does not count as work (default 10, allowed 3–60). Tuned during the shadow phase.',
         ],
+        'work_clock' => [
+            'default'     => 'shortcut',
+            'label'       => 'Work clock source',
+            'description' => 'Where clock-in/out comes from: "shortcut" (the iOS Shortcut punches, default) or '
+                . '"location" (the automatic location clock writes your hours from stays at work places; '
+                . 'Shortcut punches are then ignored so nothing is counted twice).',
+        ],
         'workclock_max_bridge_hours' => [
             'default'     => '3',
             'label'       => 'Work clock: max bridge (h)',
