@@ -39,7 +39,8 @@ final class GetWorkSummary implements Tool
             . 'The result gives total, per-bucket and per-workplace totals (by_place) — answer from those '
             . 'in ONE call; never tell the user a split or period is impossible. Summarise (total, average, '
             . 'busiest) rather than reading every bar. For a single day, clock status or individual session '
-            . 'times use get_work_hours.';
+            . 'times use get_work_hours. Both show the SAME card (bars, plus the session lines for the bar the user taps), '
+            . 'so call only ONE of them for a question.';
     }
 
     public function parameters(): array
@@ -115,7 +116,13 @@ final class GetWorkSummary implements Tool
             'by_bucket'     => $byBucket,
             'by_place'      => array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total']], $placesAll),
             'has_data'      => $card['has_data'],
-            '_render'       => $card,
+            // The same card as get_work_hours: bars for the period, and the session lines for the bar you tap.
+            '_render'       => $this->events->overview(
+                $userId,
+                $from !== '' && $to !== ''
+                    ? ['date' => $from, 'to' => $to, 'bucket' => isset($arguments['bucket']) ? (string) $arguments['bucket'] : null, 'place' => $place]
+                    : ['period' => $period, 'place' => $place]
+            ),
         ];
         if (!$card['has_data'] && $place !== null && $place !== '') {
             $result['known_places'] = $this->events->knownPlaces($userId);

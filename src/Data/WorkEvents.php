@@ -512,6 +512,114 @@ final class WorkEvents
         ];
     }
 
+    /** The periods the hours card's toggle offers; 'today' is the single-day view, the rest are chart presets. */
+    public const OVERVIEW_PERIODS = ['today', 'week', '4w', '12w', 'year'];
+
+    /** Sessions a card carries for the whole range; a bigger range carries only its latest bar's, the rest load on tap. */
+    private const OVERVIEW_MAX_SESSIONS = 60;
+
+    /**
+     * ONE card for hours (it used to be two: a sessions card and a bar chart): the range's total, one bar per
+     * day/week/month when the range spans several days, and the session lines — which the page narrows to the
+     * bar you tap. Built from the same pieces as before (summary() for totals and sessions, breakdown() for
+     * the bars), so the numbers agree with what each used to say.
+     *
+     * $req: period ('today'|'week'|'4w'|'12w'|'year'), or scope/date/to (the get_work_hours way), plus place and
+     * bucket ('day'|'week'|'month', custom ranges only). The normalised request is kept in `query`, so the page
+     * can refresh exactly this view.
+     *
+     * @param array<string, mixed> $req
+     * @return array<string, mixed> a `work_hours` card
+     */
+    public function overview(int $userId, array $req): array
+    {
+        $tz     = new DateTimeZone(self::LOCAL_TZ);
+        $period = isset($req['period']) && in_array($req['period'], self::OVERVIEW_PERIODS, true) ? (string) $req['period'] : null;
+        $place  = isset($req['place']) && trim((string) $req['place']) !== '' ? trim((string) $req['place']) : null;
+        $bucket = isset($req['bucket']) && in_array($req['bucket'], ['day', 'week', 'month'], true) ? (string) $req['bucket'] : null;
+        $scope  = (string) ($req['scope'] ?? 'today');
+        $date   = self::isoDateOrNull($req['date'] ?? null);
+        $toDate = self::isoDateOrNull($req['to'] ?? null);
+
+        // 1) The days the card covers.
+        if ($period === 'today') {
+            $scope = 'today';
+            $date  = $toDate = null;
+        }
+        if ($period !== null && $period !== 'today') {
+            [$bs, $title, $label] = $this->chartBuckets($period, $tz);
+            $from = $bs[0]['start'];
+            $to   = $bs[count($bs) - 1]['end']->modify('-1 day');
+            $mode = $period;
+        } else {
+            [$start, $endEx, $label, $title] = $this->rangeFor($scope, $date, $tz, $toDate);
+            $from = $start;
+            $to   = $endEx->modify('-1 day');
+            $mode = $date === null && $scope === 'today' ? 'today' : ($date === null && $scope === 'week' ? 'week' : null);
+        }
+        if ($this->daysBetweenLocal($from, $to) > 400) {
+            $from = $to->modify('-400 days');   // the same cap the bars use, so totals and bars agree
+        }
+        $fromIso = $from->format('Y-m-d');
+        $toIso   = $to->format('Y-m-d');
+        $multi   = $fromIso !== $toIso;
+
+        // 2) Totals + session lines for exactly those days.
+        $sum  = $this->summary($userId, 'today', $fromIso, $place, $toIso);
+        $card = $sum['card'];
+        $card['title'] = $title;
+        $card['range'] = $label;
+        $card['from']  = $fromIso;
+        $card['to']    = $toIso;
+        $card['mode']  = $mode;
+        $card['query'] = ['period' => $period, 'scope' => $period === null ? $scope : null, 'date' => $date, 'to' => $toDate,
+            'place' => $place, 'bucket' => $bucket];
+
+        // 3) Bars, when there is more than a day to compare.
+        if ($multi) {
+            $chart = $period !== null && $period !== 'today'
+                ? $this->breakdown($userId, $period, null, null, null, $place)
+                : $this->breakdown($userId, 'week', $fromIso, $toIso, $bucket, $place);
+            $card['bars']        = $chart['bars'];
+            $card['bucket_word'] = $chart['bucket_word'];
+            $card['avg']         = $chart['avg'];
+            $card['stacked']     = $chart['stacked'];
+            if ($chart['stacked']) {
+                // The bars' per-place split follows THIS order, so the legend must too.
+                $card['multi_place'] = true;
+                $card['places']      = array_map(static fn (array $p): array => [
+                    'place' => $p['place'], 'total' => $p['total'], 'minutes' => $p['minutes'],
+                ], $chart['places_all']);
+            }
+        }
+
+        // 4) A range with a lot of sessions carries only its latest bar's; the rest load when a bar is tapped.
+        $scopeFrom = $fromIso;
+        $scopeTo   = $toIso;
+        if ($multi && count($card['sessions']) > self::OVERVIEW_MAX_SESSIONS) {
+            $latest = null;
+            foreach (array_reverse($card['bars']) as $bar) {
+                if ($bar['minutes'] > 0) {
+                    $latest = $bar;
+                    break;
+                }
+            }
+            if ($latest !== null) {
+                $card['sessions'] = $this->summary($userId, 'today', $latest['from'], $place, $latest['to'])['card']['sessions'];
+                $scopeFrom = $latest['from'];
+                $scopeTo   = $latest['to'];
+            }
+        }
+        $card['sessions_scope'] = ['from' => $scopeFrom, 'to' => $scopeTo];
+
+        return $card;
+    }
+
+    private static function isoDateOrNull(mixed $v): ?string
+    {
+        return is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) === 1 ? $v : null;
+    }
+
     /**
      * Buckets worked minutes over a longer span for the bar chart: daily bars for the
      * current week, weekly bars for 4w/12w, or monthly bars for a year. A session's
@@ -625,6 +733,9 @@ final class WorkEvents
             $bar = [
                 'label'   => $b['label'],
                 'sub'     => $b['sub'],
+                // The local days this bar covers (inclusive) — the merged hours card narrows its session list to them.
+                'from'    => $b['start']->format('Y-m-d'),
+                'to'      => $b['end']->modify('-1 day')->format('Y-m-d'),
                 'minutes' => $b['minutes'],
                 'total'   => self::fmtDuration($b['minutes']),
                 'ongoing' => $b['ongoing'],

@@ -35,7 +35,9 @@ final class GetWorkHours implements Tool
             . 'day/week/month, a whole week/month, or "how have I worked this week" — prefer '
             . 'get_work_summary, which draws a bar chart. The user may have more than one workplace; pass '
             . '"place" to limit to one, or omit for all (breaks time down per workplace). Summarise '
-            . 'briefly rather than listing every session. If it reports needs_fix, tell the user they '
+            . 'briefly rather than listing every session. The card it shows is the SAME one get_work_summary shows '
+            . '(totals, bars per day/week/month for a multi-day range, and the session lines the user can narrow by '
+            . 'tapping a bar), so call only ONE of the two for a question. If it reports needs_fix, tell the user they '
             . 'have a session with no clock-out and ask when they left so it can be corrected with '
             . 'log_work_event.';
     }
@@ -106,7 +108,8 @@ final class GetWorkHours implements Tool
             'by_place'      => $summary['places'],
             'sessions'      => $summary['sessions'],
             'needs_fix'     => $summary['needs_fix'],
-            '_render'       => $summary['card'],
+            // One card for hours: totals, bars when the range spans days, and these sessions (see WorkEvents::overview).
+            '_render'       => $this->events->overview($userId, ['scope' => $scope, 'date' => $date, 'to' => $toDate, 'place' => $place]),
         ];
         if ($summary['sessions'] === [] && $place !== null && trim($place) !== '') {
             $result['known_places'] = $this->events->knownPlaces($userId);
