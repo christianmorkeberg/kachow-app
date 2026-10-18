@@ -48,7 +48,19 @@ final class UserSettings
             'label'       => 'Appearance',
             'description' => 'The visual look / colour theme, one of: aurora (the default dark blue), noir '
                 . '(dark monochrome with an amber accent), paper (clean light), lavender (soft violet), '
-                . 'blush (soft pink), disco (neon on deep purple). Changes colours and corner rounding only.',
+                . 'blush (soft pink), disco (neon on deep purple) — or "auto", which follows the device\'s '
+                . 'light/dark setting (and so its day/night schedule) using theme_light by day and theme_dark '
+                . 'by night. Changes colours and corner rounding only.',
+        ],
+        'theme_dark' => [
+            'default'     => 'aurora',
+            'label'       => 'Dark look (auto)',
+            'description' => 'The look used when theme is "auto" and the device is in dark mode: aurora, noir or disco.',
+        ],
+        'theme_light' => [
+            'default'     => 'paper',
+            'label'       => 'Light look (auto)',
+            'description' => 'The look used when theme is "auto" and the device is in light mode: paper, lavender or blush.',
         ],
         'personality' => [
             'default'     => '2',
@@ -274,18 +286,54 @@ final class UserSettings
     /** Available visual themes (the client owns the actual palettes). */
     public const THEMES = ['aurora', 'noir', 'paper', 'lavender', 'blush', 'disco'];
 
-    /** Any theme input → a known theme id (unknown → the default 'aurora'). */
+    /** The dark and the light looks. "auto" follows the device and uses one of each. */
+    public const DARK_THEMES  = ['aurora', 'noir', 'disco'];
+    public const LIGHT_THEMES = ['paper', 'lavender', 'blush'];
+
+    /** Any theme input → a known theme id, or 'auto' (follow the device); unknown → the default 'aurora'. */
     public static function normalizeTheme(?string $value): string
     {
         $v = strtolower(trim((string) $value));
+        if (in_array($v, ['auto', 'automatic', 'system', 'device', 'automatisk', 'enhed'], true)) {
+            return 'auto';
+        }
 
         return in_array($v, self::THEMES, true) ? $v : 'aurora';
     }
 
-    /** The renderable "appearance" picker card payload (kind: appearance). */
-    public static function appearanceCard(string $theme): array
+    /** theme_dark / theme_light must be a look of that kind (anything else → that kind's default); theme → normalizeTheme. */
+    public static function normalizeThemeFor(string $key, ?string $value): string
     {
-        return ['kind' => 'appearance', 'theme' => self::normalizeTheme($theme)];
+        $v = strtolower(trim((string) $value));
+        if ($key === 'theme_dark') {
+            return in_array($v, self::DARK_THEMES, true) ? $v : 'aurora';
+        }
+        if ($key === 'theme_light') {
+            return in_array($v, self::LIGHT_THEMES, true) ? $v : 'paper';
+        }
+
+        return self::normalizeTheme($value);
+    }
+
+    /** The renderable "appearance" picker card payload (kind: appearance). */
+    public static function appearanceCard(string $theme, ?string $dark = null, ?string $light = null): array
+    {
+        return [
+            'kind'        => 'appearance',
+            'theme'       => self::normalizeTheme($theme),
+            'theme_dark'  => self::normalizeThemeFor('theme_dark', $dark),
+            'theme_light' => self::normalizeThemeFor('theme_light', $light),
+        ];
+    }
+
+    /** The appearance card for a user, from their three saved settings. */
+    public function appearance(int $userId): array
+    {
+        return self::appearanceCard(
+            (string) ($this->get($userId, 'theme') ?? 'aurora'),
+            $this->get($userId, 'theme_dark'),
+            $this->get($userId, 'theme_light')
+        );
     }
 
     /**

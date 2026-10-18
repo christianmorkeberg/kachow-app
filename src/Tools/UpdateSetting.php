@@ -28,7 +28,10 @@ final class UpdateSetting implements Tool
             . '(1 = off/neutral, 5 = maximum; use for "turn your personality up to 5", "be a hype gym bro" '
             . '(→ 5), "keep it neutral" (→ 1), Danish "skru personligheden op", "vær mere neutral"); '
             . '"theme" — the visual look, one of aurora / noir / paper / lavender / blush / disco (use for '
-            . '"switch to the lavender theme", "make it dark", "go disco", Danish "skift til lavendel-temaet"); '
+            . '"switch to the lavender theme", "make it dark", "go disco", Danish "skift til lavendel-temaet"), or '
+            . '"auto" to FOLLOW THE DEVICE\'s light/dark setting ("match my phone", "dark at night, light in the day", '
+            . 'Danish "følg min telefons mørk/lys-indstilling"); "theme_dark" (aurora / noir / disco) and "theme_light" '
+            . '(paper / lavender / blush) choose which look auto uses at night / by day ("use noir at night"); '
             . '"cycle_show_fertile" — "on"/"off". '
             . '"work_clock" — "location" switches the work clock to the automatic location clock (hours written '
             . 'from stays at work-type places; Shortcut punches ignored from then on), "shortcut" switches back '
@@ -69,8 +72,8 @@ final class UpdateSetting implements Tool
         if ($key === 'personality' && $value !== '') {
             $value = UserSettings::normalizePersonality($value);
         }
-        if ($key === 'theme' && $value !== '') {
-            $value = UserSettings::normalizeTheme($value);
+        if (in_array($key, ['theme', 'theme_dark', 'theme_light'], true) && $value !== '') {
+            $value = UserSettings::normalizeThemeFor($key, $value);
         }
         if ($key === 'work_clock' && $value !== '') {
             $v = mb_strtolower(trim($value));
@@ -94,8 +97,8 @@ final class UpdateSetting implements Tool
         // Changing the personality or theme shows the matching card reflecting the change.
         if ($key === 'personality') {
             $result['_render'] = UserSettings::personalityCard((string) $result['value']);
-        } elseif ($key === 'theme') {
-            $result['_render'] = UserSettings::appearanceCard((string) $result['value']);
+        } elseif (in_array($key, ['theme', 'theme_dark', 'theme_light'], true)) {
+            $result['_render'] = $this->settings->appearance($userId);
         }
 
         return $result;

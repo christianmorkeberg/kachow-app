@@ -50,8 +50,8 @@ final class GetAppearance implements Tool
             'current_theme' => $theme,
             'themes'        => UserSettings::THEMES,
             'note'          => 'The app shows a tappable theme picker card — do NOT list the themes as text; '
-                . 'just invite the user to tap one.',
-            '_render'       => UserSettings::appearanceCard($theme),
+                . 'just invite the user to tap one. It also has a "match my device" switch (light by day, dark at night).',
+            '_render'       => $this->settings->appearance($userId),
         ];
     }
 }

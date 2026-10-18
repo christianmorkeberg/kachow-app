@@ -269,6 +269,14 @@ $cases = [
     ['msg' => 'which calendar do you use for my work?', 'expect' => 'settings'],
     ['msg' => 'brug min kalender Vagter til arbejde', 'expect' => 'settings'],
     ['msg' => 'what are my settings?', 'expect' => 'settings'],
+    // Auto dark/light: follow the phone's setting.
+    ['msg' => "make it follow my phone's dark mode", 'expect' => 'settings'],
+    ['msg' => 'match my device appearance', 'expect' => 'settings'],
+    ['msg' => 'use noir at night and lavender in the day', 'expect' => 'settings'],
+    ['msg' => 'gør det mørkt', 'expect' => 'settings'],
+    ['msg' => 'vil du skifte til lys tilstand', 'expect' => 'settings'],
+    ['msg' => 'følg min telefons indstilling', 'expect' => 'settings'],
+    ['msg' => 'send en mail til Mørkeberg', 'absent' => 'settings'],
     // personality / tone dial
     ['msg' => 'turn up your personality to full', 'expect' => 'settings'],
     ['msg' => 'keep your tone neutral', 'expect' => 'settings'],

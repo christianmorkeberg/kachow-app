@@ -403,11 +403,15 @@ final class ToolSelector
             'theme', 'appearance', 'colour scheme', 'color scheme', 'dark mode', 'light mode',
             'lavender', 'disco', 'noir', 'blush', 'choose a theme', 'pick a theme', 'choose theme',
             'pick a look', 'choose a look', 'change the look', 'new look',
+            // follow the device's light/dark setting (theme = auto)
+            'follow my phone', 'follow my device', 'follow the device', 'match my device', 'match my phone', 'device appearance',
             // Danish
             'indstilling', 'indstillinger', 'konfigurer', 'foretrukne', 'hvilken kalender',
             'arbejdskalender', 'brug min kalender', 'kalender til arbejde', 'kalendernavn',
             'personlighed', 'din tone', 'vær neutral', 'mere neutral', 'skru op for',
             'tema', 'udseende', 'farvetema', 'mørk tilstand', 'lyst tema',
+            // (no bare "mørk" — it sits inside "Mørkeberg")
+            'lys tilstand', 'gør det mørk', 'gør det lys', 'mørkt udseende', 'lyst udseende', 'følg min telefon', 'følg telefonens',
         ],
         // Home devices through the Pico home agent (Hue lights, later thermostats).
         'home' => [
