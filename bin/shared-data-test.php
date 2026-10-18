@@ -139,6 +139,10 @@ check('shared: their hours, not the viewer\'s', ($h['total_minutes'] ?? 0) === 4
     && !str_contains(json_encode($h['sessions'] ?? []), 'Elsewhere'), json_encode($h['total_minutes'] ?? $h));
 check('attributed, look-only card', ($h['_render']['readonly'] ?? false) === true && ($h['_render']['person']['name'] ?? '') === 'Owner'
     && ($h['_render']['kind'] ?? '') === 'work_hours');
+check('the card knows its first and last day and each session\'s date (the per-day bars need them)', ($h['_render']['from'] ?? '') === '2026-09-29'
+    && ($h['_render']['to'] ?? '') === '2026-09-29' && ($h['_render']['sessions'][0]['date'] ?? '') === '2026-09-29', json_encode([$h['_render']['from'] ?? null, $h['_render']['to'] ?? null]));
+$span = $hoursTool->execute(['person' => 'Owner', 'from' => '2026-09-28', 'to' => '2026-09-30'], 1);
+check('a multi-day range ends on its last day, not the day after', ($span['_render']['from'] ?? '') === '2026-09-28' && ($span['_render']['to'] ?? '') === '2026-09-30');
 $fix = $hoursTool->execute(['person' => 'Owner', 'from' => '2026-09-20', 'to' => '2026-09-20'], 1);
 check('their forgotten clock-out is theirs to fix: no prompt on the card, no offer to the model',
     ($fix['_render']['needs_fix'] ?? null) === [] && str_contains((string) ($fix['note'] ?? ''), 'do not offer'), json_encode($fix['note'] ?? null));

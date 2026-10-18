@@ -447,6 +447,7 @@ final class WorkEvents
                     'out_id'   => $s['out_id'],
                     'place'    => $s['location'],
                     'day'      => $this->toLocal($s['in'])->format('D j M'),
+                    'date'     => $this->toLocal($s['in'])->format('Y-m-d'),
                     'in'       => $this->toLocal($s['in'])->format('H:i'),
                     'out'      => $out !== null ? $this->toLocal($s['out'])->format('H:i') : null,
                     'ongoing'  => $isOngoing,
@@ -473,6 +474,9 @@ final class WorkEvents
             'query'       => ['scope' => $scope, 'date' => $date, 'to' => $toDate, 'place' => $filterKey !== null ? $place : null],
             'title'       => $scopeLabel . ($filterKey !== null ? ' · ' . $place : ''),
             'range'       => $rangeLabel,
+            // First and last local day of the range, so the card can draw one bar per day (empty days included).
+            'from'        => $startLocal->format('Y-m-d'),
+            'to'          => $endLocal->modify('-1 day')->format('Y-m-d'),
             'total'       => $totalLabel,
             'total_minutes' => $totalMinutes,
             'ongoing'     => $ongoing,
@@ -482,6 +486,7 @@ final class WorkEvents
                 : [],
             'sessions'    => array_map(static fn (array $s): array => [
                 'day'      => $s['day'],
+                'date'     => $s['date'],
                 'place'    => $s['place'],
                 'in'       => $s['in'],
                 'out'      => $s['out'],
