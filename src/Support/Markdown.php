@@ -73,6 +73,32 @@ final class Markdown
         // Escape first — the rest only ever adds our own tags.
         $s = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
 
+        // Bare http(s) URLs become links too (not the ones already inside [text](url)). They are
+        // parked behind placeholders while the emphasis rules run, so an underscore or asterisk
+        // in a URL is never turned into italics, then put back as anchors.
+        $urls = [];
+        $s    = preg_replace_callback(
+            '~(?<!\]\()(?<![\w"=>`])https?://[^\s<>`]+~u',
+            static function (array $m) use (&$urls): string {
+                $url  = $m[0];
+                $tail = '';
+                while (strlen($url) > 8) {
+                    $last = substr($url, -1);
+                    $trim = str_contains('.,;:!?', $last)
+                        || ($last === ')' && substr_count($url, '(') < substr_count($url, ')'));
+                    if (!$trim) {
+                        break;
+                    }
+                    $tail = $last . $tail;
+                    $url  = substr($url, 0, -1);
+                }
+                $urls[] = '<a href="' . $url . '" target="_blank" rel="noopener noreferrer">' . $url . '</a>' . $tail;
+
+                return "\x1A" . (count($urls) - 1) . "\x1A";
+            },
+            $s
+        ) ?? $s;
+
         $s = preg_replace_callback('/`([^`]+)`/', static fn (array $m): string => '<code>' . $m[1] . '</code>', $s) ?? $s;
         $s = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $s) ?? $s;
         $s = preg_replace('/__([^_]+)__/', '<strong>$1</strong>', $s) ?? $s;
@@ -86,6 +112,10 @@ final class Markdown
                 '<a href="' . $m[2] . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>',
             $s
         ) ?? $s;
+
+        if ($urls !== []) {
+            $s = preg_replace_callback('/\x1A(\d+)\x1A/', static fn (array $m): string => $urls[(int) $m[1]] ?? '', $s) ?? $s;
+        }
 
         return $s;
     }
