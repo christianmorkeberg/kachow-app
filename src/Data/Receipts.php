@@ -108,6 +108,25 @@ final class Receipts
         return $stmt->rowCount() >= 0 && $this->get($userId, $id) !== null;
     }
 
+    /**
+     * Attaches an already-stored file (PDF or image) to an existing expense — NOT part of FIELDS: the reference is set
+     * by code that stored the file, never by a model-supplied field. Returns the file it replaced (for cleanup), or false
+     * if the expense does not exist.
+     *
+     * @return string|null|false the previous file_ref, null if there was none, false if no such expense
+     */
+    public function attachFile(int $userId, int $id, string $fileRef, string $mime)
+    {
+        $row = $this->get($userId, $id);
+        if ($row === null) {
+            return false;
+        }
+        $this->db->prepare('UPDATE receipts SET file_ref = :f, mime = :m WHERE id = :id AND user_id = :u')
+            ->execute([':f' => $fileRef, ':m' => $mime, ':id' => $id, ':u' => $userId]);
+
+        return $row['file_ref'] !== null ? (string) $row['file_ref'] : null;
+    }
+
     public function confirm(int $userId, int $id): bool
     {
         $stmt = $this->db->prepare("UPDATE receipts SET status = 'confirmed' WHERE id = :id AND user_id = :u");

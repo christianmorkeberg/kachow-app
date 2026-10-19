@@ -25,6 +25,7 @@ final class NotificationTypes
     public const SCHEDULED_TASK  = 'scheduled_task';
     public const WORK_CLOCK_GAP  = 'work_clock_gap';
     public const FEEDBACK_REPORT = 'feedback_report';
+    public const IMPORTANT_EMAIL = 'important_email';
 
     /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
@@ -93,6 +94,14 @@ final class NotificationTypes
             'description' => 'With the location work clock on: a morning heads-up when a work visit yesterday '
                 . 'could not be clocked because of a tracking gap, so you can add the hours yourself.',
             'default'     => true,
+        ],
+        // Sent by notify-cron: new unread mail that a model judges to need attention. Off by default — it reads
+        // the user's mailbox and sends subjects to the model — so the user opts in.
+        self::IMPORTANT_EMAIL => [
+            'label'       => 'Important unread email',
+            'description' => 'A heads-up when new unread mail looks like it needs you (a person waiting for a reply, a payment or '
+                . 'deadline, a booking). Newsletters and receipts are ignored. Mail subjects and previews are read by the assistant to decide.',
+            'default'     => false,
         ],
         // Sent by api/report.php when a user flags a message ("report to developer"). Replaces the
         // e-mail to the developer; only admins are ever sent it, so only admins see the toggle.

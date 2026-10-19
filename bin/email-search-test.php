@@ -69,6 +69,7 @@ final class FakeMailbox implements EmailProvider
         return null;
     }
 
+    public function attachment(string $messageId, string $attachmentId): ?array { return null; }
     public function markRead(string $messageId): void {}
     public function markAllRead(int $limit = 100): int { return 0; }
     public function createDraft(EmailDraft $draft): string { return 'd'; }

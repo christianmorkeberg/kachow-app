@@ -108,7 +108,84 @@ final class ImapProvider implements EmailProvider
             unread:   false,
             bodyText: trim($body),
             bodyHtml: $html,
+            attachments: array_map(static fn (array $a): array => ['id' => $a['id'], 'filename' => $a['filename'], 'mime' => $a['mime'], 'size' => $a['size']], $this->attachmentLeaves($headerText, $bodyRaw)),
         );
+    }
+
+    public function attachment(string $messageId, string $attachmentId): ?array
+    {
+        $uid = (int) $messageId;
+        if ($uid <= 0) {
+            return null;
+        }
+        $this->client->select('INBOX');
+        $raw = $this->client->fetchRaw($uid);
+        if ($raw === '') {
+            return null;
+        }
+        [$headerText, $bodyRaw] = $this->splitHeaders($raw);
+        foreach ($this->attachmentLeaves($headerText, $bodyRaw) as $a) {
+            if ($a['id'] === $attachmentId) {
+                return ['filename' => $a['filename'], 'mime' => $a['mime'], 'data' => $this->decodeBinary($a['body'], $a['encoding'])];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The real attachments of a MIME message: leaf parts with a filename that are not images embedded in the HTML.
+     * The id is the part's position in the tree ("2", "1.3"), stable for a given message.
+     *
+     * @return list<array{id:string, filename:string, mime:string, size:int, encoding:string, body:string}>
+     */
+    private function attachmentLeaves(string $headerText, string $body, string $path = ''): array
+    {
+        $headers  = $this->parseHeaders($headerText);
+        $ctypeRaw = $headers['content-type'] ?? 'text/plain';
+
+        if (str_starts_with(strtolower($ctypeRaw), 'multipart/') && preg_match('/boundary="?([^";]+)"?/i', $ctypeRaw, $b)) {
+            $out = [];
+            foreach ($this->splitMultipart($body, $b[1]) as $i => $part) {
+                [$ph, $pb] = $this->splitHeaders($part);
+                $out = array_merge($out, $this->attachmentLeaves($ph, $pb, $path === '' ? (string) ($i + 1) : $path . '.' . ($i + 1)));
+            }
+
+            return $out;
+        }
+
+        $disp = (string) ($headers['content-disposition'] ?? '');
+        $name = $this->partFilename($disp) ?: $this->partFilename($ctypeRaw);
+        if ($name === '' || (stripos($disp, 'inline') === 0 && isset($headers['content-id']))) {
+            return [];
+        }
+        $enc  = strtolower(trim((string) ($headers['content-transfer-encoding'] ?? '')));
+        $mime = strtolower(trim(explode(';', $ctypeRaw)[0]));
+        $size = $enc === 'base64' ? (int) (strlen(preg_replace('/\s+/', '', $body) ?? '') * 3 / 4) : strlen($body);
+
+        return [['id' => $path === '' ? '1' : $path, 'filename' => $name, 'mime' => $mime, 'size' => $size, 'encoding' => $enc, 'body' => $body]];
+    }
+
+    /** filename="x" / name="x" / RFC 2231 filename*=utf-8''x%20y, decoded; '' if none. */
+    private function partFilename(string $header): string
+    {
+        if (preg_match("/filename\*\s*=\s*[^']*'[^']*'([^;\s]+)/i", $header, $m)) {
+            return rawurldecode($m[1]);
+        }
+        if (preg_match('/(?:file)?name\s*=\s*"([^"]*)"/i', $header, $m) || preg_match('/(?:file)?name\s*=\s*([^;\s]+)/i', $header, $m)) {
+            return trim($this->decode($m[1]));
+        }
+
+        return '';
+    }
+
+    private function decodeBinary(string $body, string $encoding): string
+    {
+        return match ($encoding) {
+            'base64'           => (string) base64_decode(preg_replace('/\s+/', '', $body) ?? '', false),
+            'quoted-printable' => quoted_printable_decode($body),
+            default            => $body,
+        };
     }
 
     public function markRead(string $messageId): void

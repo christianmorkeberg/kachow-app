@@ -185,6 +185,25 @@ final class EmailService
         return $provider->get($messageId);
     }
 
+    /**
+     * One attachment's bytes. With no account named, the mailbox holding the message is found first (as read_email does).
+     *
+     * @return array{filename:string, mime:string, data:string}|null
+     */
+    public function attachment(int $userId, ?int $accountId, string $messageId, string $attachmentId): ?array
+    {
+        if ($accountId === null) {
+            $found = $this->locate($userId, $messageId);
+            if ($found === null) {
+                return null;
+            }
+            $accountId = $found['account_id'];
+        }
+        [$account, $provider] = $this->resolve($userId, $accountId);
+
+        return $provider->attachment($messageId, $attachmentId);
+    }
+
     /** Mark a message read/seen. Best-effort; never critical to the caller. */
     public function markRead(int $userId, ?int $accountId, string $messageId): void
     {

@@ -102,7 +102,7 @@ final class ToolSelector
         ],
         'receipts' => [
             'add_expense', 'update_receipt', 'delete_receipt', 'get_expenses', 'export_expenses_csv',
-            'mark_expense_reimbursed',
+            'mark_expense_reimbursed', 'attach_email_file',
         ],
         // Income side of the books: invoices/revenue, owner drawings, udlæg reimbursement.
         'bookkeeping' => [
@@ -112,7 +112,7 @@ final class ToolSelector
             'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'update_trip', 'delete_trip', 'get_driving_distance',
         ],
         'email' => [
-            'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts',
+            'get_emails', 'read_email', 'mark_emails_read', 'draft_email', 'send_email', 'list_email_accounts', 'attach_email_file',
         ],
         'cycle' => [
             'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle', 'log_cycle_day',

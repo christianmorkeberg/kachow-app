@@ -93,7 +93,27 @@ final class GmailProvider implements EmailProvider
             unread:   $summary->unread,
             bodyText: $body,
             bodyHtml: $html,
+            attachments: array_map(static fn (array $a): array => ['id' => $a['id'], 'filename' => $a['filename'], 'mime' => $a['mime'], 'size' => $a['size']], $this->attachmentParts($msg->getPayload())),
         );
+    }
+
+    public function attachment(string $messageId, string $attachmentId): ?array
+    {
+        try {
+            // Gmail's own attachmentId changes between fetches, so the id we list is the stable part id; look the part up again.
+            $msg = $this->service->users_messages->get('me', $messageId, ['format' => 'full']);
+            foreach ($this->attachmentParts($msg->getPayload()) as $a) {
+                if ($a['id'] === $attachmentId) {
+                    $body = $this->service->users_messages_attachments->get('me', $messageId, $a['gmail_id']);
+
+                    return ['filename' => $a['filename'], 'mime' => $a['mime'], 'data' => $this->b64urlDecode((string) $body->getData())];
+                }
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
     }
 
     public function markRead(string $messageId): void
@@ -178,6 +198,37 @@ final class GmailProvider implements EmailProvider
             date:     $this->normalizeDate($headers['date'] ?? ''),
             unread:   in_array('UNREAD', $labels, true),
         );
+    }
+
+    /**
+     * Real attachments in a payload (a filename and an attachment body; inline images referenced by the HTML are skipped).
+     *
+     * @return list<array{id:string, gmail_id:string, filename:string, mime:string, size:int}>
+     */
+    private function attachmentParts(?\Google\Service\Gmail\MessagePart $part): array
+    {
+        $out = [];
+        if ($part === null) {
+            return $out;
+        }
+        $name = (string) $part->getFilename();
+        $att  = (string) $part->getBody()?->getAttachmentId();
+        if ($name !== '' && $att !== '') {
+            $inline = false;
+            foreach ($part->getHeaders() ?? [] as $h) {
+                if (strtolower((string) $h->getName()) === 'content-disposition' && stripos((string) $h->getValue(), 'inline') === 0) {
+                    $inline = true;
+                }
+            }
+            if (!$inline) {
+                $out[] = ['id' => (string) $part->getPartId(), 'gmail_id' => $att, 'filename' => $name, 'mime' => (string) $part->getMimeType(), 'size' => (int) $part->getBody()?->getSize()];
+            }
+        }
+        foreach ($part->getParts() ?? [] as $child) {
+            $out = array_merge($out, $this->attachmentParts($child));
+        }
+
+        return $out;
     }
 
     /** Recursively pull the best plain-text body out of a Gmail payload. */
