@@ -9,7 +9,7 @@ use App\Tools\ToolRegistry;
 /**
  * Which tools the voice assistant gets, and how each is declared to Gemini Live.
  *
- * A fixed allow-list (no deletes or bulk clears: they would need a spoken confirmation first) plus one
+ * A fixed allow-list (deletes are in, behind a spoken confirmation: see ConfirmGate) plus one
  * gateway tool, ask_kachow, that hands everything else to the full text assistant. Tools are FAST (answer in
  * about a second: the model waits for the result) or SLOW (may take seconds: declared NON_BLOCKING so the
  * conversation carries on and the result is spoken when the model is idle).
@@ -25,20 +25,53 @@ final class VoiceTools
         'get_shopping_list', 'add_to_shopping_list', 'check_off_item',
         'log_work_event', 'get_work_hours',
         'log_workout', 'get_workout_history', 'get_workout_plan',
+        // Blocking on purpose: a NON_BLOCKING result makes the model speak a new turn per call, so switching off
+        // five lights gave five separate confirmations.
+        'home_device_call',
+        // scheduled tasks and notifications
+        'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'notify_me', 'set_place_reminder',
+        // workouts and health
+        'update_workout', 'get_workout_progress', 'training_load', 'create_workout_plan', 'add_plan_exercise',
+        'check_off_exercise', 'uncheck_exercise', 'get_week_plan', 'get_cycle_status', 'log_cycle_day', 'log_period',
+        // trips and places
+        'get_trips', 'update_trip', 'get_mileage', 'list_places', 'get_stays', 'get_location_day',
+        // lists
+        'list_shopping_lists', 'uncheck_item', 'set_list_grouping', 'get_wishlist', 'add_wishlist_item',
+        'update_wishlist_item', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'get_books',
     ];
 
-    /** May take several seconds (weather service, the home agent, the full assistant). */
-    public const SLOW = ['get_current_weather', 'get_weather_forecast', 'home_device_call', self::GATEWAY];
+    /**
+     * Destructive, but allowed: the first call is held back by ConfirmGate until the user has said yes out loud.
+     * (Receipts, trips, places, connections, plans, vinyls, memories … stay with the text assistant via ask_kachow.)
+     */
+    public const CONFIRM = [
+        'delete_calendar_event', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
+        'cancel_reminder', 'delete_work_event',
+        'cancel_scheduled_task', 'delete_workout', 'delete_workout_plan', 'remove_plan_exercise', 'remove_period',
+        'delete_trip', 'delete_place', 'delete_wishlist_item', 'remove_vinyl',
+    ];
+
+    /** May take several seconds (weather, maps and geocoding, Discogs, the full assistant). */
+    public const SLOW = [
+        'get_current_weather', 'get_weather_forecast', self::GATEWAY,
+        // map / geocoding / Discogs lookups
+        'log_trip', 'save_place', 'update_place', 'suggest_places', 'get_driving_distance', 'add_vinyl',
+    ];
 
     /** @return list<string> */
     public static function allowed(): array
     {
-        return array_merge(self::FAST, self::SLOW);
+        return array_merge(self::FAST, self::CONFIRM, self::SLOW);
     }
 
     public static function isAllowed(string $name): bool
     {
         return in_array($name, self::allowed(), true);
+    }
+
+    public static function needsConfirm(string $name): bool
+    {
+        return in_array($name, self::CONFIRM, true);
     }
 
     public static function isSlow(string $name): bool
@@ -97,6 +130,9 @@ final class VoiceTools
         };
         if ($slow && !str_starts_with((string) $decl['description'], 'SLOW')) {
             $decl['description'] = 'SLOW (may take several seconds). ' . $decl['description'];
+        }
+        if (self::needsConfirm((string) $decl['name'])) {
+            $decl['description'] = 'DESTRUCTIVE: the first call only asks; it deletes after the user says yes. ' . $decl['description'];
         }
         $decl['behavior'] = $behavior;
 

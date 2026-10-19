@@ -80,12 +80,16 @@ final class VoiceSession
             . "reason is clear, why — do not retry over and over. If a result looks wrong or empty, say so; never invent a result.\n"
             . "Tools marked SLOW take a while: say something like \"On it — I'll tell you when it's done\", carry on talking normally, and when "
             . "the result arrives tell the user briefly.\n"
+            . "When one request needs several tool calls (e.g. several lights), make them together and confirm ONCE at the end, "
+            . "in one short sentence — never one confirmation per call, and don't repeat what you already said.\n"
             . "If the user changes their mind or corrects you mid-action, set the new value explicitly (an absolute date or time), don't "
             . "shift relative to the old one.\n"
             . "Resolve \"this event\", \"it\", \"that one\" from the agenda below and what you just talked about; ask one short question only "
             . "if it is really ambiguous. Tools take LOCAL times (Europe/Copenhagen) — use the local time stated below.\n"
-            . "Use " . VoiceTools::GATEWAY . " for anything the other tools cannot do. You cannot delete things or clear lists by voice yet — "
-            . "say so and suggest doing it in the app.\n\n"
+            . "Use " . VoiceTools::GATEWAY . " for anything the other tools cannot do. To DELETE or clear something use the matching tool: it will "
+            . "not do it on the first call but tell you to ask — then ask ONE short question naming exactly what goes (\"Delete the potato "
+            . "event at five?\"), and only on a clear yes call it again with the same arguments. For deleting other kinds of things use "
+            . VoiceTools::GATEWAY . " and relay its question.\n\n"
             . AssistantLoop::nowLine($now);
 
         if ($agenda !== '') {

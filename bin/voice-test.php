@@ -16,6 +16,7 @@ use App\Data\VoiceLog;
 use App\Tools\GetVoiceLog;
 use App\Tools\Tool;
 use App\Tools\ToolRegistry;
+use App\Voice\ConfirmGate;
 use App\Voice\LiveTokens;
 use App\Voice\VoiceAlert;
 use App\Voice\VoiceSession;
@@ -54,15 +55,16 @@ foreach (array_merge(VoiceTools::FAST, ['get_current_weather', 'home_device_call
 
 echo "1) the allow-list and the declarations\n";
 check('fast and slow tools are allowed, the gateway too', VoiceTools::isAllowed('update_calendar_event') && VoiceTools::isAllowed('home_device_call') && VoiceTools::isAllowed(VoiceTools::GATEWAY));
-check('deletes, bulk clears and everything else are not', !VoiceTools::isAllowed('delete_calendar_event') && !VoiceTools::isAllowed('clear_checked_items') && !VoiceTools::isAllowed('get_emails'));
+check('deletes are allowed but flagged for confirmation; everything else is not', VoiceTools::isAllowed('delete_calendar_event') && VoiceTools::needsConfirm('delete_calendar_event')
+    && !VoiceTools::needsConfirm('update_calendar_event') && !VoiceTools::isAllowed('get_emails') && !VoiceTools::isAllowed('forget_about_me'));
 $decl = VoiceTools::declarations($registry);
 $names = array_column($decl, 'name');
-check('only allowed tools are declared, plus the gateway', !in_array('delete_calendar_event', $names, true) && !in_array('get_emails', $names, true)
+check('only allowed tools are declared, plus the gateway', in_array('delete_calendar_event', $names, true) && !in_array('get_emails', $names, true)
     && in_array('update_calendar_event', $names, true) && in_array(VoiceTools::GATEWAY, $names, true));
 $by = array_column($decl, null, 'name');
-check('auto: fast tools block, slow tools are NON_BLOCKING', $by['update_calendar_event']['behavior'] === 'BLOCKING' && $by['home_device_call']['behavior'] === 'NON_BLOCKING'
+check('auto: fast tools block, slow tools are NON_BLOCKING', $by['update_calendar_event']['behavior'] === 'BLOCKING' && $by['get_current_weather']['behavior'] === 'NON_BLOCKING' && $by['home_device_call']['behavior'] === 'BLOCKING'
     && $by[VoiceTools::GATEWAY]['behavior'] === 'NON_BLOCKING');
-check('slow tools say SLOW in their description, fast ones do not', str_starts_with($by['home_device_call']['description'], 'SLOW') && !str_starts_with($by['update_calendar_event']['description'], 'SLOW')
+check('slow tools say SLOW in their description, fast ones do not', str_starts_with($by['get_current_weather']['description'], 'SLOW') && !str_starts_with($by['update_calendar_event']['description'], 'SLOW')
     && str_starts_with($by[VoiceTools::GATEWAY]['description'], 'SLOW'));
 check('the other modes make every tool the same', array_unique(array_column(VoiceTools::declarations($registry, 'nonblocking'), 'behavior')) === ['NON_BLOCKING']
     && array_unique(array_column(VoiceTools::declarations($registry, 'blocking'), 'behavior')) === ['BLOCKING']);
@@ -117,7 +119,7 @@ $r = $run->run('set_reminder', [], 1);
 check('a tool error is flagged but still handed to the model — and is not a fault', $r['ok'] === false && $r['error'] === 'No time given.' && $r['result']['error'] === 'No time given.' && $r['fault'] === false);
 $r = $run->run('log_workout', [], 1);
 check('an exception becomes a friendly error, with the real one logged — and is a fault', $r['ok'] === false && $r['result']['error'] === 'The tool failed.' && str_contains($r['error'], 'db down') && $r['fault'] === true);
-$r = $run->run('delete_calendar_event', ['event_id' => 'x'], 1);
+$r = $run->run('get_emails', [], 1);
 check('a tool outside the allow-list is refused (logged, not a fault)', $r['ok'] === false && str_contains($r['error'], 'not allowed') && $r['fault'] === false);
 $r = $run->run(VoiceTools::GATEWAY, ['request' => 'what is my balance'], 1);
 check('the gateway asks the full assistant and returns its words and card', $r['ok'] && $r['result'] === ['answer' => 'Done: what is my balance'] && $r['card'] === ['kind' => 'notice']);
@@ -175,6 +177,40 @@ check('a failed call becomes a feedback report with the call and the transcript'
 check('it shows up in the open reports', count($reports->recent('open')) === 1);
 $tool = new GetVoiceLog($log, $users);
 check('only the developer reads the voice log', isset($tool->execute([], 2)['error']) && isset($tool->execute([], 1)['sessions']));
+
+echo "6) spoken confirmation before a delete\n";
+$ran = 0;
+$reg2 = new ToolRegistry();
+$reg2->register(fakeTool('delete_calendar_event', function ($a, $u) use (&$ran) { $ran++; return ['deleted' => true]; }));
+$gate = new ConfirmGate($log);
+$r2 = new VoiceToolRunner($reg2, $gw, $gate);
+$d = ['event_id' => 'e9', 'calendar_id' => 'c1'];
+$a = $r2->run('delete_calendar_event', $d, 1, 'sess1aaaa', 3, 77);
+check('the first call only asks: not run, told to confirm', $ran === 0 && ($a['result']['needs_confirmation'] ?? false) === true && $a['ok'] === true);
+$b = $r2->run('delete_calendar_event', $d, 1, 'sess1aaaa', 3, 77);
+check('the same call in the same turn is still held (the model cannot answer for the user)', $ran === 0 && isset($b['result']['needs_confirmation']));
+$c = $r2->run('delete_calendar_event', ['event_id' => 'other'], 1, 'sess1aaaa', 4, 77);
+check('a different call in a later turn is a new question, not a yes', $ran === 0 && isset($c['result']['needs_confirmation']));
+$e = $r2->run('delete_calendar_event', ['calendar_id' => 'c1', 'event_id' => 'e9'], 1, 'sess1aaaa', 4, 77);
+check('the same call in a later turn runs (argument order does not matter)', $ran === 1 && ($e['result']['deleted'] ?? false) === true);
+$f = $r2->run('delete_calendar_event', $d, 1, 'sess1aaaa', 5, 77);
+check('a yes is used once: the next identical call asks again', $ran === 1 && isset($f['result']['needs_confirmation']));
+$g = $r2->run('delete_calendar_event', $d, 1, 'sess-other', 9, 77);
+check('another session\'s ask does not count', $ran === 1 && isset($g['result']['needs_confirmation']));
+$h = (new VoiceToolRunner($reg2, $gw))->run('delete_calendar_event', $d, 1, 'sess1aaaa', 9, 77);
+check('without a gate a delete is refused', $ran === 1 && $h['ok'] === false);
+check('summary line from the call itself: label + readable args, no ids', VoiceToolRunner::describe('insert_calendar_event', ['summary' => 'potato', 'start' => '2026-10-19T16:00', 'calendar_id' => 'c1', 'all_day' => false], true) === 'Insert calendar event: potato, 2026-10-19T16:00');
+check('a failed call says so; the gateway shows the request', VoiceToolRunner::describe('set_reminder', ['text' => 'milk'], false) === 'Set reminder: milk (failed)'
+    && str_starts_with(VoiceToolRunner::describe(VoiceTools::GATEWAY, ['request' => 'Show my receipts'], true), 'Asked the full assistant: Show my receipts'));
+check('a held delete has no summary (nothing was done)', $a['summary'] === null && $e['summary'] === 'Delete calendar event');
+foreach (['schedule_task', 'list_scheduled_tasks', 'notify_me', 'get_workout_progress', 'log_period', 'get_trips', 'list_places', 'get_wishlist', 'get_vinyls', 'uncheck_item'] as $n) {
+    $okAll = ($okAll ?? true) && VoiceTools::isAllowed($n) && !VoiceTools::needsConfirm($n) && !VoiceTools::isSlow($n);
+}
+check('the new groups are direct tools (tasks, health, trips/places, lists)', $okAll);
+check('maps/Discogs lookups are slow; deletes of those groups need a yes', VoiceTools::isSlow('log_trip') && VoiceTools::isSlow('suggest_places') && VoiceTools::isSlow('add_vinyl')
+    && VoiceTools::needsConfirm('delete_trip') && VoiceTools::needsConfirm('cancel_scheduled_task') && VoiceTools::needsConfirm('remove_period') && VoiceTools::needsConfirm('delete_place'));
+check('no tool is both slow and confirm; none listed twice', array_intersect(VoiceTools::SLOW, VoiceTools::CONFIRM) === [] && count(VoiceTools::allowed()) === count(array_unique(VoiceTools::allowed())));
+check('the prompt tells the model how deleting works', str_contains(VoiceSession::prompt([], [], ''), 'ONE short question'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
