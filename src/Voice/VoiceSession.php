@@ -46,14 +46,21 @@ final class VoiceSession
         array $instructions = [],
         string $agenda = '',
         ?DateTimeImmutable $now = null,
+        string $language = 'auto',
     ): array {
+        $language = self::language($language);
+        $speech   = ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice !== '' ? $voice : self::DEFAULT_VOICE]]];
+        if ($language !== 'auto') {
+            $speech['languageCode'] = $language === 'da' ? 'da-DK' : 'en-US';   // pins the accent too, so the voice stays the same
+        }
+
         return [
             'model'                    => 'models/' . ($model !== '' ? $model : self::DEFAULT_MODEL),
             'generationConfig'         => [
                 'responseModalities' => ['AUDIO'],
-                'speechConfig'       => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice !== '' ? $voice : self::DEFAULT_VOICE]]],
+                'speechConfig'       => $speech,
             ],
-            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now)]]],
+            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now, $language)]]],
             'tools'                    => [['functionDeclarations' => VoiceTools::declarations($registry, $toolMode)]],
             'inputAudioTranscription'  => new \stdClass(),
             'outputAudioTranscription' => new \stdClass(),
@@ -62,14 +69,28 @@ final class VoiceSession
         ];
     }
 
+    /** 'auto' (English or Danish, following the user), 'en' or 'da'. */
+    public static function language(?string $v): string
+    {
+        $v = strtolower(trim((string) $v));
+
+        return in_array($v, ['en', 'da'], true) ? $v : 'auto';
+    }
+
     /**
      * @param list<array{content:string}> $memories
      * @param list<array{instruction:string}> $instructions
      */
-    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null): string
+    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null, string $language = 'auto'): string
     {
-        $p = "You are Kachow, the user's personal assistant, and you are talking to them out loud. Speak English unless the user speaks "
-            . "another language, then mirror it.\n\n"
+        $lang = match (self::language($language)) {
+            'en'    => 'LANGUAGE: always speak English, whatever language the user uses.',
+            'da'    => 'LANGUAGE: always speak Danish (dansk), whatever language the user uses.',
+            default => 'LANGUAGE: you speak ONLY English or Danish. Reply in the language the user just spoke (Danish → Danish, English → English); '
+                . 'if unsure, use English. Never use any other language — unclear audio is still English or Danish.',
+        };
+        $p = "You are Kachow, the user's personal assistant, and you are talking to them out loud. " . $lang . ' Keep the same voice, accent and tone '
+            . "throughout the whole conversation.\n\n"
             . "HOW TO SPEAK: short, natural, relaxed sentences, like a helpful person — no lists, no markdown, no reading out long details. "
             . "Anything long (an agenda, a table, a list) is shown on the user's screen as a card: give the gist in a sentence or two. "
             . "Say times and dates the way people say them (\"Thursday at ten\", not \"2026-10-22T10:00\").\n\n"
