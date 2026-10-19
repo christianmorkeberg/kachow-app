@@ -20,7 +20,7 @@ final class VoiceToolRunner
     /**
      * @param callable(string): array{reply:string, card:?array} $gateway runs a request through the full assistant
      */
-    public function __construct(private ToolRegistry $registry, private $gateway)
+    public function __construct(private ToolRegistry $registry, private $gateway, private ?ConfirmGate $gate = null)
     {
     }
 
@@ -29,13 +29,22 @@ final class VoiceToolRunner
      * @return array{ok:bool, result:array<string, mixed>, card:?array<string, mixed>, ms:int, error:?string, fault:bool} fault = the tool THREW (a bug or an outage),
      *         as opposed to a tool answering with an error the model can act on ("no time given") — only faults are worth waking the developer for
      */
-    public function run(string $name, array $args, int $userId): array
+    public function run(string $name, array $args, int $userId, string $sessionId = '', int $turn = 0, ?int $conversationId = null): array
     {
         $t0 = microtime(true);
         $ms = static fn (): int => (int) round((microtime(true) - $t0) * 1000);
 
         if (!VoiceTools::isAllowed($name)) {
             return ['ok' => false, 'result' => ['error' => 'That is not available by voice.'], 'card' => null, 'ms' => $ms(), 'error' => 'not allowed by voice: ' . $name, 'fault' => false];
+        }
+        if (VoiceTools::needsConfirm($name)) {
+            if ($this->gate === null) {
+                return ['ok' => false, 'result' => ['error' => 'That needs a spoken confirmation, which is not available here.'], 'card' => null, 'ms' => $ms(), 'error' => 'no confirm gate', 'fault' => false];
+            }
+            $held = $this->gate->check($userId, $sessionId, $name, $args, $turn, $conversationId);
+            if ($held !== null) {
+                return ['ok' => true, 'result' => $held, 'card' => null, 'ms' => $ms(), 'error' => null, 'fault' => false];
+            }
         }
         try {
             if ($name === VoiceTools::GATEWAY) {

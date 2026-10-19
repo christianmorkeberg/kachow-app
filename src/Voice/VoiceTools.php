@@ -9,7 +9,7 @@ use App\Tools\ToolRegistry;
 /**
  * Which tools the voice assistant gets, and how each is declared to Gemini Live.
  *
- * A fixed allow-list (no deletes or bulk clears: they would need a spoken confirmation first) plus one
+ * A fixed allow-list (deletes are in, behind a spoken confirmation: see ConfirmGate) plus one
  * gateway tool, ask_kachow, that hands everything else to the full text assistant. Tools are FAST (answer in
  * about a second: the model waits for the result) or SLOW (may take seconds: declared NON_BLOCKING so the
  * conversation carries on and the result is spoken when the model is idle).
@@ -30,18 +30,32 @@ final class VoiceTools
         'home_device_call',
     ];
 
+    /**
+     * Destructive, but allowed: the first call is held back by ConfirmGate until the user has said yes out loud.
+     * (Receipts, trips, places, connections, plans, vinyls, memories … stay with the text assistant via ask_kachow.)
+     */
+    public const CONFIRM = [
+        'delete_calendar_event', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
+        'cancel_reminder', 'delete_work_event',
+    ];
+
     /** May take several seconds (weather service, the full assistant). */
     public const SLOW = ['get_current_weather', 'get_weather_forecast', self::GATEWAY];
 
     /** @return list<string> */
     public static function allowed(): array
     {
-        return array_merge(self::FAST, self::SLOW);
+        return array_merge(self::FAST, self::CONFIRM, self::SLOW);
     }
 
     public static function isAllowed(string $name): bool
     {
         return in_array($name, self::allowed(), true);
+    }
+
+    public static function needsConfirm(string $name): bool
+    {
+        return in_array($name, self::CONFIRM, true);
     }
 
     public static function isSlow(string $name): bool
@@ -100,6 +114,9 @@ final class VoiceTools
         };
         if ($slow && !str_starts_with((string) $decl['description'], 'SLOW')) {
             $decl['description'] = 'SLOW (may take several seconds). ' . $decl['description'];
+        }
+        if (self::needsConfirm((string) $decl['name'])) {
+            $decl['description'] = 'DESTRUCTIVE: the first call only asks; it deletes after the user says yes. ' . $decl['description'];
         }
         $decl['behavior'] = $behavior;
 

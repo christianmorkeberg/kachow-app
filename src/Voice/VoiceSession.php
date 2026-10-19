@@ -86,8 +86,10 @@ final class VoiceSession
             . "shift relative to the old one.\n"
             . "Resolve \"this event\", \"it\", \"that one\" from the agenda below and what you just talked about; ask one short question only "
             . "if it is really ambiguous. Tools take LOCAL times (Europe/Copenhagen) — use the local time stated below.\n"
-            . "Use " . VoiceTools::GATEWAY . " for anything the other tools cannot do. You cannot delete things or clear lists by voice yet — "
-            . "say so and suggest doing it in the app.\n\n"
+            . "Use " . VoiceTools::GATEWAY . " for anything the other tools cannot do. To DELETE or clear something use the matching tool: it will "
+            . "not do it on the first call but tell you to ask — then ask ONE short question naming exactly what goes (\"Delete the potato "
+            . "event at five?\"), and only on a clear yes call it again with the same arguments. For deleting other kinds of things use "
+            . VoiceTools::GATEWAY . " and relay its question.\n\n"
             . AssistantLoop::nowLine($now);
 
         if ($agenda !== '') {

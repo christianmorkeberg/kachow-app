@@ -19,6 +19,7 @@ final class VoiceLog
     public const KINDS = [
         'session_start', 'setup_complete', 'first_audio', 'tool_call', 'tool_error', 'interrupted', 'cancelled',
         'goaway', 'resume', 'idle_close', 'limit_close', 'session_end', 'client_error', 'auto_report', 'gateway',
+        'confirm_ask', 'confirm_done',
     ];
 
     private PDO $db;
@@ -72,6 +73,27 @@ final class VoiceLog
         $stmt->execute([':s' => $sessionId, ':k' => $kind]);
 
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * The latest confirm_ask / confirm_done for this exact call (hash), or null.
+     *
+     * @return array{kind:string, turn:int, at:int}|null
+     */
+    public function latestConfirm(string $sessionId, string $hash): ?array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT kind, detail, created_at FROM voice_events WHERE session_id = :s AND kind IN ('confirm_ask','confirm_done') ORDER BY id DESC LIMIT 20"
+        );
+        $stmt->execute([':s' => $sessionId]);
+        foreach ($stmt->fetchAll() as $r) {
+            $d = json_decode((string) $r['detail'], true);
+            if (is_array($d) && ($d['h'] ?? '') === $hash) {
+                return ['kind' => (string) $r['kind'], 'turn' => (int) ($d['turn'] ?? 0), 'at' => (int) strtotime((string) $r['created_at'] . ' UTC')];
+            }
+        }
+
+        return null;
     }
 
     /** The conversation holding a session's "ask the full assistant" turns, if one was started. */
