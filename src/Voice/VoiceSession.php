@@ -69,6 +69,20 @@ final class VoiceSession
         ];
     }
 
+    /**
+     * The language a session uses: the saved choice ('en' / 'da'), else — while nothing was ever chosen — Danish if the
+     * browser says Danish, otherwise English. (The saved value 'auto' only means "not chosen yet".)
+     */
+    public static function resolveLanguage(?string $stored, string $browserHint = ''): string
+    {
+        $stored = self::language($stored);
+        if ($stored !== 'auto') {
+            return $stored;
+        }
+
+        return str_starts_with(strtolower(trim($browserHint)), 'da') ? 'da' : 'en';
+    }
+
     /** 'auto' (English or Danish, following the user), 'en' or 'da'. */
     public static function language(?string $v): string
     {

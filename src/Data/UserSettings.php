@@ -165,8 +165,9 @@ final class UserSettings
         'voice_language' => [
             'default'     => 'auto',
             'label'       => 'Voice language',
-            'description' => 'Voice mode: "auto" = English or Danish, following the language you speak (nothing else); "en" or "da" = '
-                . 'always that language (also pins the accent, so the voice sounds the same every time).',
+            'description' => 'Voice mode language: "en" or "da" — always that language (it also pins the accent, so the voice sounds the same '
+                . 'every time). Set by the EN | DA switch in the voice screen; "auto" only means not chosen yet (it then follows the browser '
+                . 'language the first time).',
         ],
         'voice_model' => [
             'default'     => 'gemini-3.8-live',

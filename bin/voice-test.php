@@ -224,6 +224,8 @@ check('language: auto = English or Danish only, no language code; en/da pin the 
     && str_contains($setupAuto['systemInstruction']['parts'][0]['text'], 'ONLY English or Danish')
     && $setupEn['generationConfig']['speechConfig']['languageCode'] === 'en-US' && $setupDa['generationConfig']['speechConfig']['languageCode'] === 'da-DK'
     && str_contains($setupDa['systemInstruction']['parts'][0]['text'], 'always speak Danish') && VoiceSession::language('fr') === 'auto');
+check('language choice: saved wins; unset follows the browser (Danish → da, else en)', VoiceSession::resolveLanguage('da', 'en-US') === 'da' && VoiceSession::resolveLanguage('en', 'da-DK') === 'en'
+    && VoiceSession::resolveLanguage('auto', 'da-DK') === 'da' && VoiceSession::resolveLanguage('auto', 'en-GB') === 'en' && VoiceSession::resolveLanguage(null, '') === 'en');
 check('the voice name stays set, and the prompt asks for one consistent voice', $setupAuto['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Puck'
     && str_contains($setupAuto['systemInstruction']['parts'][0]['text'], 'same voice, accent and tone'));
 check('the prompt tells the model how deleting works', str_contains(VoiceSession::prompt([], [], ''), 'ONE short question'));
