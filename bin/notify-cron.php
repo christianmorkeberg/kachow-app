@@ -379,6 +379,32 @@ try {
     error_log('notify-cron moms: ' . $e->getMessage());
 }
 
+// ---------- Important unread email ----------
+// Opt-in (off by default). Daytime only, so a night-time mail waits for the morning; each message is judged once.
+try {
+    $h = (int) $nowLocal->format('G');
+    if ($h >= 7 && $h < 22) {
+        $prefs = new \App\Data\NotificationPrefs();
+        $mail  = \App\Email\EmailService::fromEnv();
+        $gem   = null;
+        foreach (array_keys($subscribed) as $uid) {
+            if (!$prefs->isEnabled($uid, NotificationTypes::IMPORTANT_EMAIL) || !$mail->hasAccounts($uid)) {
+                continue;
+            }
+            $gem ??= \App\Assistant\GeminiClient::fromEnv();
+            $ask = static fn (string $prompt): string => \App\Assistant\GeminiClient::extractText(
+                $gem->generate([['role' => 'user', 'parts' => [['text' => $prompt]]]], [], null, null, ['responseMimeType' => 'application/json'], 25000)
+            );
+            $nudge = (new \App\Email\ImportantMailNudge($mail, $ask, static fn (int $u, string $key): bool => $log->claim($u, NotificationTypes::IMPORTANT_EMAIL, $key)))->build($uid);
+            if ($nudge !== null) {
+                $notifier->notify($uid, NotificationTypes::IMPORTANT_EMAIL, $nudge['title'], $nudge['body']);
+            }
+        }
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron important email: ' . $e->getMessage());
+}
+
 exit(0);
 
 function fmtDur(int $minutes): string

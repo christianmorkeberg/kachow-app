@@ -104,7 +104,7 @@ final class OutlookProvider implements EmailProvider
 
     public function get(string $messageId): ?EmailMessage
     {
-        $select = 'id,conversationId,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,body';
+        $select = 'id,conversationId,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,body,hasAttachments';
         try {
             // Ask for HTML so we can render it richly; we derive the plain text from it.
             $m = MsGraph::request(
@@ -140,7 +140,42 @@ final class OutlookProvider implements EmailProvider
             unread:   $summary->unread,
             bodyText: $body,
             bodyHtml: $html,
+            attachments: !empty($m['hasAttachments']) ? $this->attachmentList($messageId) : [],
         );
+    }
+
+    /** @return list<array{id:string, filename:string, mime:string, size:int}> */
+    private function attachmentList(string $messageId): array
+    {
+        try {
+            $r = MsGraph::request($this->accessToken, 'GET', '/me/messages/' . rawurlencode($messageId) . '/attachments?$select=id,name,contentType,size,isInline');
+        } catch (\Throwable) {
+            return [];
+        }
+        $out = [];
+        foreach ((array) ($r['value'] ?? []) as $a) {
+            if (($a['@odata.type'] ?? '') !== '#microsoft.graph.fileAttachment' || !empty($a['isInline'])) {
+                continue;
+            }
+            $out[] = ['id' => (string) $a['id'], 'filename' => (string) ($a['name'] ?? 'attachment'), 'mime' => (string) ($a['contentType'] ?? ''), 'size' => (int) ($a['size'] ?? 0)];
+        }
+
+        return $out;
+    }
+
+    public function attachment(string $messageId, string $attachmentId): ?array
+    {
+        try {
+            $a = MsGraph::request($this->accessToken, 'GET', '/me/messages/' . rawurlencode($messageId) . '/attachments/' . rawurlencode($attachmentId));
+        } catch (\Throwable) {
+            return null;
+        }
+        $bytes = base64_decode((string) ($a['contentBytes'] ?? ''), true);
+        if ($bytes === false || $bytes === '') {
+            return null;
+        }
+
+        return ['filename' => (string) ($a['name'] ?? 'attachment'), 'mime' => (string) ($a['contentType'] ?? ''), 'data' => $bytes];
     }
 
     public function markRead(string $messageId): void

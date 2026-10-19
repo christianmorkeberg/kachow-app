@@ -27,6 +27,13 @@ interface EmailProvider
     public function get(string $messageId): ?EmailMessage;
 
     /**
+     * The bytes of one attachment listed on a fetched message (EmailMessage::$attachments), or null if it is gone.
+     *
+     * @return array{filename:string, mime:string, data:string}|null
+     */
+    public function attachment(string $messageId, string $attachmentId): ?array;
+
+    /**
      * Mark a message as read/seen in the mailbox. Best-effort — implementations
      * throw on hard failure so the caller can log it, but callers treat it as
      * non-critical (a failed mark must never break opening the mail).

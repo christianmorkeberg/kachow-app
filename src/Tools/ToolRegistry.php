@@ -225,6 +225,7 @@ final class ToolRegistry
         $registry->register(new SetCompanyProfile($userSettings));
         $registry->register(new GetEmails($email));
         $registry->register(new ReadEmail($email));
+        $registry->register(new AttachEmailFile($email, $receipts, $income, $receiptStorage));
         $registry->register(new MarkEmailsRead($email));
         $registry->register(new DraftEmail($email));
         $registry->register(new SendEmail($email));

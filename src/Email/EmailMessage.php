@@ -23,6 +23,8 @@ final class EmailMessage
         public readonly bool $unread,
         public readonly string $bodyText = '',
         public readonly string $bodyHtml = '',
+        /** @var list<array{id:string, filename:string, mime:string, size:int}> real attachments (not inline images); filled by a full fetch */
+        public readonly array $attachments = [],
     ) {
     }
 
@@ -46,6 +48,9 @@ final class EmailMessage
         ];
         if ($withBody) {
             $out['body'] = $this->bodyText;
+            if ($this->attachments !== []) {
+                $out['attachments'] = $this->attachments;
+            }
         }
 
         return $out;
