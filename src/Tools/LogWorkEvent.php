@@ -37,7 +37,10 @@ final class LogWorkEvent implements Tool
     public function description(): string
     {
         return 'Manually records a work clock-in or clock-out, for corrections or when the automatic '
-            . 'trigger was missed (e.g. "I forgot to clock out yesterday, I left at 17:00"). Give "at" '
+            . 'trigger was missed. Only when the user CLEARLY says they are starting or stopping work (now or at a stated '
+            . 'time): a fragment, a question, or talk about the future or a condition ("only then I work", "I might start '
+            . 'later") is NOT a clock event — ask instead. If they are already clocked in, a clock-in is refused and you '
+            . 'tell them. Example of a correction: "I forgot to clock out yesterday, I left at 17:00". Give "at" '
             . 'as the LOCAL wall-clock time the user stated, format "YYYY-MM-DD HH:MM" (24h) — do NOT '
             . 'convert to UTC or add a "Z"; the app handles the timezone. Omit "at" for right now. '
             . 'To record a WHOLE past session in ONE call (e.g. "Wednesday I worked 9–15"), set '
@@ -140,6 +143,25 @@ final class LogWorkEvent implements Tool
             ];
         }
 
+        // Clocking IN right now while a session is already open must not start a second one: sessions pair per
+        // workplace, so a placeless 'in' next to an open "DTU" session left DTU running all day and made a
+        // zero-minute session of the new pair (report #46).
+        if ($kind === 'in' && $atUtc === null) {
+            $conflict = self::openConflict($this->events->openSessions($userId), $place);
+            if ($conflict !== null) {
+                $since = (new DateTimeImmutable($conflict['occurred_at'], new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(WorkEvents::LOCAL_TZ))->format('H:i');
+
+                return [
+                    'recorded'           => false,
+                    'already_clocked_in' => true,
+                    'place'              => $conflict['place'],
+                    'since'              => $since,
+                    'message'            => 'Nothing was recorded: they are ALREADY clocked in' . ($conflict['place'] !== null ? ' at ' . $conflict['place'] : '')
+                        . ' since ' . $since . '. Tell them so. Do not clock in again unless they say they are at a different workplace.',
+                ];
+            }
+        }
+
         // Clocking out without naming a place: if there's exactly one open session,
         // attach to it (a placeless 'out' otherwise wouldn't pair with a placed
         // 'in', since pairing is per workplace). "I punched out at 4pm" → closes it.
@@ -147,6 +169,10 @@ final class LogWorkEvent implements Tool
             $open = $this->events->openSessions($userId);
             if (count($open) === 1) {
                 $place = $open[0]['place'];
+            } elseif (count($open) > 1) {
+                $names = array_map(static fn (array $o): string => (string) ($o['place'] ?? 'no workplace'), $open);
+
+                return ['recorded' => false, 'error' => 'More than one session is open (' . implode(', ', $names) . '). Ask which workplace they are leaving, then call again with place.'];
             }
         }
 
@@ -171,6 +197,25 @@ final class LogWorkEvent implements Tool
             'day_total'     => $summary['total_label'],
             'clocked_in'    => $summary['ongoing'],
         ];
+    }
+
+    /**
+     * The open session that a new clock-in "now" would collide with: any open session when no workplace is given, or the
+     * one at the same workplace (compared case-insensitively). A clock-in at ANOTHER named workplace is allowed.
+     *
+     * @param list<array{place:?string, in_id:int, occurred_at:string}> $open
+     * @return array{place:?string, in_id:int, occurred_at:string}|null
+     */
+    public static function openConflict(array $open, ?string $place): ?array
+    {
+        $key = mb_strtolower(trim((string) $place));
+        foreach ($open as $o) {
+            if ($key === '' || mb_strtolower(trim((string) ($o['place'] ?? ''))) === $key) {
+                return $o;
+            }
+        }
+
+        return null;
     }
 
     /**
