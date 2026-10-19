@@ -17,6 +17,9 @@ final class FeedbackReports
 {
     private const STATUSES = ['new', 'seen', 'resolved'];
 
+    /** The statuses that still need the developer: everything not resolved. */
+    private const OPEN = ['new', 'seen'];
+
     private PDO $db;
 
     public function __construct(?PDO $db = null)
@@ -53,8 +56,9 @@ final class FeedbackReports
     }
 
     /**
-     * Recent reports, newest first, optionally filtered by status. Joins the reporter's
-     * name/email for display.
+     * Recent reports, optionally filtered: a status, or "open" (new + seen = not resolved yet).
+     * Unresolved reports always come first, newest first within each group, so what still needs
+     * attention is at the top even in the unfiltered list. Joins the reporter's name/email.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -65,11 +69,13 @@ final class FeedbackReports
                        r.status, r.created_at, u.name AS reporter_name, u.email AS reporter_email
                 FROM feedback_reports r JOIN users u ON u.id = r.user_id';
         $params = [];
-        if ($status !== null && in_array($status, self::STATUSES, true)) {
+        if ($status === 'open') {
+            $sql .= " WHERE r.status <> 'resolved'";
+        } elseif ($status !== null && in_array($status, self::STATUSES, true)) {
             $sql .= ' WHERE r.status = :s';
             $params[':s'] = $status;
         }
-        $sql .= ' ORDER BY r.id DESC LIMIT ' . $limit;
+        $sql .= " ORDER BY CASE WHEN r.status = 'resolved' THEN 1 ELSE 0 END, r.id DESC LIMIT " . $limit;
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -106,6 +112,19 @@ final class FeedbackReports
         $stmt->execute([':s' => $status]);
 
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * How many reports are open (not resolved) and resolved — the numbers on the card's filter chips.
+     *
+     * @return array{open:int, resolved:int, all:int}
+     */
+    public function counts(): array
+    {
+        $resolved = $this->countByStatus('resolved');
+        $total    = (int) $this->db->query('SELECT COUNT(*) FROM feedback_reports')->fetchColumn();
+
+        return ['open' => $total - $resolved, 'resolved' => $resolved, 'all' => $total];
     }
 
     /**

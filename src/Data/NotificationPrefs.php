@@ -44,11 +44,11 @@ final class NotificationPrefs
 
     /**
      * The full catalogue for a user with their effective enabled state — what the
-     * settings UI renders.
+     * settings UI renders (developer-only types only for an admin).
      *
      * @return array<int, array{key:string, label:string, description:string, enabled:bool}>
      */
-    public function forUser(int $userId): array
+    public function forUser(int $userId, bool $isAdmin = false): array
     {
         $set = [];
         $stmt = $this->db->prepare('SELECT type_key, enabled FROM notification_prefs WHERE user_id = :u');
@@ -59,6 +59,9 @@ final class NotificationPrefs
 
         $out = [];
         foreach (NotificationTypes::all() as $t) {
+            if (!$isAdmin && NotificationTypes::isAdminOnly($t['key'])) {
+                continue;   // developer-only types are not offered to everyone
+            }
             $out[] = [
                 'key'         => $t['key'],
                 'label'       => $t['label'],

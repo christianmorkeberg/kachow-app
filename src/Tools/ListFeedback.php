@@ -33,7 +33,8 @@ final class ListFeedback implements Tool
             . 'it, their note, the reported message, the SURROUNDING conversation (the messages leading '
             . 'up to it, including tool results), the routing, tool calls, model, and the model\'s '
             . 'thoughts if captured — so you can answer follow-up questions like "what messages were '
-            . 'sent" directly from this. Default shows new (unresolved) reports.';
+            . 'sent" directly from this. Default shows the open (unresolved) reports; unresolved ones are '
+            . 'always listed first.';
     }
 
     public function parameters(): array
@@ -43,8 +44,9 @@ final class ListFeedback implements Tool
             'properties' => [
                 'status' => [
                     'type'        => 'string',
-                    'enum'        => ['new', 'seen', 'resolved', 'all'],
-                    'description' => 'Which reports to show. Default "new".',
+                    'enum'        => ['open', 'new', 'seen', 'resolved', 'all'],
+                    'description' => 'Which reports to show: "open" = not resolved yet (new + seen), the default; '
+                        . '"all" lists everything, unresolved first.',
                 ],
                 'limit' => ['type' => 'integer', 'description' => 'Max reports (default 20).'],
             ],
@@ -58,7 +60,7 @@ final class ListFeedback implements Tool
             return ['error' => 'Feedback reports are only available to the developer/admin.'];
         }
 
-        $status = isset($arguments['status']) ? (string) $arguments['status'] : 'new';
+        $status = isset($arguments['status']) ? (string) $arguments['status'] : 'open';
         $limit  = isset($arguments['limit']) && $arguments['limit'] !== '' ? (int) $arguments['limit'] : 20;
         ['card' => $card, 'reports' => $out] = self::build($this->reports, $status, $limit);
 
@@ -101,9 +103,9 @@ final class ListFeedback implements Tool
      *
      * @return array{card: array<string, mixed>, reports: list<array<string, mixed>>}
      */
-    public static function build(FeedbackReports $reports, string $status = 'new', int $limit = 20): array
+    public static function build(FeedbackReports $reports, string $status = 'open', int $limit = 20): array
     {
-        $status = in_array($status, ['new', 'seen', 'resolved', 'all'], true) ? $status : 'new';
+        $status = in_array($status, ['open', 'new', 'seen', 'resolved', 'all'], true) ? $status : 'open';
         $rows   = $reports->recent($status === 'all' ? null : $status, $limit);
 
         $out = [];
@@ -155,6 +157,7 @@ final class ListFeedback implements Tool
             'status'    => $status,
             'limit'     => $limit,   // so the card's refresh asks for the same page
             'new_total' => $reports->countByStatus('new'),
+            'counts'    => $reports->counts(),   // the filter chips: open / resolved / all
             'reports'   => $out,
         ];
 

@@ -128,22 +128,15 @@ final class Users
     }
 
     /**
-     * Admin users' name + email, for notifying the developer(s) of feedback.
+     * Ids of the admin users — who gets the push when a feedback report comes in.
      *
-     * @return array<int, array{name:?string, email:string}>
+     * @return list<int>
      */
-    public function adminContacts(): array
+    public function adminIds(): array
     {
-        $rows = $this->db->query("SELECT name, email FROM users WHERE role = 'admin'")->fetchAll();
-        $out  = [];
-        foreach ($rows as $r) {
-            $out[] = [
-                'name'  => $r['name'] !== null ? (string) $r['name'] : null,
-                'email' => (string) $r['email'],
-            ];
-        }
+        $rows = $this->db->query("SELECT id FROM users WHERE role = 'admin'")->fetchAll();
 
-        return $out;
+        return array_map(static fn (array $r): int => (int) $r['id'], $rows);
     }
 
     /**

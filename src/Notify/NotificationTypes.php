@@ -24,8 +24,9 @@ final class NotificationTypes
     public const TRACKING_SILENT = 'tracking_silent';
     public const SCHEDULED_TASK  = 'scheduled_task';
     public const WORK_CLOCK_GAP  = 'work_clock_gap';
+    public const FEEDBACK_REPORT = 'feedback_report';
 
-    /** @var array<string, array{label:string, description:string, default:bool}> */
+    /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
         self::CHECKOUT_NUDGE => [
             'label'       => 'Forgot to clock out',
@@ -93,6 +94,14 @@ final class NotificationTypes
                 . 'could not be clocked because of a tracking gap, so you can add the hours yourself.',
             'default'     => true,
         ],
+        // Sent by api/report.php when a user flags a message ("report to developer"). Replaces the
+        // e-mail to the developer; only admins are ever sent it, so only admins see the toggle.
+        self::FEEDBACK_REPORT => [
+            'label'       => 'New feedback report',
+            'description' => 'Developer: when someone flags a message from the chat. Tap it to open the open reports.',
+            'default'     => true,
+            'admin'       => true,
+        ],
     ];
 
     /**
@@ -106,6 +115,7 @@ final class NotificationTypes
         self::CYCLE_UPCOMING => 'cycle',      // cycle status
         self::MOMS_DEADLINE  => 'moms',       // the quarter awaiting filing
         self::WORK_CLOCK_GAP => 'work_yesterday', // yesterday's hours, to fill in the skipped visit
+        self::FEEDBACK_REPORT => 'feedback',  // the open reports (admin)
     ];
 
     public static function exists(string $key): bool
@@ -120,6 +130,12 @@ final class NotificationTypes
     public static function deepLink(string $type): ?string
     {
         return isset(self::CARD_FOR[$type]) ? '/?card=' . self::CARD_FOR[$type] : null;
+    }
+
+    /** Types only the developer/admin is offered (and sent). */
+    public static function isAdminOnly(string $key): bool
+    {
+        return (self::CATALOGUE[$key]['admin'] ?? false) === true;
     }
 
     public static function defaultEnabled(string $key): bool
