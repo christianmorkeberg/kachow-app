@@ -35,6 +35,7 @@ use App\Data\Receipts;
 use App\Data\Reminders;
 use App\Data\ScheduledTasks;
 use App\Data\SystemTasks;
+use App\Data\VoiceLog;
 use App\Data\ShoppingLists;
 use App\Data\UserInstructions;
 use App\Data\Users;
@@ -269,6 +270,7 @@ final class ToolRegistry
         $registry->register(new ListFeedback($users, $feedback));
         $registry->register(new ResolveFeedback($users, $feedback));
         $registry->register(new SetDiagnostics($users, new AppFlags()));
+        $registry->register(new GetVoiceLog(new VoiceLog(), $users));
         // Registered last: it reads the registry at call time to describe the full, current tool set.
         $registry->register(new ExplainCapabilities($registry));
 

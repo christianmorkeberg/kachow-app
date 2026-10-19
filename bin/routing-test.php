@@ -311,6 +311,8 @@ $cases = [
     ['msg' => 'make idea #7 high priority', 'expect' => 'devideas'],
     ['msg' => 'show the details of idea #12', 'expect' => 'devideas'],
     ['msg' => 'eksporter ideer', 'expect' => 'devideas'],
+    ['msg' => 'how did the last voice session go?', 'expect' => 'feedback'],
+    ['msg' => 'show the voice log', 'expect' => 'feedback'],
     ['msg' => 'show my scheduled tasks', 'expect' => 'reminders'],
     ['msg' => 'pause the invoice task', 'expect' => 'reminders'],
     ['msg' => 'what did the system task do last time', 'expect' => 'reminders'],
