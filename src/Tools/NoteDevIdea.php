@@ -34,7 +34,9 @@ final class NoteDevIdea implements Tool
             . 'by any user goes straight to the developer\'s list (so you can tell a non-developer user '
             . 'the developer will see it). Capture the idea in a clear sentence. Duplicates are '
             . 'checked: the result lists the existing backlog and flags likely duplicates — if the idea '
-            . '(or a translation/rewording of it) is already there, tell the user instead of re-adding.';
+            . '(or a translation/rewording of it) is already there, tell the user instead of re-adding. Put the '
+            . 'short headline in `idea` and anything longer (why, design notes, what is open, decisions) in '
+            . '`details`; the developer can mark an idea high priority.';
     }
 
     public function parameters(): array
@@ -42,7 +44,11 @@ final class NoteDevIdea implements Tool
         return [
             'type'       => 'object',
             'properties' => [
-                'idea' => ['type' => 'string', 'description' => 'The idea, as a clear one-line description.'],
+                'idea'     => ['type' => 'string', 'description' => 'The idea, as a clear one-line description.'],
+                'details'  => ['type' => 'string', 'description' => 'Optional longer notes for the idea: context, design, '
+                    . 'decisions, what is still open. Keep the user\'s own wording and facts; do not invent.'],
+                'priority' => ['type' => 'string', 'enum' => array_keys(DevIdeas::PRIORITIES),
+                    'description' => '"high" only if the user says it is a priority / next up. Default normal.'],
             ],
             'required' => ['idea'],
         ];
@@ -73,8 +79,14 @@ final class NoteDevIdea implements Tool
             }
         }
 
-        $id = $this->ideas->add($userId, $idea);
-
+        $priority = (string) ($arguments['priority'] ?? 'normal');
+        // Only the developer ranks the backlog; anyone else's idea starts at normal.
+        $id = $this->ideas->add(
+            $userId,
+            $idea,
+            isset($arguments['details']) ? (string) $arguments['details'] : null,
+            $this->users->isAdmin($userId) && isset(DevIdeas::PRIORITIES[$priority]) ? $priority : 'normal'
+        );
         return [
             'saved'          => true,
             'id'             => $id,
