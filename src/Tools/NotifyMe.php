@@ -35,7 +35,9 @@ final class NotifyMe implements Tool
         return 'Sends the user a phone push notification. Use when you have something worth telling them right '
             . 'now — a scheduled check actually found something, or this run\'s instructions say to report what '
             . 'it did. Otherwise stay quiet (don\'t call this); silence is the normal outcome of a check that '
-            . 'found nothing.';
+            . 'found nothing. A phone push banner cannot hold a tappable link, so when the user needs to open a page '
+            . '(a survey, a booking), put the FULL https URL in the body: tapping the notification opens the app '
+            . 'with the text and the URL as a link they can tap.';
     }
 
     public function parameters(): array

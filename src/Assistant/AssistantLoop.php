@@ -1201,7 +1201,14 @@ final class AssistantLoop
             if ($role === 'user') {
                 $contents[] = ['role' => 'user', 'parts' => [['text' => $content]]];
             } elseif ($role === 'assistant') {
-                $contents[] = ['role' => 'model', 'parts' => [['text' => $content]]];
+                // A notification tapped inside a running chat is stored as an assistant turn right
+                // after the previous assistant reply — fold the two into one model turn.
+                $n = count($contents);
+                if ($n > 0 && $contents[$n - 1]['role'] === 'model') {
+                    $contents[$n - 1]['parts'][0]['text'] .= "\n\n" . $content;
+                } else {
+                    $contents[] = ['role' => 'model', 'parts' => [['text' => $content]]];
+                }
             }
         }
 
