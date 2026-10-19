@@ -162,6 +162,12 @@ final class UserSettings
             'description' => 'Voice mode: the assistant\'s speaking voice, one of Google\'s prebuilt voices (e.g. Puck, Kore, Charon, '
                 . 'Fenrir, Aoede, Leda, Orus, Zephyr).',
         ],
+        'voice_language' => [
+            'default'     => 'auto',
+            'label'       => 'Voice language',
+            'description' => 'Voice mode: "auto" = English or Danish, following the language you speak (nothing else); "en" or "da" = '
+                . 'always that language (also pins the accent, so the voice sounds the same every time).',
+        ],
         'voice_model' => [
             'default'     => 'gemini-3.8-live',
             'label'       => 'Voice model',

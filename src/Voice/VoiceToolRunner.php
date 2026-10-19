@@ -20,7 +20,7 @@ final class VoiceToolRunner
     /**
      * @param callable(string): array{reply:string, card:?array} $gateway runs a request through the full assistant
      */
-    public function __construct(private ToolRegistry $registry, private $gateway, private ?ConfirmGate $gate = null)
+    public function __construct(private ToolRegistry $registry, private $gateway, private ?ConfirmGate $gate = null, private $homeName = null)
     {
     }
 
@@ -60,42 +60,23 @@ final class VoiceToolRunner
                 $card   = isset($result['_render']) && is_array($result['_render']) ? $result['_render'] : null;
             }
         } catch (Throwable $e) {
-            return ['ok' => false, 'result' => ['error' => 'The tool failed.'], 'card' => null, 'ms' => $ms(), 'error' => get_class($e) . ': ' . $e->getMessage(), 'fault' => true, 'summary' => self::describe($name, $args, false)];
+            return ['ok' => false, 'result' => ['error' => 'The tool failed.'], 'card' => null, 'ms' => $ms(), 'error' => get_class($e) . ': ' . $e->getMessage(), 'fault' => true, 'summary' => self::describe($name, $args, false, $this->homeName)];
         }
 
         $error = isset($result['error']) ? (is_string($result['error']) ? $result['error'] : json_encode($result['error'])) : null;
 
         return ['ok' => $error === null, 'result' => self::shape($result), 'card' => $card, 'ms' => $ms(), 'error' => $error, 'fault' => false,
-            'summary' => self::describe($name, $args, $error === null)];
+            'summary' => self::describe($name, $args, $error === null, $this->homeName)];
     }
 
     /**
-     * One line saying what the call did, for the chat bubble — built from the call itself (not from anything the
-     * model says), so the user can check what was actually understood: "Insert calendar event: potato, 2026-10-19T16:00".
+     * One readable line saying what the call did, for the chat bubble (see ActionLine).
      *
      * @param array<string, mixed> $args
      */
-    public static function describe(string $name, array $args, bool $ok): string
+    public static function describe(string $name, array $args, bool $ok, ?callable $homeName = null): string
     {
-        if ($name === VoiceTools::GATEWAY) {
-            $bits = [mb_substr(trim((string) ($args['request'] ?? '')), 0, 80)];
-            $label = 'Asked the full assistant';
-        } else {
-            $label = ucfirst(str_replace('_', ' ', $name));
-            $bits  = [];
-            foreach ($args as $k => $v) {
-                if (!is_scalar($v) || is_bool($v) || $v === '' || preg_match('/(^|_)id$/', (string) $k)) {
-                    continue;
-                }
-                $bits[] = mb_substr(trim((string) $v), 0, 60);
-                if (count($bits) >= 3) {
-                    break;
-                }
-            }
-        }
-        $line = $label . ($bits !== [] && $bits[0] !== '' ? ': ' . implode(', ', $bits) : '');
-
-        return $ok ? $line : $line . ' (failed)';
+        return ActionLine::describe($name, $args, $ok, $homeName);
     }
 
     /**
