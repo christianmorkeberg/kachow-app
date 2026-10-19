@@ -199,6 +199,17 @@ $g = $r2->run('delete_calendar_event', $d, 1, 'sess-other', 9, 77);
 check('another session\'s ask does not count', $ran === 1 && isset($g['result']['needs_confirmation']));
 $h = (new VoiceToolRunner($reg2, $gw))->run('delete_calendar_event', $d, 1, 'sess1aaaa', 9, 77);
 check('without a gate a delete is refused', $ran === 1 && $h['ok'] === false);
+check('summary line from the call itself: label + readable args, no ids', VoiceToolRunner::describe('insert_calendar_event', ['summary' => 'potato', 'start' => '2026-10-19T16:00', 'calendar_id' => 'c1', 'all_day' => false], true) === 'Insert calendar event: potato, 2026-10-19T16:00');
+check('a failed call says so; the gateway shows the request', VoiceToolRunner::describe('set_reminder', ['text' => 'milk'], false) === 'Set reminder: milk (failed)'
+    && str_starts_with(VoiceToolRunner::describe(VoiceTools::GATEWAY, ['request' => 'Show my receipts'], true), 'Asked the full assistant: Show my receipts'));
+check('a held delete has no summary (nothing was done)', $a['summary'] === null && $e['summary'] === 'Delete calendar event');
+foreach (['schedule_task', 'list_scheduled_tasks', 'notify_me', 'get_workout_progress', 'log_period', 'get_trips', 'list_places', 'get_wishlist', 'get_vinyls', 'uncheck_item'] as $n) {
+    $okAll = ($okAll ?? true) && VoiceTools::isAllowed($n) && !VoiceTools::needsConfirm($n) && !VoiceTools::isSlow($n);
+}
+check('the new groups are direct tools (tasks, health, trips/places, lists)', $okAll);
+check('maps/Discogs lookups are slow; deletes of those groups need a yes', VoiceTools::isSlow('log_trip') && VoiceTools::isSlow('suggest_places') && VoiceTools::isSlow('add_vinyl')
+    && VoiceTools::needsConfirm('delete_trip') && VoiceTools::needsConfirm('cancel_scheduled_task') && VoiceTools::needsConfirm('remove_period') && VoiceTools::needsConfirm('delete_place'));
+check('no tool is both slow and confirm; none listed twice', array_intersect(VoiceTools::SLOW, VoiceTools::CONFIRM) === [] && count(VoiceTools::allowed()) === count(array_unique(VoiceTools::allowed())));
 check('the prompt tells the model how deleting works', str_contains(VoiceSession::prompt([], [], ''), 'ONE short question'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);

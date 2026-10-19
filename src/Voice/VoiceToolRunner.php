@@ -26,7 +26,7 @@ final class VoiceToolRunner
 
     /**
      * @param array<string, mixed> $args
-     * @return array{ok:bool, result:array<string, mixed>, card:?array<string, mixed>, ms:int, error:?string, fault:bool} fault = the tool THREW (a bug or an outage),
+     * @return array{ok:bool, result:array<string, mixed>, card:?array<string, mixed>, ms:int, error:?string, fault:bool, summary:?string} fault = the tool THREW (a bug or an outage),
      *         as opposed to a tool answering with an error the model can act on ("no time given") — only faults are worth waking the developer for
      */
     public function run(string $name, array $args, int $userId, string $sessionId = '', int $turn = 0, ?int $conversationId = null): array
@@ -35,22 +35,22 @@ final class VoiceToolRunner
         $ms = static fn (): int => (int) round((microtime(true) - $t0) * 1000);
 
         if (!VoiceTools::isAllowed($name)) {
-            return ['ok' => false, 'result' => ['error' => 'That is not available by voice.'], 'card' => null, 'ms' => $ms(), 'error' => 'not allowed by voice: ' . $name, 'fault' => false];
+            return ['ok' => false, 'result' => ['error' => 'That is not available by voice.'], 'card' => null, 'ms' => $ms(), 'error' => 'not allowed by voice: ' . $name, 'fault' => false, 'summary' => null];
         }
         if (VoiceTools::needsConfirm($name)) {
             if ($this->gate === null) {
-                return ['ok' => false, 'result' => ['error' => 'That needs a spoken confirmation, which is not available here.'], 'card' => null, 'ms' => $ms(), 'error' => 'no confirm gate', 'fault' => false];
+                return ['ok' => false, 'result' => ['error' => 'That needs a spoken confirmation, which is not available here.'], 'card' => null, 'ms' => $ms(), 'error' => 'no confirm gate', 'fault' => false, 'summary' => null];
             }
             $held = $this->gate->check($userId, $sessionId, $name, $args, $turn, $conversationId);
             if ($held !== null) {
-                return ['ok' => true, 'result' => $held, 'card' => null, 'ms' => $ms(), 'error' => null, 'fault' => false];
+                return ['ok' => true, 'result' => $held, 'card' => null, 'ms' => $ms(), 'error' => null, 'fault' => false, 'summary' => null];
             }
         }
         try {
             if ($name === VoiceTools::GATEWAY) {
                 $request = trim((string) ($args['request'] ?? ''));
                 if ($request === '') {
-                    return ['ok' => false, 'result' => ['error' => 'What should I ask?'], 'card' => null, 'ms' => $ms(), 'error' => 'empty request', 'fault' => false];
+                    return ['ok' => false, 'result' => ['error' => 'What should I ask?'], 'card' => null, 'ms' => $ms(), 'error' => 'empty request', 'fault' => false, 'summary' => null];
                 }
                 $g      = ($this->gateway)($request);
                 $result = ['answer' => (string) $g['reply']];
@@ -60,12 +60,42 @@ final class VoiceToolRunner
                 $card   = isset($result['_render']) && is_array($result['_render']) ? $result['_render'] : null;
             }
         } catch (Throwable $e) {
-            return ['ok' => false, 'result' => ['error' => 'The tool failed.'], 'card' => null, 'ms' => $ms(), 'error' => get_class($e) . ': ' . $e->getMessage(), 'fault' => true];
+            return ['ok' => false, 'result' => ['error' => 'The tool failed.'], 'card' => null, 'ms' => $ms(), 'error' => get_class($e) . ': ' . $e->getMessage(), 'fault' => true, 'summary' => self::describe($name, $args, false)];
         }
 
         $error = isset($result['error']) ? (is_string($result['error']) ? $result['error'] : json_encode($result['error'])) : null;
 
-        return ['ok' => $error === null, 'result' => self::shape($result), 'card' => $card, 'ms' => $ms(), 'error' => $error, 'fault' => false];
+        return ['ok' => $error === null, 'result' => self::shape($result), 'card' => $card, 'ms' => $ms(), 'error' => $error, 'fault' => false,
+            'summary' => self::describe($name, $args, $error === null)];
+    }
+
+    /**
+     * One line saying what the call did, for the chat bubble — built from the call itself (not from anything the
+     * model says), so the user can check what was actually understood: "Insert calendar event: potato, 2026-10-19T16:00".
+     *
+     * @param array<string, mixed> $args
+     */
+    public static function describe(string $name, array $args, bool $ok): string
+    {
+        if ($name === VoiceTools::GATEWAY) {
+            $bits = [mb_substr(trim((string) ($args['request'] ?? '')), 0, 80)];
+            $label = 'Asked the full assistant';
+        } else {
+            $label = ucfirst(str_replace('_', ' ', $name));
+            $bits  = [];
+            foreach ($args as $k => $v) {
+                if (!is_scalar($v) || is_bool($v) || $v === '' || preg_match('/(^|_)id$/', (string) $k)) {
+                    continue;
+                }
+                $bits[] = mb_substr(trim((string) $v), 0, 60);
+                if (count($bits) >= 3) {
+                    break;
+                }
+            }
+        }
+        $line = $label . ($bits !== [] && $bits[0] !== '' ? ': ' . implode(', ', $bits) : '');
+
+        return $ok ? $line : $line . ' (failed)';
     }
 
     /**

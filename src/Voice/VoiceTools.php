@@ -28,6 +28,16 @@ final class VoiceTools
         // Blocking on purpose: a NON_BLOCKING result makes the model speak a new turn per call, so switching off
         // five lights gave five separate confirmations.
         'home_device_call',
+        // scheduled tasks and notifications
+        'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'notify_me', 'set_place_reminder',
+        // workouts and health
+        'update_workout', 'get_workout_progress', 'training_load', 'create_workout_plan', 'add_plan_exercise',
+        'check_off_exercise', 'uncheck_exercise', 'get_week_plan', 'get_cycle_status', 'log_cycle_day', 'log_period',
+        // trips and places
+        'get_trips', 'update_trip', 'get_mileage', 'list_places', 'get_stays', 'get_location_day',
+        // lists
+        'list_shopping_lists', 'uncheck_item', 'set_list_grouping', 'get_wishlist', 'add_wishlist_item',
+        'update_wishlist_item', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'get_books',
     ];
 
     /**
@@ -37,10 +47,16 @@ final class VoiceTools
     public const CONFIRM = [
         'delete_calendar_event', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
         'cancel_reminder', 'delete_work_event',
+        'cancel_scheduled_task', 'delete_workout', 'delete_workout_plan', 'remove_plan_exercise', 'remove_period',
+        'delete_trip', 'delete_place', 'delete_wishlist_item', 'remove_vinyl',
     ];
 
-    /** May take several seconds (weather service, the full assistant). */
-    public const SLOW = ['get_current_weather', 'get_weather_forecast', self::GATEWAY];
+    /** May take several seconds (weather, maps and geocoding, Discogs, the full assistant). */
+    public const SLOW = [
+        'get_current_weather', 'get_weather_forecast', self::GATEWAY,
+        // map / geocoding / Discogs lookups
+        'log_trip', 'save_place', 'update_place', 'suggest_places', 'get_driving_distance', 'add_vinyl',
+    ];
 
     /** @return list<string> */
     public static function allowed(): array
