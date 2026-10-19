@@ -16,6 +16,9 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../config.php';
 
+// Obey the system task's state (paused / owned by the dispatcher) and record what this run came to.
+\App\Support\SystemTaskGuard::begin('home_sync');
+
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
 use App\Data\HomeDevices;

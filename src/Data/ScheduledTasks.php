@@ -161,7 +161,7 @@ final class ScheduledTasks
     public function markResult(int $id, string $title): void
     {
         $stmt = $this->db->prepare(
-            'UPDATE scheduled_tasks SET has_unseen_result = 1, last_result_title = :t WHERE id = :id'
+            'UPDATE scheduled_tasks SET has_unseen_result = 1, last_run_notified = 1, last_result_title = :t WHERE id = :id'
         );
         $stmt->execute([':t' => mb_substr(trim($title), 0, 160), ':id' => $id]);
     }
@@ -245,7 +245,7 @@ final class ScheduledTasks
     public function claimOnce(int $id): bool
     {
         $stmt = $this->db->prepare(
-            "UPDATE scheduled_tasks SET status = 'done', last_run_at = UTC_TIMESTAMP()
+            "UPDATE scheduled_tasks SET status = 'done', last_run_at = UTC_TIMESTAMP(), last_run_notified = 0
              WHERE id = :id AND status = 'active' AND next_run_at <= UTC_TIMESTAMP()"
         );
         $stmt->execute([':id' => $id]);
@@ -262,7 +262,7 @@ final class ScheduledTasks
     public function claimAndReschedule(int $id, string $nextRunAtUtc): bool
     {
         $stmt = $this->db->prepare(
-            "UPDATE scheduled_tasks SET next_run_at = :next, last_run_at = UTC_TIMESTAMP()
+            "UPDATE scheduled_tasks SET next_run_at = :next, last_run_at = UTC_TIMESTAMP(), last_run_notified = 0
              WHERE id = :id AND status = 'active' AND next_run_at <= UTC_TIMESTAMP()"
         );
         $stmt->execute([':next' => $nextRunAtUtc, ':id' => $id]);
@@ -318,6 +318,192 @@ final class ScheduledTasks
         }
 
         return $candidate->setTimezone($utc);
+    }
+
+    /**
+     * What a run came to, for the card: ok/error and the run's closing words (the assistant's final
+     * reply, which for a quiet check is usually "nothing to report"). Called by the cron after each run.
+     */
+    public function recordRun(int $id, bool $ok, string $summary): void
+    {
+        $stmt = $this->db->prepare('UPDATE scheduled_tasks SET last_run_status = :s, last_summary = :t WHERE id = :id');
+        $stmt->execute([':s' => $ok ? 'ok' : 'error', ':t' => mb_substr(trim($summary), 0, 1500), ':id' => $id]);
+    }
+
+    /**
+     * One task of this user, any status, or null.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function find(int $userId, int $id): ?array
+    {
+        $stmt = $this->db->prepare($this->cardSelect() . ' WHERE user_id = :u AND id = :id');
+        $stmt->execute([':u' => $userId, ':id' => $id]);
+        $r = $stmt->fetch();
+
+        return $r === false ? null : self::cardRow($r);
+    }
+
+    /**
+     * The tasks the card shows: active ones soonest first, then paused ones, then one-offs that already
+     * ran (most recent 10). Cancelled tasks are gone.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listForCard(int $userId): array
+    {
+        $stmt = $this->db->prepare($this->cardSelect() . " WHERE user_id = :u AND status IN ('active','paused','done')");
+        $stmt->execute([':u' => $userId]);
+        $rows = array_map([self::class, 'cardRow'], $stmt->fetchAll());
+
+        $rank = ['active' => 0, 'paused' => 1, 'done' => 2];
+        usort($rows, static function (array $a, array $b) use ($rank): int {
+            return [$rank[$a['status']], $a['status'] === 'done' ? '' : $a['next_run_at'], $a['status'] === 'done' ? $b['last_run_at'] : '', $a['id']]
+                <=> [$rank[$b['status']], $b['status'] === 'done' ? '' : $b['next_run_at'], $b['status'] === 'done' ? $a['last_run_at'] : '', $b['id']];
+        });
+        $done = 0;
+
+        return array_values(array_filter($rows, static function (array $r) use (&$done): bool {
+            return $r['status'] !== 'done' || ++$done <= 10;
+        }));
+    }
+
+    /**
+     * Pauses (active → paused) or resumes (paused → active) a task. Resuming picks the next slot from
+     * NOW, so the slots missed while paused are not replayed. A paused one-off can only resume while its
+     * time is still ahead. Returns null on success, else why not.
+     */
+    public function setActive(int $userId, int $id, bool $active): ?string
+    {
+        $t = $this->find($userId, $id);
+        if ($t === null) {
+            return 'No such scheduled task.';
+        }
+        if ($t['status'] === 'done' || $t['status'] === 'cancelled') {
+            return 'That task has already finished.';
+        }
+        if ($active) {
+            if ($t['status'] === 'active') {
+                return null;
+            }
+            if ($t['frequency'] === 'once') {
+                $next = new DateTimeImmutable($t['next_run_at'], new DateTimeZone('UTC'));
+                if ($next <= new DateTimeImmutable('now', new DateTimeZone('UTC'))) {
+                    return 'That one-off time has passed, so it cannot be resumed — schedule it again.';
+                }
+            } else {
+                $next = self::nextRunAtUtc($t['frequency'], $t['time_of_day'], $t['day_of_week'], null, $t['interval_minutes']);
+            }
+            $this->db->prepare("UPDATE scheduled_tasks SET status = 'active', next_run_at = :n WHERE id = :id AND user_id = :u")
+                ->execute([':n' => $next->format('Y-m-d H:i:s'), ':id' => $id, ':u' => $userId]);
+
+            return null;
+        }
+        $this->db->prepare("UPDATE scheduled_tasks SET status = 'paused' WHERE id = :id AND user_id = :u AND status = 'active'")
+            ->execute([':id' => $id, ':u' => $userId]);
+
+        return null;
+    }
+
+    /** "Every weekday at 08:00", "Every 30 minutes", "Sundays at 19:00" … in English (the card is shown as is). */
+    public static function describeSchedule(string $frequency, ?string $timeOfDay, ?int $dayOfWeek, ?int $intervalMinutes): string
+    {
+        [$h, $m] = self::parseTimeOfDay($timeOfDay);
+        $at      = sprintf('%02d:%02d', $h, $m);
+        $days    = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
+
+        return match ($frequency) {
+            'minutes'  => ($intervalMinutes ?? 60) % 60 === 0 && ($intervalMinutes ?? 60) >= 60
+                ? 'Every ' . (($intervalMinutes ?? 60) === 60 ? 'hour' : (($intervalMinutes ?? 60) / 60) . ' hours')
+                : 'Every ' . ($intervalMinutes ?? 60) . ' minutes',
+            'hourly'   => 'Every hour',
+            'daily'    => 'Every day at ' . $at,
+            'weekdays' => 'Every weekday at ' . $at,
+            'weekly'   => 'Every ' . ($days[$dayOfWeek ?? 1] ?? 'week') . ' at ' . $at,
+            'once'     => 'Once',
+            default    => $frequency,
+        };
+    }
+
+    /**
+     * The card (kind: scheduled_tasks) for these tasks (from listForCard) and, for the developer, the
+     * system jobs (from SystemTasks::listForCard).
+     *
+     * @param list<array<string, mixed>> $tasks
+     * @param list<array<string, mixed>>|null $system null for a non-developer (no system section)
+     * @return array<string, mixed>
+     */
+    public static function card(array $tasks, ?array $system = null): array
+    {
+        $tz    = new DateTimeZone(self::LOCAL_TZ);
+        $local = static function (?string $utc, string $fmt) use ($tz): ?string {
+            return $utc === null ? null : (new DateTimeImmutable($utc, new DateTimeZone('UTC')))->setTimezone($tz)->format($fmt);
+        };
+        $items = [];
+        foreach ($tasks as $t) {
+            $items[] = [
+                'id'          => $t['id'],
+                'label'       => $t['label'],
+                'instruction' => mb_substr((string) $t['instruction'], 0, 400),
+                'status'      => $t['status'],
+                'schedule'    => self::describeSchedule($t['frequency'], $t['time_of_day'], $t['day_of_week'], $t['interval_minutes']),
+                'once'        => $t['frequency'] === 'once',
+                'tell_always' => $t['notify_always'],
+                'next_run'    => $t['status'] === 'active' ? $local($t['next_run_at'], 'D j M, H:i') : null,
+                'last_run'    => $local($t['last_run_at'], 'D j M, H:i'),
+                'last_status' => $t['last_run_status'],
+                'notified'    => $t['last_run_notified'],
+                'last_title'  => $t['last_result_title'],
+                'last_summary' => $t['last_summary'],
+                'unseen'      => $t['has_unseen_result'],
+                'conversation_id' => $t['conversation_id'],
+            ];
+        }
+        $card = [
+            'kind'  => 'scheduled_tasks',
+            'title' => 'Scheduled tasks',
+            'items' => $items,
+        ];
+        if ($system !== null) {
+            $card['system'] = $system;
+        }
+
+        return $card;
+    }
+
+    private function cardSelect(): string
+    {
+        return 'SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, interval_minutes,
+                       notify_always, status, next_run_at, last_run_at, has_unseen_result, last_result_title,
+                       last_summary, last_run_status, last_run_notified
+                FROM scheduled_tasks';
+    }
+
+    /**
+     * @param array<string, mixed> $r
+     * @return array<string, mixed>
+     */
+    private static function cardRow(array $r): array
+    {
+        return [
+            'id'               => (int) $r['id'],
+            'conversation_id'  => (int) $r['conversation_id'],
+            'label'            => (string) $r['label'],
+            'instruction'      => (string) $r['instruction'],
+            'frequency'        => (string) $r['frequency'],
+            'time_of_day'      => $r['time_of_day'] !== null ? (string) $r['time_of_day'] : null,
+            'day_of_week'      => $r['day_of_week'] !== null ? (int) $r['day_of_week'] : null,
+            'interval_minutes' => $r['interval_minutes'] !== null ? (int) $r['interval_minutes'] : null,
+            'notify_always'    => (bool) $r['notify_always'],
+            'status'           => (string) $r['status'],
+            'next_run_at'      => (string) $r['next_run_at'],
+            'last_run_at'      => $r['last_run_at'] !== null ? (string) $r['last_run_at'] : null,
+            'has_unseen_result' => (bool) $r['has_unseen_result'],
+            'last_result_title' => $r['last_result_title'] !== null ? (string) $r['last_result_title'] : null,
+            'last_summary'     => $r['last_summary'] !== null ? (string) $r['last_summary'] : null,
+            'last_run_status'  => $r['last_run_status'] !== null ? (string) $r['last_run_status'] : null,
+            'last_run_notified' => (bool) $r['last_run_notified'],
+        ];
     }
 
     /** @return array{0:int, 1:int} [hour, minute], defaulting to 08:00 on anything unparsable. */

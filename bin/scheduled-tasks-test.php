@@ -87,6 +87,7 @@ $db->exec("CREATE TABLE scheduled_tasks (
     time_of_day TEXT, day_of_week INTEGER, status TEXT NOT NULL DEFAULT 'active',
     interval_minutes INTEGER, notify_always INTEGER NOT NULL DEFAULT 0,
     has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
+    last_summary TEXT, last_run_status TEXT, last_run_notified INTEGER NOT NULL DEFAULT 0,
     next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 // next_run_at in the past, so it's claimable right now.
 $db->exec("INSERT INTO scheduled_tasks (user_id, conversation_id, label, instruction, frequency, next_run_at)
@@ -159,6 +160,72 @@ $task = $tasks->byConversation(1, 1);
 check('the task that owns a conversation is found', ($task['label'] ?? '') === 'Test' && ($task['id'] ?? 0) === 1, json_encode($task));
 check('an ordinary chat is not a task', $tasks->byConversation(1, 999) === null);
 check('another user cannot see it', $tasks->byConversation(2, 1) === null);
+
+echo "14) the card: listing, pause / resume, last run\n";
+$db2 = new PDO('sqlite::memory:');
+$db2->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$db2->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+$db2->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => gmdate('Y-m-d H:i:s'), 0);
+$db2->exec("CREATE TABLE scheduled_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, conversation_id INTEGER NOT NULL,
+    label TEXT NOT NULL, instruction TEXT NOT NULL, frequency TEXT NOT NULL,
+    time_of_day TEXT, day_of_week INTEGER, status TEXT NOT NULL DEFAULT 'active',
+    interval_minutes INTEGER, notify_always INTEGER NOT NULL DEFAULT 0,
+    has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
+    last_summary TEXT, last_run_status TEXT, last_run_notified INTEGER NOT NULL DEFAULT 0,
+    next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$t2 = new ScheduledTasks($db2);
+$a = $t2->create(1, 10, 'Invoices', 'Check my mail for invoices.', 'weekdays', '08:00', null);
+$b = $t2->create(1, 11, 'Lights', 'Turn the lights on if I am home.', 'minutes', null, null, 30, true);
+$c = $t2->create(1, 12, 'Old one-off', 'x', 'daily', '09:00', null);
+$d = $t2->create(2, 13, 'Someone else', 'y', 'daily', '09:00', null);
+$db2->exec("UPDATE scheduled_tasks SET status = 'done', frequency = 'once', last_run_at = '2026-10-01 07:00:00' WHERE id = $c");
+$list = $t2->listForCard(1);
+check('only this user, active first (soonest), finished one-off last', array_column($list, 'id') === [$b, $a, $c] || array_column($list, 'id') === [$a, $b, $c], json_encode(array_column($list, 'id')));
+check('another user\'s task is not listed or found', $t2->find(1, $d) === null && count($list) === 3);
+
+echo "   pause / resume\n";
+check('pausing works', $t2->setActive(1, $a, false) === null && $t2->find(1, $a)['status'] === 'paused');
+check('a paused task is not due', array_column(array_filter($t2->listForCard(1), fn ($t) => $t['status'] === 'active'), 'id') === [$b]);
+$db2->exec("UPDATE scheduled_tasks SET next_run_at = '2000-01-01 00:00:00' WHERE id = $a");
+check('a paused task never shows as due, even long overdue', !in_array($a, array_column($t2->due(), 'id'), true));
+check('resuming works and schedules from NOW (the missed slots are not replayed)', $t2->setActive(1, $a, true) === null
+    && $t2->find(1, $a)['status'] === 'active' && $t2->find(1, $a)['next_run_at'] > gmdate('Y-m-d H:i:s'));
+check('resuming one that is active is fine', $t2->setActive(1, $a, true) === null);
+check('someone else cannot pause it', $t2->setActive(2, $a, false) === 'No such scheduled task.' && $t2->find(1, $a)['status'] === 'active');
+check('a finished one-off cannot be resumed', is_string($t2->setActive(1, $c, true)));
+$once = $t2->create(1, 14, 'Once', 'z', 'once', null, null, null, false, new DateTimeImmutable('+2 days', new DateTimeZone('UTC')));
+$t2->setActive(1, $once, false);
+check('a paused one-off resumes while its time is ahead, keeping that time', $t2->setActive(1, $once, true) === null && $t2->find(1, $once)['status'] === 'active');
+$db2->exec("UPDATE scheduled_tasks SET status = 'paused', next_run_at = '2000-01-01 00:00:00' WHERE id = $once");
+check('…but not once it has passed', is_string($t2->setActive(1, $once, true)) && $t2->find(1, $once)['status'] === 'paused');
+
+echo "   last run\n";
+$db2->exec("UPDATE scheduled_tasks SET next_run_at = '2000-01-01 00:00:00' WHERE id = $b");
+$t2->claimAndReschedule($b, '2099-01-01 00:00:00');
+$t2->markResult($b, 'Lights on');
+check('a notify_me marks the run as notified, with its title', $t2->find(1, $b)['last_run_notified'] === true && $t2->find(1, $b)['last_result_title'] === 'Lights on');
+$t2->recordRun($b, true, "Turned on the living room.\n");
+check('the run\'s closing words are kept', $t2->find(1, $b)['last_summary'] === 'Turned on the living room.' && $t2->find(1, $b)['last_run_status'] === 'ok');
+$db2->exec("UPDATE scheduled_tasks SET next_run_at = '2000-01-01 00:00:00' WHERE id = $b");
+$t2->claimAndReschedule($b, '2099-01-01 00:00:00');
+check('the next run starts un-notified (a quiet run does not inherit the last one)', $t2->find(1, $b)['last_run_notified'] === false && $t2->find(1, $b)['last_result_title'] === 'Lights on');
+$t2->recordRun($b, false, str_repeat('x', 3000));
+check('an error is recorded and long text capped', $t2->find(1, $b)['last_run_status'] === 'error' && mb_strlen($t2->find(1, $b)['last_summary']) === 1500);
+
+echo "   the card\n";
+$card = ScheduledTasks::card($t2->listForCard(1));
+check('kind, no system section for a non-developer', $card['kind'] === 'scheduled_tasks' && !isset($card['system']));
+$bi = array_values(array_filter($card['items'], fn ($i) => $i['id'] === $b))[0];
+check('schedule text, tell-me-every-time, last run', $bi['schedule'] === 'Every 30 minutes' && $bi['tell_always'] === true && $bi['last_status'] === 'error' && $bi['next_run'] !== null);
+$ci = array_values(array_filter($card['items'], fn ($i) => $i['id'] === $c))[0];
+check('a finished one-off has no next run', $ci['next_run'] === null && $ci['once'] === true && $ci['status'] === 'done');
+check('with a system section for the developer', ScheduledTasks::card([], [['key' => 'x']])['system'] === [['key' => 'x']]);
+check('schedule wording', ScheduledTasks::describeSchedule('weekdays', '08:00', null, null) === 'Every weekday at 08:00'
+    && ScheduledTasks::describeSchedule('weekly', '19:30', 7, null) === 'Every Sunday at 19:30'
+    && ScheduledTasks::describeSchedule('minutes', null, null, 120) === 'Every 2 hours'
+    && ScheduledTasks::describeSchedule('minutes', null, null, 60) === 'Every hour'
+    && ScheduledTasks::describeSchedule('daily', '4:05', null, null) === 'Every day at 04:05');
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

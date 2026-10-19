@@ -15,7 +15,7 @@ use App\Data\ScheduledTasks;
  */
 final class ScheduleTask implements Tool
 {
-    private const MAX_ACTIVE_PER_USER = 15;
+    public const MAX_ACTIVE_PER_USER = 15;
     private const WEEKDAYS = [
         'monday' => 1, 'tuesday' => 2, 'wednesday' => 3, 'thursday' => 4,
         'friday' => 5, 'saturday' => 6, 'sunday' => 7,

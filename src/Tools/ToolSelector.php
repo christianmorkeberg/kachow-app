@@ -122,7 +122,7 @@ final class ToolSelector
         ],
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
-            'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',
+            'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
         ],
         // Tracked movement (OwnTracks raw points; private per user).
         'location' => [
@@ -432,6 +432,11 @@ final class ToolSelector
             'every day', 'once a day', 'every hour', 'every week', 'recurring', 'scheduled task',
             'every weekday', 'weekdays at', 'every morning', 'every evening', 'every night', 'every 15 minutes',
             'every 30 minutes', 'every 10 minutes', 'every 5 minutes',
+            // Managing them: the card, pause/resume, the built-in system jobs
+            'scheduled tasks', 'my scheduled', 'what have i scheduled', 'pause the task', 'pause that task', 'pause task',
+            'resume the task', 'resume that task', 'resume task', 'deactivate the task', 'activate the task',
+            'pause the', 'resume the', 'pause my', 'resume my', 'deactivate', 'turn off the check', 'stop the check',
+            'system task', 'system job', 'cron job', 'background job', 'the dispatcher', 'last run of',
             // Website watching = a scheduled task that opens the page each run.
             'watch this page', 'watch the page', 'watch this site', 'watch the site', 'monitor this', 'monitor the',
             'keep an eye on', 'back in stock', 'tell me when the price', 'tell me if the price',
@@ -441,6 +446,8 @@ final class ToolSelector
             'hver dag', 'hver uge', 'hver time', 'tilbagevendende', 'planlagt opgave',
             'hver hverdag', 'alle hverdage', 'hver morgen', 'hver aften', 'hver nat', 'hvert kvarter',
             'hvert 15. minut', 'hvert 30. minut',
+            'planlagte opgaver', 'mine planlagte', 'sæt opgaven på pause', 'genoptag opgaven', 'systemopgave', 'baggrundsjob',
+            'sæt på pause', 'på pause', 'genoptag', 'deaktiver',
         ],
         // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
         'feedback' => [

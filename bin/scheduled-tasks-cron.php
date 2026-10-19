@@ -58,10 +58,24 @@ use App\Music\Discogs;
 use App\Notify\Notifier;
 use App\Notify\WebPush;
 use App\Receipts\ReceiptStorage;
+use App\Data\SystemTasks;
+use App\Support\SystemTaskDispatcher;
+use App\Support\SystemTaskRunner;
 use App\Support\ToolMemory;
 use App\Tools\NotifyMe;
 use App\Tools\ToolRegistry;
 use App\Weather\Dmi;
+
+// The built-in cron jobs the dispatcher owns (see App\Data\SystemTasks) run when this script ends — after the
+// user's tasks, so a long job never delays them, and also when it exits early below (no push configured).
+// Jobs left on the cPanel entry are untouched: with none switched over this is one cheap query.
+register_shutdown_function(static function (): void {
+    try {
+        SystemTaskDispatcher::runDue(new SystemTasks(), [SystemTaskRunner::class, 'run'], __DIR__);
+    } catch (\Throwable $e) {
+        error_log('scheduled-tasks-cron system tasks: ' . $e->getMessage());
+    }
+});
 
 // A task's notify_me is pointless without push configured, and this run is otherwise
 // expensive (a real Gemini tool-calling turn per task) for no reachable payoff.
@@ -181,17 +195,24 @@ foreach ($due as $task) {
         $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
         // The rules go to the model as context for this run only; the conversation keeps just the instruction,
         // so opening the run from a notification doesn't show the boilerplate as "your" message.
-        $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, UNATTENDED_PREAMBLE . $report);
+        $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, UNATTENDED_PREAMBLE . $report);
 
         // The home agent (the Pico) not answering is usually a blip: wait, then try once more.
         $fresh = array_slice($conversations->messages($task['conversation_id']), $seen);
         if (ToolMemory::homeUnreachable($fresh)) {
             sleep(RETRY_AFTER_SECONDS);
-            $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
+            $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
         }
+        // What the run came to, for the scheduled-tasks card (its closing words; a notify_me has its own title).
+        $tasks->recordRun($task['id'], true, (string) $reply);
         $ran++;
     } catch (\Throwable $e) {
         error_log('scheduled-tasks-cron task ' . $task['id'] . ': ' . $e->getMessage());
+        try {
+            $tasks->recordRun($task['id'], false, $e->getMessage());
+        } catch (\Throwable $ignored) {
+            // bookkeeping only
+        }
     }
 }
 
