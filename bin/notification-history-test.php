@@ -90,5 +90,19 @@ check('a test push is not history', count($h->list(1, 100)) === $cnt);
 $broken = new Notifier(new PushSubscriptions($db), new NotificationPrefs($db), $sender, new NotificationHistory(new PDO('sqlite::memory:')));
 check('a failing history never blocks the push', $broken->notify(1, NotificationTypes::REMINDER, 'R', 'b') === 1);
 
+echo "\n5) the developer's feedback push\n";
+check('it opens the open reports', NotificationTypes::deepLink(NotificationTypes::FEEDBACK_REPORT) === '/?card=feedback');
+check('it is a developer-only type', NotificationTypes::isAdminOnly(NotificationTypes::FEEDBACK_REPORT) && !NotificationTypes::isAdminOnly(NotificationTypes::REMINDER));
+$prefs = new NotificationPrefs($db);
+$keys  = static fn (array $rows): array => array_column($rows, 'key');
+check('settings offer it to an admin', in_array('feedback_report', $keys($prefs->forUser(1, true)), true));
+check('… but not to everyone else', !in_array('feedback_report', $keys($prefs->forUser(1)), true) && !in_array('feedback_report', $keys($prefs->forUser(1, false)), true));
+check('everyone still gets all the other types', count($prefs->forUser(1)) === count($prefs->forUser(1, true)) - 1);
+$before = count($h->list(1, 100));
+$n->notify(1, NotificationTypes::FEEDBACK_REPORT, 'Feedback #7 from Alex', 'The weather icons jump');
+$e = $h->list(1)[0];
+check('it is sent, kept in the bell list and links to the card', count($h->list(1, 100)) === $before + 1 && $e['type'] === 'feedback_report'
+    && $e['url'] === '/?card=feedback' && str_contains($e['title'], '#7'));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

@@ -67,7 +67,7 @@ check('the card knows its filter, page size and open total', $new['card']['kind'
     && $new['card']['limit'] === 20 && $new['card']['new_total'] === 2);
 check('resolved list', array_column(ListFeedback::build($reports, 'resolved')['reports'], 'id') === [$a]);
 check('all', count(ListFeedback::build($reports, 'all')['reports']) === 3);
-check('an unknown status falls back to the open list', ListFeedback::build($reports, 'nonsense')['card']['status'] === 'new');
+check('an unknown status falls back to the open list', ListFeedback::build($reports, 'nonsense')['card']['status'] === 'open');
 check('the page size is kept', count(ListFeedback::build($reports, 'all', 2)['reports']) === 2 && ListFeedback::build($reports, 'all', 2)['card']['limit'] === 2);
 $one = ListFeedback::build($reports, 'new')['reports'][1];
 check('each report carries what the card shows', $one['note'] === 'second' && $one['from'] === 'Reporter' && $one['reported_text'] === 'two'
@@ -77,6 +77,23 @@ echo "\n3) a refresh after resolving elsewhere\n";
 $reports->setStatus($b, 'resolved');   // e.g. from the chat tool or another device
 check('the open list no longer shows it', array_column(ListFeedback::build($reports, 'new')['reports'], 'id') === [$c]);
 check('and the open total follows', ListFeedback::build($reports, 'new')['card']['new_total'] === 1);
+
+echo "\n4) open first, filters and the chip counts\n";
+$d = $reports->create(1, 13, 103, 'fourth', $snap('four'));   // newer than the resolved ones
+$reports->setStatus($a, 'new');                                 // reopen the oldest
+$reports->setStatus($c, 'resolved');
+// states now: a new (oldest), b resolved, c resolved, d new (newest)
+$all = array_column(ListFeedback::build($reports, 'all')['reports'], 'id');
+check('"all" lists unresolved first (newest first), then resolved (newest first)', $all === [$d, $a, $c, $b], json_encode($all));
+$open = ListFeedback::build($reports, 'open');
+check('"open" is everything not resolved', array_column($open['reports'], 'id') === [$d, $a]);
+$reports->setStatus($a, 'seen');
+check('"open" includes seen reports, "new" does not', array_column(ListFeedback::build($reports, 'open')['reports'], 'id') === [$d, $a]
+    && array_column(ListFeedback::build($reports, 'new')['reports'], 'id') === [$d]);
+check('the default is the open list', ListFeedback::build($reports)['card']['status'] === 'open');
+check('the card carries the chip counts', ListFeedback::build($reports, 'open')['card']['counts'] === ['open' => 2, 'resolved' => 2, 'all' => 4],
+    json_encode(ListFeedback::build($reports, 'open')['card']['counts']));
+check('the limit cuts the resolved tail, never the open ones', array_column(ListFeedback::build($reports, 'all', 2)['reports'], 'id') === [$d, $a]);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
