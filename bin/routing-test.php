@@ -311,6 +311,11 @@ $cases = [
     ['msg' => 'make idea #7 high priority', 'expect' => 'devideas'],
     ['msg' => 'show the details of idea #12', 'expect' => 'devideas'],
     ['msg' => 'eksporter ideer', 'expect' => 'devideas'],
+    ['msg' => 'show my scheduled tasks', 'expect' => 'reminders'],
+    ['msg' => 'pause the invoice task', 'expect' => 'reminders'],
+    ['msg' => 'what did the system task do last time', 'expect' => 'reminders'],
+    ['msg' => 'move the cron job to 05:00', 'expect' => 'reminders'],
+    ['msg' => 'vis mine planlagte opgaver', 'expect' => 'reminders'],
 
     ['msg' => 'show my month', 'expect' => 'calendar'],
     ['msg' => 'vis månedsoversigten for november', 'expect' => 'calendar'],
