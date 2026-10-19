@@ -31,7 +31,11 @@ final class ListDevIdeas implements Tool
             . 'suggested it); for anyone else, the ideas they suggested themselves. Use when they ask what '
             . 'ideas/features are noted for the app ("udviklingsideer", "backlog", "what\'s in progress"). '
             . 'status filters the card (default "open" = everything not done). Each idea has an id (used by '
-            . 'set_dev_idea_status and remove_dev_idea). The card shows the list — summarise, don\'t re-list.';
+            . 'set_dev_idea_status, update_dev_idea and remove_dev_idea). Ideas can have longer `details` notes and a '
+            . 'priority (high ones are listed first); the list only says WHICH ideas have details — pass `ids` to '
+            . 'read the full details of those ideas (e.g. "tell me about #12", or to write them out in chat). '
+            . 'The card shows the list and has an export button (Markdown download of one, several or all ideas) — '
+            . 'summarise, don\'t re-list.';
     }
 
     public function parameters(): array
@@ -44,6 +48,11 @@ final class ListDevIdeas implements Tool
                     'enum'        => ['open', 'new', 'in_progress', 'done', 'all'],
                     'description' => 'Which ideas to show: open (default, not done), new, in_progress, done or all.',
                 ],
+                'ids' => [
+                    'type'        => 'array',
+                    'items'       => ['type' => 'integer'],
+                    'description' => 'Only these ideas (the #numbers), returned WITH their full details.',
+                ],
             ],
             'required'   => [],
         ];
@@ -54,16 +63,28 @@ final class ListDevIdeas implements Tool
         $isAdmin = $this->users->isAdmin($userId);
         $all     = $isAdmin ? $this->ideas->listAll() : $this->ideas->listForUser($userId);
         $filter  = (string) ($arguments['status'] ?? 'open');
-        $card    = DevIdeas::card($all, $isAdmin, $userId, $filter);
+        $ids     = array_values(array_filter(array_map('intval', (array) ($arguments['ids'] ?? [])), static fn (int $i): bool => $i > 0));
+        $card    = DevIdeas::card($all, $isAdmin, $userId, $ids !== [] ? 'all' : $filter);
 
-        $shown = array_values(array_filter($all, static fn (array $i): bool => match ($card['filter']) {
-            'all'   => true,
-            'open'  => $i['status'] !== 'done',
-            default => $i['status'] === $card['filter'],
-        }));
-        $ideas = array_map(static function (array $i) use ($isAdmin, $userId): array {
+        $shown = array_values(array_filter($all, static fn (array $i): bool => $ids !== []
+            ? in_array($i['id'], $ids, true)
+            : match ($card['filter']) {
+                'all'   => true,
+                'open'  => $i['status'] !== 'done',
+                default => $i['status'] === $card['filter'],
+            }));
+        $withDetails = $ids !== [];
+        $ideas = array_map(static function (array $i) use ($isAdmin, $userId, $withDetails): array {
             $ts  = strtotime($i['created_at']);
             $row = ['id' => $i['id'], 'idea' => $i['idea'], 'status' => $i['status'], 'noted' => $ts !== false ? date('j M', $ts) : ''];
+            if ($i['priority'] === 'high') {
+                $row['priority'] = 'high';
+            }
+            if ($withDetails) {
+                $row['details'] = $i['details'];
+            } elseif ($i['details'] !== null) {
+                $row['has_details'] = true;
+            }
             if ($isAdmin) {
                 $row['from'] = $i['user_id'] === $userId ? 'you' : $i['from'];
             }

@@ -307,6 +307,10 @@ $cases = [
 
     ['msg' => 'mark idea #38 as done', 'expect' => 'devideas'],
     ['msg' => 'sæt idé #41 til i gang', 'expect' => 'devideas'],
+    ['msg' => 'update idea #12 with the design notes', 'expect' => 'devideas'],
+    ['msg' => 'make idea #7 high priority', 'expect' => 'devideas'],
+    ['msg' => 'show the details of idea #12', 'expect' => 'devideas'],
+    ['msg' => 'eksporter ideer', 'expect' => 'devideas'],
 
     ['msg' => 'show my month', 'expect' => 'calendar'],
     ['msg' => 'vis månedsoversigten for november', 'expect' => 'calendar'],
