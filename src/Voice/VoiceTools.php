@@ -25,10 +25,13 @@ final class VoiceTools
         'get_shopping_list', 'add_to_shopping_list', 'check_off_item',
         'log_work_event', 'get_work_hours',
         'log_workout', 'get_workout_history', 'get_workout_plan',
+        // Blocking on purpose: a NON_BLOCKING result makes the model speak a new turn per call, so switching off
+        // five lights gave five separate confirmations.
+        'home_device_call',
     ];
 
-    /** May take several seconds (weather service, the home agent, the full assistant). */
-    public const SLOW = ['get_current_weather', 'get_weather_forecast', 'home_device_call', self::GATEWAY];
+    /** May take several seconds (weather service, the full assistant). */
+    public const SLOW = ['get_current_weather', 'get_weather_forecast', self::GATEWAY];
 
     /** @return list<string> */
     public static function allowed(): array

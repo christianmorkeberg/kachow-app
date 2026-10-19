@@ -60,9 +60,9 @@ $names = array_column($decl, 'name');
 check('only allowed tools are declared, plus the gateway', !in_array('delete_calendar_event', $names, true) && !in_array('get_emails', $names, true)
     && in_array('update_calendar_event', $names, true) && in_array(VoiceTools::GATEWAY, $names, true));
 $by = array_column($decl, null, 'name');
-check('auto: fast tools block, slow tools are NON_BLOCKING', $by['update_calendar_event']['behavior'] === 'BLOCKING' && $by['home_device_call']['behavior'] === 'NON_BLOCKING'
+check('auto: fast tools block, slow tools are NON_BLOCKING', $by['update_calendar_event']['behavior'] === 'BLOCKING' && $by['get_current_weather']['behavior'] === 'NON_BLOCKING' && $by['home_device_call']['behavior'] === 'BLOCKING'
     && $by[VoiceTools::GATEWAY]['behavior'] === 'NON_BLOCKING');
-check('slow tools say SLOW in their description, fast ones do not', str_starts_with($by['home_device_call']['description'], 'SLOW') && !str_starts_with($by['update_calendar_event']['description'], 'SLOW')
+check('slow tools say SLOW in their description, fast ones do not', str_starts_with($by['get_current_weather']['description'], 'SLOW') && !str_starts_with($by['update_calendar_event']['description'], 'SLOW')
     && str_starts_with($by[VoiceTools::GATEWAY]['description'], 'SLOW'));
 check('the other modes make every tool the same', array_unique(array_column(VoiceTools::declarations($registry, 'nonblocking'), 'behavior')) === ['NON_BLOCKING']
     && array_unique(array_column(VoiceTools::declarations($registry, 'blocking'), 'behavior')) === ['BLOCKING']);
