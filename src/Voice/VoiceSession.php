@@ -1,0 +1,146 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Voice;
+
+use App\Assistant\AssistantLoop;
+use App\Tools\ToolRegistry;
+use DateTimeImmutable;
+use DateTimeZone;
+
+/**
+ * What a voice session is told when it starts: the model, the voice, the system instruction (how to talk, how to
+ * use tools naturally, the local time, what the assistant knows about the user, today's agenda) and the tools.
+ * The browser sends this as the first message of the Live connection.
+ */
+final class VoiceSession
+{
+    public const DEFAULT_MODEL = 'gemini-3.8-live';
+    public const DEFAULT_VOICE = 'Puck';
+
+    /**
+     * The user's voice limits from their settings, clamped.
+     *
+     * @return array{daily_seconds:int, idle_seconds:int}
+     */
+    public static function limits(?string $dailyMinutes, ?string $idleSeconds): array
+    {
+        $min  = max(1, min(120, is_numeric($dailyMinutes) ? (int) $dailyMinutes : 10));
+        $idle = max(15, min(300, is_numeric($idleSeconds) ? (int) $idleSeconds : 45));
+
+        return ['daily_seconds' => $min * 60, 'idle_seconds' => $idle];
+    }
+
+    /**
+     * @param list<array{content:string}> $memories
+     * @param list<array{instruction:string}> $instructions
+     * @return array<string, mixed> the `setup` object
+     */
+    public static function setup(
+        ToolRegistry $registry,
+        string $model,
+        string $voice,
+        string $toolMode,
+        array $memories = [],
+        array $instructions = [],
+        string $agenda = '',
+        ?DateTimeImmutable $now = null,
+    ): array {
+        return [
+            'model'                    => 'models/' . ($model !== '' ? $model : self::DEFAULT_MODEL),
+            'generationConfig'         => [
+                'responseModalities' => ['AUDIO'],
+                'speechConfig'       => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice !== '' ? $voice : self::DEFAULT_VOICE]]],
+            ],
+            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now)]]],
+            'tools'                    => [['functionDeclarations' => VoiceTools::declarations($registry, $toolMode)]],
+            'inputAudioTranscription'  => new \stdClass(),
+            'outputAudioTranscription' => new \stdClass(),
+            'sessionResumption'        => new \stdClass(),
+            'contextWindowCompression' => ['slidingWindow' => new \stdClass()],
+        ];
+    }
+
+    /**
+     * @param list<array{content:string}> $memories
+     * @param list<array{instruction:string}> $instructions
+     */
+    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null): string
+    {
+        $p = "You are Kachow, the user's personal assistant, and you are talking to them out loud. Speak English unless the user speaks "
+            . "another language, then mirror it.\n\n"
+            . "HOW TO SPEAK: short, natural, relaxed sentences, like a helpful person — no lists, no markdown, no reading out long details. "
+            . "Anything long (an agenda, a table, a list) is shown on the user's screen as a card: give the gist in a sentence or two. "
+            . "Say times and dates the way people say them (\"Thursday at ten\", not \"2026-10-22T10:00\").\n\n"
+            . "HOW TO ACT: when the request is clear, just do it with a tool — don't ask for permission for ordinary, reversible things. "
+            . "Before a tool call give a SHORT lead-in in the progressive (\"Moving it to Thursday…\", \"Adding milk…\") — never claim something "
+            . "is done before the tool result says so. When the result comes back, confirm in a few words what happened, with the concrete new "
+            . "value (\"…done, it's Thursday at ten\"). If the result is an error, say in one short sentence that it didn't work and, if the "
+            . "reason is clear, why — do not retry over and over. If a result looks wrong or empty, say so; never invent a result.\n"
+            . "Tools marked SLOW take a while: say something like \"On it — I'll tell you when it's done\", carry on talking normally, and when "
+            . "the result arrives tell the user briefly.\n"
+            . "If the user changes their mind or corrects you mid-action, set the new value explicitly (an absolute date or time), don't "
+            . "shift relative to the old one.\n"
+            . "Resolve \"this event\", \"it\", \"that one\" from the agenda below and what you just talked about; ask one short question only "
+            . "if it is really ambiguous. Tools take LOCAL times (Europe/Copenhagen) — use the local time stated below.\n"
+            . "Use " . VoiceTools::GATEWAY . " for anything the other tools cannot do. You cannot delete things or clear lists by voice yet — "
+            . "say so and suggest doing it in the app.\n\n"
+            . AssistantLoop::nowLine($now);
+
+        if ($agenda !== '') {
+            $p .= "\n\nTHE USER'S AGENDA (next 7 days; event id and calendar id are for the calendar tools — never read them out):\n" . $agenda;
+        }
+        if ($instructions !== []) {
+            $p .= "\n\nThe user's standing instructions (always follow):";
+            foreach ($instructions as $i) {
+                $p .= "\n- " . trim((string) $i['instruction']);
+            }
+        }
+        if ($memories !== []) {
+            $p .= "\n\nWhat you already know about the user (use it to help; don't recite it):";
+            foreach (array_slice($memories, 0, 60) as $m) {
+                $p .= "\n- " . trim((string) $m['content']);
+            }
+        }
+
+        return $p;
+    }
+
+    /**
+     * Compact agenda lines from get_calendar_events' events.
+     *
+     * @param list<array<string, mixed>> $events
+     */
+    public static function agenda(array $events, int $max = 40): string
+    {
+        $tz    = new DateTimeZone('Europe/Copenhagen');
+        $lines = [];
+        foreach (array_slice($events, 0, $max) as $e) {
+            $start = (string) ($e['start'] ?? '');
+            $end   = (string) ($e['end'] ?? '');
+            if ($start === '') {
+                continue;
+            }
+            try {
+                $s = new DateTimeImmutable($start);
+                if (!empty($e['allDay'])) {
+                    $when = $s->format('D j M') . ' (all day)';
+                } else {
+                    $s    = $s->setTimezone($tz);
+                    $when = $s->format('D j M H:i');
+                    if ($end !== '') {
+                        $when .= '–' . (new DateTimeImmutable($end))->setTimezone($tz)->format('H:i');
+                    }
+                }
+            } catch (\Throwable $ex) {
+                $when = $start;
+            }
+            $cal      = (string) ($e['calendar_id'] ?? '');
+            $lines[]  = '- ' . $when . ' · ' . trim((string) ($e['summary'] ?? '(no title)'))
+                . ' [id ' . (string) ($e['id'] ?? '?') . ($cal !== '' ? ', calendar ' . $cal : '') . ']';
+        }
+
+        return implode("\n", $lines);
+    }
+}

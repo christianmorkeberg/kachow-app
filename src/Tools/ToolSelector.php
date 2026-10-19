@@ -118,7 +118,7 @@ final class ToolSelector
             'log_period', 'get_cycle_status', 'remove_period', 'get_connected_cycle', 'log_cycle_day',
         ],
         'feedback' => [
-            'list_feedback', 'resolve_feedback', 'set_diagnostics',
+            'list_feedback', 'resolve_feedback', 'set_diagnostics', 'get_voice_log',
         ],
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
@@ -457,6 +457,8 @@ final class ToolSelector
             // "report(ed) to the developer" phrasings — distinct from dev ideas.
             'to the developer', 'to developer', 'report anything', 'did anyone report',
             'any reports', 'reports from users',
+            // The voice (Gemini Live) log
+            'voice log', 'voice session', 'voice sessions', 'voice errors', 'stemmelog', 'stemmesession',
             // Danish
             'feedback', 'fejlrapport', 'fejlrapporter', 'brugerrapport', 'rapporter',
             'hvad har brugerne rapporteret', 'til udvikleren', 'rapporteret noget',

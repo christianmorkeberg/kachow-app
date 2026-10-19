@@ -143,6 +143,30 @@ final class UserSettings
             'label'       => 'Commuter rate (25–120 km/day)',
             'description' => 'Befordringsfradrag rate for 25–120 km/day, kr/km (2025: 2.23). First 24 km/day are not deductible.',
         ],
+        // Voice mode (Gemini Live). Read by the voice endpoints, which clamp the numbers.
+        'voice_daily_minutes' => [
+            'default'     => '10',
+            'label'       => 'Voice minutes per day',
+            'description' => 'Voice mode: how many minutes of live voice per day before it stops (default 10, allowed 1–120) — a '
+                . 'cost guard. Resets at midnight Copenhagen time.',
+        ],
+        'voice_idle_seconds' => [
+            'default'     => '45',
+            'label'       => 'Voice idle timeout (s)',
+            'description' => 'Voice mode: the session closes after this many seconds of silence (default 45, allowed 15–300) — '
+                . 'so a forgotten session does not keep running. Tap the mic to start again.',
+        ],
+        'voice_name' => [
+            'default'     => 'Puck',
+            'label'       => 'Voice',
+            'description' => 'Voice mode: the assistant\'s speaking voice, one of Google\'s prebuilt voices (e.g. Puck, Kore, Charon, '
+                . 'Fenrir, Aoede, Leda, Orus, Zephyr).',
+        ],
+        'voice_model' => [
+            'default'     => 'gemini-3.8-live',
+            'label'       => 'Voice model',
+            'description' => 'Voice mode: the Gemini Live model id (default gemini-3.8-live). Change only if Google renames it.',
+        ],
         // Location tracking (phase 3): how stays are detected from the raw points. Tunable per
         // user after looking at real days; past days are recomputed with the new values.
         'location_stay_radius_m' => [
