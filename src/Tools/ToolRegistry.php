@@ -164,7 +164,7 @@ final class ToolRegistry
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new ShowChart());
-        $registry->register(new LogWorkEvent($workEvents));
+        $registry->register(new LogWorkEvent($workEvents, static fn (int $u): bool => \App\Support\HomeNow::check(new LocationPoints(), new Places(), $u)));
         $registry->register(new DeleteWorkEvent($workEvents));
         $registry->register(new GetWorkTrackingSetup($apiTokens));
         $homeOwner = new HomeOwner($apiTokens, $connections);   // whose Pico a user talks to (own, or a shared one)
