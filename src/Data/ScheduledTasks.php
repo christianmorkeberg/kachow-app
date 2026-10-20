@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Database;
+use App\Support\RoutineGate;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -352,11 +353,11 @@ final class ScheduledTasks
      */
     public function listForCard(int $userId): array
     {
-        $stmt = $this->db->prepare($this->cardSelect() . " WHERE user_id = :u AND status IN ('active','paused','done')");
+        $stmt = $this->db->prepare($this->cardSelect() . " WHERE user_id = :u AND status IN ('draft','active','paused','done')");
         $stmt->execute([':u' => $userId]);
         $rows = array_map([self::class, 'cardRow'], $stmt->fetchAll());
 
-        $rank = ['active' => 0, 'paused' => 1, 'done' => 2];
+        $rank = ['draft' => 0, 'active' => 1, 'paused' => 2, 'done' => 3];
         usort($rows, static function (array $a, array $b) use ($rank): int {
             return [$rank[$a['status']], $a['status'] === 'done' ? '' : $a['next_run_at'], $a['status'] === 'done' ? $b['last_run_at'] : '', $a['id']]
                 <=> [$rank[$b['status']], $b['status'] === 'done' ? '' : $b['next_run_at'], $b['status'] === 'done' ? $a['last_run_at'] : '', $b['id']];
@@ -366,6 +367,30 @@ final class ScheduledTasks
         return array_values(array_filter($rows, static function (array $r) use (&$done): bool {
             return $r['status'] !== 'done' || ++$done <= 10;
         }));
+    }
+
+    /**
+     * The scheduled-tasks / routines card for a user (place names resolved for "Leaving Home").
+     *
+     * @return array<string, mixed>
+     */
+    public function cardForUser(int $userId, ?Places $places = null, ?array $system = null): array
+    {
+        $names = [];
+        if ($places !== null) {
+            foreach ($places->list($userId) as $p) {
+                $names[(int) $p['id']] = (string) $p['name'];
+            }
+        }
+
+        $requests = [];
+        try {
+            $requests = (new Routines($this->db))->pendingRequests($userId);
+        } catch (\Throwable) {
+            // not migrated yet: no questions
+        }
+
+        return self::card($this->listForCard($userId), $system, $names, $requests);
     }
 
     /**
@@ -386,7 +411,9 @@ final class ScheduledTasks
             if ($t['status'] === 'active') {
                 return null;
             }
-            if ($t['frequency'] === 'once') {
+            if ($t['frequency'] === 'event') {
+                $next = new DateTimeImmutable(Routines::NEVER, new DateTimeZone('UTC'));   // runs on request, never by the clock
+            } elseif ($t['frequency'] === 'once') {
                 $next = new DateTimeImmutable($t['next_run_at'], new DateTimeZone('UTC'));
                 if ($next <= new DateTimeImmutable('now', new DateTimeZone('UTC'))) {
                     return 'That one-off time has passed, so it cannot be resumed — schedule it again.';
@@ -421,6 +448,7 @@ final class ScheduledTasks
             'weekdays' => 'Every weekday at ' . $at,
             'weekly'   => 'Every ' . ($days[$dayOfWeek ?? 1] ?? 'week') . ' at ' . $at,
             'once'     => 'Once',
+            'event'    => 'When triggered',
             default    => $frequency,
         };
     }
@@ -433,7 +461,7 @@ final class ScheduledTasks
      * @param list<array<string, mixed>>|null $system null for a non-developer (no system section)
      * @return array<string, mixed>
      */
-    public static function card(array $tasks, ?array $system = null): array
+    public static function card(array $tasks, ?array $system = null, array $placeNames = [], array $requests = []): array
     {
         $tz    = new DateTimeZone(self::LOCAL_TZ);
         $local = static function (?string $utc, string $fmt) use ($tz): ?string {
@@ -441,15 +469,24 @@ final class ScheduledTasks
         };
         $items = [];
         foreach ($tasks as $t) {
+            $isRoutine = in_array($t['trigger_type'] ?? 'time', ['phrase', 'place'], true);
             $items[] = [
                 'id'          => $t['id'],
                 'label'       => $t['label'],
                 'instruction' => mb_substr((string) $t['instruction'], 0, 400),
                 'status'      => $t['status'],
-                'schedule'    => self::describeSchedule($t['frequency'], $t['time_of_day'], $t['day_of_week'], $t['interval_minutes']),
+                'schedule'    => $isRoutine
+                    ? Routines::describeTrigger($t, $placeNames)
+                    : self::describeSchedule($t['frequency'], $t['time_of_day'], $t['day_of_week'], $t['interval_minutes']),
+                'routine'     => $isRoutine,
+                'trigger_type' => $t['trigger_type'] ?? 'time',
+                'phrases'     => $t['phrases'] ?? [],
+                'conditions_text' => RoutineGate::describe($t['conditions'] ?? []),
+                'run_mode'    => $t['run_mode'] ?? 'auto',
+                'run_trigger' => $t['run_trigger'] ?? null,
                 'once'        => $t['frequency'] === 'once',
                 'tell_always' => $t['notify_always'],
-                'next_run'    => $t['status'] === 'active' ? $local($t['next_run_at'], 'D j M, H:i') : null,
+                'next_run'    => $t['status'] === 'active' && $t['frequency'] !== 'event' ? $local($t['next_run_at'], 'D j M, H:i') : null,
                 'last_run'    => $local($t['last_run_at'], 'D j M, H:i'),
                 'last_status' => $t['last_run_status'],
                 'notified'    => $t['last_run_notified'],
@@ -463,6 +500,11 @@ final class ScheduledTasks
             'kind'  => 'scheduled_tasks',
             'title' => 'Scheduled tasks',
             'items' => $items,
+            // "Ask first" routines waiting for a yes / no (see Routines::pendingRequests)
+            'requests' => array_map(static fn (array $q): array => [
+                'id' => $q['id'], 'task_id' => $q['task_id'], 'label' => $q['label'], 'trigger_text' => $q['trigger_text'],
+                'at' => $local($q['created_at'], 'H:i'),
+            ], $requests),
         ];
         if ($system !== null) {
             $card['system'] = $system;
@@ -475,7 +517,8 @@ final class ScheduledTasks
     {
         return 'SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, interval_minutes,
                        notify_always, status, next_run_at, last_run_at, has_unseen_result, last_result_title,
-                       last_summary, last_run_status, last_run_notified
+                       last_summary, last_run_status, last_run_notified,
+                       trigger_type, phrases, trigger_config, conditions, run_mode, run_trigger
                 FROM scheduled_tasks';
     }
 
@@ -503,6 +546,13 @@ final class ScheduledTasks
             'last_summary'     => $r['last_summary'] !== null ? (string) $r['last_summary'] : null,
             'last_run_status'  => $r['last_run_status'] !== null ? (string) $r['last_run_status'] : null,
             'last_run_notified' => (bool) $r['last_run_notified'],
+            // routines (phrase / place triggered tasks); a plain time task has trigger_type 'time'
+            'trigger_type'     => (string) ($r['trigger_type'] ?? 'time'),
+            'phrases'          => array_values(array_filter(array_map('trim', explode("\n", (string) ($r['phrases'] ?? ''))), static fn (string $x): bool => $x !== '')),
+            'trigger'          => (array) json_decode((string) ($r['trigger_config'] ?? ''), true),
+            'conditions'       => (array) json_decode((string) ($r['conditions'] ?? ''), true),
+            'run_mode'         => (string) ($r['run_mode'] ?? 'auto'),
+            'run_trigger'      => $r['run_trigger'] ?? null,
         ];
     }
 

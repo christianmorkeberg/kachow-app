@@ -48,6 +48,7 @@ final class VoiceSession
         ?DateTimeImmutable $now = null,
         string $language = 'auto',
         array $stopWords = [],
+        string $routines = '',
     ): array {
         $language = self::language($language);
         $speech   = ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice !== '' ? $voice : self::DEFAULT_VOICE]]];
@@ -61,7 +62,7 @@ final class VoiceSession
                 'responseModalities' => ['AUDIO'],
                 'speechConfig'       => $speech,
             ],
-            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now, $language, $stopWords)]]],
+            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now, $language, $stopWords, $routines)]]],
             'tools'                    => [['functionDeclarations' => VoiceTools::declarations($registry, $toolMode)]],
             'inputAudioTranscription'  => new \stdClass(),
             'outputAudioTranscription' => new \stdClass(),
@@ -127,7 +128,7 @@ final class VoiceSession
      * @param list<array{content:string}> $memories
      * @param list<array{instruction:string}> $instructions
      */
-    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null, string $language = 'auto', array $stopWords = []): string
+    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null, string $language = 'auto', array $stopWords = [], string $routines = ''): string
     {
         $lang = match (self::language($language)) {
             'en'    => 'LANGUAGE: always speak English, whatever language the user uses.',
@@ -162,6 +163,10 @@ final class VoiceSession
 
         if ($agenda !== '') {
             $p .= "\n\nTHE USER'S AGENDA (next 7 days; event id and calendar id are for the calendar tools — never read them out):\n" . $agenda;
+        }
+        if ($routines !== '') {
+            $p .= "\n\nTHE USER'S ROUTINES. When what they say matches a routine's phrase or name, call " . 'run_routine' . " (it starts in the background and ends with "
+                . "a notification — say \"On it\" in a few words) instead of doing its steps yourself:\n" . $routines;
         }
         if ($instructions !== []) {
             $p .= "\n\nThe user's standing instructions (always follow):";
