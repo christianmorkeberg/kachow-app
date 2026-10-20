@@ -61,7 +61,7 @@ final class ToolSelector
             'set_list_grouping',
         ],
         'home' => [
-            'home_device_call', 'get_home_agent_setup', 'refresh_home_devices',
+            'home_device_call', 'get_home_agent_setup', 'refresh_home_devices', 'set_thermostat', 'get_thermostats',
         ],
         'calendar' => [
             'get_calendar_events', 'get_calendar_month', 'insert_calendar_event', 'update_calendar_event', 'delete_calendar_event',

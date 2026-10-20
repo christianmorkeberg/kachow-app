@@ -30,4 +30,15 @@ DEVICES = {
         ],
         "methods": ["GET", "PUT"],
     },
+    # Radiator thermostats: a Shelly BLU gateway on your network (the valves talk Bluetooth to it). Plain http on your LAN;
+    # only the three valve calls are allowed — nothing else on the gateway can be reached through the Pico.
+    "shelly": {
+        "base": "http://192.168.1.60",
+        "allow": [
+            "/rpc/BluTrv.Call",
+            "/rpc/BluTrv.GetRemoteStatus",
+            "/rpc/BluTrv.GetStatus",
+        ],
+        "methods": ["GET", "POST"],
+    },
 }
