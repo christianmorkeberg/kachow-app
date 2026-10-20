@@ -16,6 +16,9 @@ final class Session
 {
     private const KEY = 'user_id';
 
+    /** How long a login session lasts: the cookie and the server-side data, sliding with every request. */
+    public const LIFETIME_DAYS = 30;
+
     public function __construct(private Users $users)
     {
     }
@@ -30,12 +33,38 @@ final class Session
             return;
         }
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start([
-                'cookie_httponly' => true,
-                'cookie_secure'   => self::isHttps(),
-                'cookie_samesite' => 'Lax',
-            ]);
+            session_start(self::options(null, self::isHttps()));
         }
+    }
+
+    /**
+     * Options for session_start. A long lifetime for BOTH the cookie (otherwise it ends with the browser session) and the
+     * server-side data (otherwise PHP's default ~24 minutes of idle time throws the session away). The data lives in an own
+     * folder next to the app — the host's shared session folder is cleaned on the host's schedule, whatever we ask for here —
+     * and this app cleans it itself (1% of requests).
+     *
+     * @return array<string, mixed>
+     */
+    public static function options(?string $saveDir = null, bool $https = false): array
+    {
+        $seconds = self::LIFETIME_DAYS * 86400;
+        $opts    = [
+            'cookie_httponly' => true,
+            'cookie_secure'   => $https,
+            'cookie_samesite' => 'Lax',
+            'cookie_lifetime' => $seconds,
+            'gc_maxlifetime'  => $seconds,
+            'gc_probability'  => 1,
+            'gc_divisor'      => 100,
+        ];
+        $dir = $saveDir ?? dirname(__DIR__, 3) . '/sessions';
+        if (is_dir($dir) || @mkdir($dir, 0700, true) || is_dir($dir)) {
+            if (is_writable($dir)) {
+                $opts['save_path'] = $dir;
+            }
+        }
+
+        return $opts;
     }
 
     /**
