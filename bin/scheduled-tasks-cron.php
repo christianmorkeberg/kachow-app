@@ -41,6 +41,9 @@ use App\Data\Invites;
 use App\Data\Memories;
 use App\Data\OwnerDraws;
 use App\Data\Receipts;
+use App\Data\LocationPoints;
+use App\Data\Places;
+use App\Data\Routines;
 use App\Data\ScheduledTasks;
 use App\Data\ShoppingLists;
 use App\Data\UserInstructions;
@@ -55,10 +58,13 @@ use App\Data\Workouts;
 use App\Email\EmailService;
 use App\Mail\NativeMailer;
 use App\Music\Discogs;
+use App\Notify\NotificationTypes;
 use App\Notify\Notifier;
 use App\Notify\WebPush;
 use App\Receipts\ReceiptStorage;
 use App\Data\SystemTasks;
+use App\Support\Household;
+use App\Support\HomeNow;
 use App\Support\SystemTaskDispatcher;
 use App\Support\SystemTaskRunner;
 use App\Support\ToolMemory;
@@ -69,13 +75,18 @@ use App\Weather\Dmi;
 // The built-in cron jobs the dispatcher owns (see App\Data\SystemTasks) run when this script ends — after the
 // user's tasks, so a long job never delays them, and also when it exits early below (no push configured).
 // Jobs left on the cPanel entry are untouched: with none switched over this is one cheap query.
-register_shutdown_function(static function (): void {
-    try {
-        SystemTaskDispatcher::runDue(new SystemTasks(), [SystemTaskRunner::class, 'run'], __DIR__);
-    } catch (\Throwable $e) {
-        error_log('scheduled-tasks-cron system tasks: ' . $e->getMessage());
-    }
-});
+// `--requested-only`: started in the background by run_routine / a place trigger to run the waiting routine runs right away (no
+// due tasks, no system jobs) — the per-minute run would pick them up anyway, a minute later.
+$requestedOnly = in_array('--requested-only', $argv ?? [], true);
+if (!$requestedOnly) {
+    register_shutdown_function(static function (): void {
+        try {
+            SystemTaskDispatcher::runDue(new SystemTasks(), [SystemTaskRunner::class, 'run'], __DIR__);
+        } catch (\Throwable $e) {
+            error_log('scheduled-tasks-cron system tasks: ' . $e->getMessage());
+        }
+    });
+}
 
 // A task's notify_me is pointless without push configured, and this run is otherwise
 // expensive (a real Gemini tool-calling turn per task) for no reachable payoff.
@@ -165,6 +176,81 @@ try {
     exit(0);
 }
 
+/**
+ * Runs one CLAIMED task through the assistant — the same for a scheduled slot and for a requested routine run.
+ *
+ * @param array<string, mixed> $task id, user_id, conversation_id, instruction, notify_always
+ */
+$execute = static function (array $task) use ($registry, $notifier, $tasks, $conversations, $loop): void {
+    $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
+    $seen = count($conversations->messages($task['conversation_id']));
+    $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
+    // The rules go to the model as context for this run only; the conversation keeps just the instruction,
+    // so opening the run from a notification doesn't show the boilerplate as "your" message.
+    $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, UNATTENDED_PREAMBLE . $report);
+
+    // The home agent (the Pico) not answering is usually a blip: wait, then try once more.
+    $fresh = array_slice($conversations->messages($task['conversation_id']), $seen);
+    if (ToolMemory::homeUnreachable($fresh)) {
+        sleep(RETRY_AFTER_SECONDS);
+        $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
+    }
+    // What the run came to, for the scheduled-tasks card (its closing words; a notify_me has its own title).
+    $tasks->recordRun($task['id'], true, (string) $reply);
+};
+
+// ---- Routine runs that were REQUESTED (a phrase, the card's Run now, an approved question, a place trigger) ----
+$routines = new Routines();
+$ranRequested = 0;
+foreach ($routines->requested() as $r) {
+    try {
+        // The user asked for it (said it, tapped Run now, said yes): conditions and "ask first" do not apply.
+        // Automatic triggers (a place, the clock) go through the conditions, and through the question when set to ask.
+        $trigger = (string) $r['run_trigger'];
+        $byUser  = str_starts_with($trigger, 'you said:') || str_starts_with($trigger, 'approved:') || str_starts_with($trigger, 'run now');
+        if (!$byUser) {
+            $c   = $r['conditions'];
+            $ctx = [];
+            if (!empty($c['away'])) {
+                $ctx['at_home'] = HomeNow::check(new LocationPoints(), new Places(), $r['user_id']);
+            }
+            if (!empty($c['others_away'])) {
+                $ctx['others_home'] = Household::othersHome(new \App\Data\Connections(), new LocationPoints(), new Places(), $r['user_id']);
+            }
+            $why = Routines::gate($r, $ctx);
+            if ($why !== null) {
+                $routines->clearRequest($r['id']);
+                $tasks->recordRun($r['id'], true, 'Skipped (' . $trigger . ') — ' . $why . '.');
+                continue;
+            }
+            if ($r['run_mode'] === 'ask') {
+                $routines->clearRequest($r['id']);
+                $routines->createRequest($r['id'], $r['user_id'], $trigger);
+                $notifier->notify($r['user_id'], NotificationTypes::ROUTINE_ASK, 'Run “' . $r['label'] . '”?', ucfirst($trigger) . ' — tap to run it or skip it.');
+                continue;
+            }
+        }
+        if (!$routines->claimRequest($r['id'])) {
+            continue;   // another process (the background run or the minute cron) got it
+        }
+        $execute($r);
+        $ranRequested++;
+    } catch (\Throwable $e) {
+        error_log('scheduled-tasks-cron routine ' . $r['id'] . ': ' . $e->getMessage());
+        try {
+            $tasks->recordRun($r['id'], false, $e->getMessage());
+        } catch (\Throwable $ignored) {
+            // bookkeeping only
+        }
+    }
+}
+if ($ranRequested > 0) {
+    fwrite(STDERR, 'scheduled-tasks-cron: ran ' . $ranRequested . " requested routine(s).\n");
+}
+if ($requestedOnly) {
+    exit(0);
+}
+
 $due = $tasks->due();
 $ran = 0;
 
@@ -190,21 +276,7 @@ foreach ($due as $task) {
             }
         }
 
-        $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
-        $seen = count($conversations->messages($task['conversation_id']));
-        $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
-        // The rules go to the model as context for this run only; the conversation keeps just the instruction,
-        // so opening the run from a notification doesn't show the boilerplate as "your" message.
-        $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, UNATTENDED_PREAMBLE . $report);
-
-        // The home agent (the Pico) not answering is usually a blip: wait, then try once more.
-        $fresh = array_slice($conversations->messages($task['conversation_id']), $seen);
-        if (ToolMemory::homeUnreachable($fresh)) {
-            sleep(RETRY_AFTER_SECONDS);
-            $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
-        }
-        // What the run came to, for the scheduled-tasks card (its closing words; a notify_me has its own title).
-        $tasks->recordRun($task['id'], true, (string) $reply);
+        $execute($task);
         $ran++;
     } catch (\Throwable $e) {
         error_log('scheduled-tasks-cron task ' . $task['id'] . ': ' . $e->getMessage());

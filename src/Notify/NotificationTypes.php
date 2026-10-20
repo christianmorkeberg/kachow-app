@@ -26,6 +26,7 @@ final class NotificationTypes
     public const WORK_CLOCK_GAP  = 'work_clock_gap';
     public const FEEDBACK_REPORT = 'feedback_report';
     public const IMPORTANT_EMAIL = 'important_email';
+    public const ROUTINE_ASK = 'routine_ask';
 
     /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
@@ -103,6 +104,13 @@ final class NotificationTypes
                 . 'deadline, a booking). Newsletters and receipts are ignored. Mail subjects and previews are read by the assistant to decide.',
             'default'     => false,
         ],
+        // Sent by the routine runner when a routine set to "ask first" is triggered automatically (leaving a place …):
+        // the question waits on the routines card until answered.
+        self::ROUTINE_ASK => [
+            'label'       => 'Routine asks first',
+            'description' => 'When a routine you set to "ask first" is triggered (for example by leaving home): a question to run it or skip it.',
+            'default'     => true,
+        ],
         // Sent by api/report.php when a user flags a message ("report to developer"). Replaces the
         // e-mail to the developer; only admins are ever sent it, so only admins see the toggle.
         self::FEEDBACK_REPORT => [
@@ -125,6 +133,7 @@ final class NotificationTypes
         self::MOMS_DEADLINE  => 'moms',       // the quarter awaiting filing
         self::WORK_CLOCK_GAP => 'work_yesterday', // yesterday's hours, to fill in the skipped visit
         self::FEEDBACK_REPORT => 'feedback',  // the open reports (admin)
+        self::ROUTINE_ASK    => 'routines',   // the routines card, with the question
     ];
 
     public static function exists(string $key): bool

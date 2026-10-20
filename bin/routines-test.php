@@ -17,6 +17,8 @@ use App\Data\ScheduledTasks;
 use App\Tools\CreateRoutine;
 use App\Tools\RunRoutine;
 use App\Tools\UpdateRoutine;
+use App\Support\BackgroundRun;
+use App\Support\Household;
 use App\Voice\VoiceTools;
 use App\Support\PlaceTransitions;
 use App\Support\RoutineGate;
@@ -158,6 +160,11 @@ $update->execute(['routine' => (string) $id1, 'status' => 'cancelled'], 7);
 check('cancelled routines are gone from the lists', $R->get(7, $id1)['status'] === 'cancelled' && $R->countAll(7) === 0);
 check('voice: run / create / update are voice tools; removing a routine needs a spoken yes', VoiceTools::isAllowed('run_routine') && VoiceTools::isSlow('run_routine') && VoiceTools::isAllowed('create_routine')
     && VoiceTools::needsConfirm('update_routine', ['status' => 'cancelled']) && !VoiceTools::needsConfirm('update_routine', ['status' => 'active']));
+
+echo "5) household and background runs\n";
+check('nobody could be judged → unknown; anyone known home → true; all known away → false', Household::summarize([]) === null && Household::summarize([null, null]) === null
+    && Household::summarize([false, true, null]) === true && Household::summarize([false, null]) === false);
+check('a background kick needs an existing script (and exec); otherwise it is a quiet no-op', BackgroundRun::kick('/nonexistent/script.php') === false);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
