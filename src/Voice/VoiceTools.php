@@ -38,6 +38,8 @@ final class VoiceTools
         'check_off_exercise', 'uncheck_exercise', 'get_week_plan', 'get_cycle_status', 'log_cycle_day', 'log_period',
         // trips and places
         'get_trips', 'update_trip', 'get_mileage', 'list_places', 'get_stays', 'get_location_day',
+        // routines: build one, run one (starts in the background and reports by notification), change one
+        'create_routine', 'update_routine',
         // lists
         'list_shopping_lists', 'uncheck_item', 'set_list_grouping', 'get_wishlist', 'add_wishlist_item',
         'update_wishlist_item', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'get_books',
@@ -56,7 +58,7 @@ final class VoiceTools
 
     /** May take several seconds (weather, maps and geocoding, Discogs, the full assistant). */
     public const SLOW = [
-        'get_current_weather', 'get_weather_forecast', self::GATEWAY,
+        'get_current_weather', 'get_weather_forecast', self::GATEWAY, 'run_routine',
         // map / geocoding / Discogs lookups
         'log_trip', 'save_place', 'update_place', 'suggest_places', 'get_driving_distance', 'add_vinyl',
     ];
@@ -72,9 +74,10 @@ final class VoiceTools
         return in_array($name, self::allowed(), true);
     }
 
-    public static function needsConfirm(string $name): bool
+    /** @param array<string, mixed> $args removing a routine (update_routine with status "cancelled") is a delete: it needs the spoken yes too */
+    public static function needsConfirm(string $name, array $args = []): bool
     {
-        return in_array($name, self::CONFIRM, true);
+        return in_array($name, self::CONFIRM, true) || ($name === 'update_routine' && ($args['status'] ?? '') === 'cancelled');
     }
 
     public static function isSlow(string $name): bool

@@ -33,6 +33,7 @@ use App\Data\Memories;
 use App\Data\PushSubscriptions;
 use App\Data\Receipts;
 use App\Data\Reminders;
+use App\Data\Routines;
 use App\Data\ScheduledTasks;
 use App\Data\SystemTasks;
 use App\Data\VoiceLog;
@@ -267,6 +268,11 @@ final class ToolRegistry
         $registry->register(new SetScheduledTaskActive($scheduledTasks, $systemTasks, $users));
         $registry->register(new UpdateSystemTask($systemTasks, $scheduledTasks, $users));
         $registry->register(new CancelScheduledTask($scheduledTasks));
+        // Routines: phrase / place triggered tasks on the same table (see Data\Routines).
+        $routines = new Routines();
+        $registry->register(new CreateRoutine($routines, $scheduledTasks, new Conversations(), new Places()));
+        $registry->register(new UpdateRoutine($routines, $scheduledTasks, new Places()));
+        $registry->register(new RunRoutine($routines));
         $feedback = new FeedbackReports();
         $registry->register(new ListFeedback($users, $feedback));
         $registry->register(new ResolveFeedback($users, $feedback));

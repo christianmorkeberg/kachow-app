@@ -37,7 +37,7 @@ final class VoiceToolRunner
         if (!VoiceTools::isAllowed($name)) {
             return ['ok' => false, 'result' => ['error' => 'That is not available by voice.'], 'card' => null, 'ms' => $ms(), 'error' => 'not allowed by voice: ' . $name, 'fault' => false, 'summary' => null];
         }
-        if (VoiceTools::needsConfirm($name)) {
+        if (VoiceTools::needsConfirm($name, $args)) {
             if ($this->gate === null) {
                 return ['ok' => false, 'result' => ['error' => 'That needs a spoken confirmation, which is not available here.'], 'card' => null, 'ms' => $ms(), 'error' => 'no confirm gate', 'fault' => false, 'summary' => null];
             }

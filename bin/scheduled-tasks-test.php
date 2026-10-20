@@ -88,6 +88,7 @@ $db->exec("CREATE TABLE scheduled_tasks (
     interval_minutes INTEGER, notify_always INTEGER NOT NULL DEFAULT 0,
     has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
     last_summary TEXT, last_run_status TEXT, last_run_notified INTEGER NOT NULL DEFAULT 0,
+    trigger_type TEXT NOT NULL DEFAULT 'time', phrases TEXT, trigger_config TEXT, conditions TEXT, run_mode TEXT NOT NULL DEFAULT 'auto', run_requested_at TEXT, run_trigger TEXT,
     next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 // next_run_at in the past, so it's claimable right now.
 $db->exec("INSERT INTO scheduled_tasks (user_id, conversation_id, label, instruction, frequency, next_run_at)
@@ -173,6 +174,7 @@ $db2->exec("CREATE TABLE scheduled_tasks (
     interval_minutes INTEGER, notify_always INTEGER NOT NULL DEFAULT 0,
     has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
     last_summary TEXT, last_run_status TEXT, last_run_notified INTEGER NOT NULL DEFAULT 0,
+    trigger_type TEXT NOT NULL DEFAULT 'time', phrases TEXT, trigger_config TEXT, conditions TEXT, run_mode TEXT NOT NULL DEFAULT 'auto', run_requested_at TEXT, run_trigger TEXT,
     next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 $t2 = new ScheduledTasks($db2);
 $a = $t2->create(1, 10, 'Invoices', 'Check my mail for invoices.', 'weekdays', '08:00', null);

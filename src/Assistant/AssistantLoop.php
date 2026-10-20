@@ -339,6 +339,8 @@ final class AssistantLoop
         // this). Default off = current keyword-routed behaviour; flip to trial the
         // "no router" architecture reversibly. See bin/wide-chain-test.php.
         private bool $wideTools = false,
+        // The user's routines (phrase / place triggered tasks): their names and phrases go into the prompt so "I'm leaving" runs one.
+        private ?\App\Data\Routines $routines = null,
     ) {
         // Always registered, but only handed to the model on a turn the user approved (see handle()).
         $this->tools->register(new WebSearch($gemini));
@@ -1065,6 +1067,23 @@ final class AssistantLoop
                     . "unless the current message overrides one:";
                 foreach ($stored as $row) {
                     $system .= "\n- (#" . (int) $row['id'] . ') ' . (string) $row['instruction'];
+                }
+            }
+        }
+
+        if ($this->routines !== null) {
+            try {
+                $live = $this->routines->active($userId);
+            } catch (\Throwable $e) {
+                $live = [];   // not migrated yet (or the table is unreachable): no routines, everything else works
+                error_log('AssistantLoop routines: ' . $e->getMessage());
+            }
+            if ($live !== []) {
+                $system .= "\n\nThe user's ROUTINES. When their words match a routine's phrase or name, call run_routine with it — do NOT do its steps "
+                    . "yourself:";
+                foreach ($live as $r) {
+                    $says = $r['phrases'] === [] ? '' : ' — says: ' . implode(' / ', array_map(static fn (string $p): string => '"' . $p . '"', $r['phrases']));
+                    $system .= "\n- " . $r['label'] . $says . ' → ' . mb_substr($r['instruction'], 0, 160);
                 }
             }
         }

@@ -10,7 +10,14 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use App\Data\Conversations;
+use App\Data\Places;
 use App\Data\Routines;
+use App\Data\ScheduledTasks;
+use App\Tools\CreateRoutine;
+use App\Tools\RunRoutine;
+use App\Tools\UpdateRoutine;
+use App\Voice\VoiceTools;
 use App\Support\PlaceTransitions;
 use App\Support\RoutineGate;
 
@@ -66,6 +73,7 @@ $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 $db->exec("CREATE TABLE scheduled_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, conversation_id INT, label TEXT, instruction TEXT, frequency TEXT, trigger_type TEXT DEFAULT 'time',
     phrases TEXT, trigger_config TEXT, conditions TEXT, run_mode TEXT DEFAULT 'auto', status TEXT DEFAULT 'active', notify_always INT DEFAULT 0, next_run_at TEXT, run_requested_at TEXT, run_trigger TEXT,
+    time_of_day TEXT, day_of_week INT, interval_minutes INT, has_unseen_result INT DEFAULT 0, last_result_title TEXT,
     last_run_at TEXT, last_run_status TEXT, last_summary TEXT, last_run_notified INT DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 $db->exec('CREATE TABLE routine_place_state (task_id INT, place_id INT, inside INT, streak INT, updated_at TEXT, PRIMARY KEY (task_id, place_id))');
 $db->exec("CREATE TABLE routine_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INT, user_id INT, trigger_text TEXT, status TEXT DEFAULT 'pending', created_at TEXT, decided_at TEXT)");
@@ -105,6 +113,51 @@ $q3 = $R->createRequest($id, 1, 'old');
 $db->exec("UPDATE routine_requests SET created_at = '2020-01-01 00:00:00' WHERE id = {$q3}");
 check('old questions expire', $R->pendingRequests(1) === []);
 check('the gate reads the routine\'s own conditions and last run', Routines::gate(['conditions' => ['weekdays' => [6, 7]], 'last_run_at' => null], [], $at('2026-10-19 12:00')) !== null && Routines::gate(['conditions' => [], 'last_run_at' => null]) === null);
+
+echo "4) the tools\n";
+$db->exec('CREATE TABLE conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, title TEXT)');
+$db->exec("CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, name TEXT, type TEXT DEFAULT 'other', shape TEXT DEFAULT 'circle', lat REAL, lon REAL, radius_m INT, polygon TEXT, created_at TEXT, updated_at TEXT)");
+$places = new Places($db);
+$places->add(1, ['name' => 'Home', 'type' => 'home', 'shape' => 'circle', 'lat' => 55.0, 'lon' => 12.0, 'radius_m' => 85]);
+$tasks = new ScheduledTasks($db);
+$convs = new Conversations($db);
+$create = new CreateRoutine($R, $tasks, $convs, $places);
+$update = new UpdateRoutine($R, $tasks, $places);
+$kickLog = sys_get_temp_dir() . '/kachow-kick-' . bin2hex(random_bytes(4));
+$run    = new RunRoutine($R, '/nonexistent/runner.php');
+
+$r1 = $create->execute(['name' => 'Away', 'instruction' => 'Turn off all lights and set the heating to 17.', 'phrases' => ["I'm leaving", 'jeg smutter']], 7);
+check('create_routine: a phrase routine is saved as a DRAFT and the card comes back', ($r1['created'] ?? false) === true && $r1['status'] === 'draft' && ($r1['_render']['kind'] ?? '') === 'scheduled_tasks'
+    && $r1['_render']['items'][0]['routine'] === true && $r1['_render']['items'][0]['status'] === 'draft' && $r1['_render']['items'][0]['schedule'] === 'Say: “I\'m leaving” / “jeg smutter”', json_encode($r1));
+check('the card shows it as "when triggered", with no next run', $r1['_render']['items'][0]['next_run'] === null && $r1['routine']['when'] === 'Say: “I\'m leaving” / “jeg smutter”');
+check('a routine needs a trigger and an instruction', isset($create->execute(['name' => 'X', 'instruction' => 'y'], 7)['error']) && isset($create->execute(['name' => 'X', 'phrases' => ['x']], 7)['error']));
+$r2 = $create->execute(['name' => 'Left home', 'instruction' => 'Turn off the lights.', 'trigger_event' => 'leave', 'trigger_place' => 'home', 'mode' => 'ask', 'conditions' => ['weekdays' => [1, 2, 3, 4, 5], 'others_away' => true], 'save' => true], 1);
+check('a place routine resolves the place by name, keeps mode and conditions, and can be saved at once', $r2['status'] === 'active' && $r2['routine']['when'] === 'Leaving Home' && $r2['routine']['mode'] === 'ask'
+    && $r2['routine']['conditions'] === 'Mon, Tue, Wed, Thu, Fri · only if nobody else is home', json_encode($r2));
+check('an unknown place is a clear error that names the places they have', str_contains($create->execute(['name' => 'X', 'instruction' => 'y', 'trigger_event' => 'leave', 'trigger_place' => 'Gym'], 1)['error'] ?? '', 'Home'));
+check('a place type works too', ($create->execute(['name' => 'Office', 'instruction' => 'y', 'trigger_event' => 'enter', 'trigger_place_type' => 'work'], 1)['routine']['when'] ?? '') === 'Arriving at any work place');
+
+// user 7 has no 'Home' place: a place routine there must fail, and routines are user-scoped
+check('places are the user\'s own', isset($create->execute(['name' => 'X', 'instruction' => 'y', 'trigger_event' => 'leave', 'trigger_place' => 'Home'], 7)['error']));
+
+$id1 = $r1['id'];
+check('a draft does not run by phrase', isset($run->execute(['routine' => "I'm leaving"], 7)['error']));
+$u = $update->execute(['routine' => 'Away', 'status' => 'active'], 7);
+check('update_routine status active SAVES the draft', ($u['updated'] ?? false) && $R->get(7, $id1)['status'] === 'active');
+$rr = $run->execute(['routine' => "ok i'm leaving now", 'said' => "I'm leaving"], 7);
+check('run_routine matches the phrase, asks for the run, and says what to tell the user', ($rr['started'] ?? false) === true && $rr['routine'] === 'Away' && $R->get(7, $id1)['run_requested_at'] !== null
+    && array_values(array_filter($R->requested(), static fn (array $x): bool => $x['id'] === $id1))[0]['run_trigger'] === "you said: I'm leaving", json_encode($rr));
+check('asking again while it waits is not a second run', ($run->execute(['routine' => 'Away'], 7)['started'] ?? true) === false);
+$u2 = $update->execute(['routine' => 'Away', 'phrases' => ['bye'], 'instruction' => 'Lights off.', 'mode' => 'ask'], 7);
+check('update_routine changes only what is given (phrases REPLACE)', $R->get(7, $id1)['phrases'] === ['bye'] && $R->get(7, $id1)['instruction'] === 'Lights off.' && $R->get(7, $id1)['run_mode'] === 'ask' && $R->get(7, $id1)['label'] === 'Away');
+check('a phrase routine cannot be given a place trigger', isset($update->execute(['routine' => 'Away', 'trigger_event' => 'leave', 'trigger_place_type' => 'home'], 7)['error']));
+$update->execute(['routine' => 'Away', 'status' => 'paused'], 7);
+check('a paused routine can still be found for editing, not for running', $R->get(7, $id1)['status'] === 'paused' && isset($run->execute(['routine' => 'Away'], 7)['error']) && ($update->execute(['routine' => 'Away', 'status' => 'active'], 7)['updated'] ?? false));
+check('another user cannot touch it', isset($update->execute(['routine' => 'Away', 'status' => 'cancelled'], 8)['error']) && $R->get(7, $id1)['status'] === 'active');
+$update->execute(['routine' => (string) $id1, 'status' => 'cancelled'], 7);
+check('cancelled routines are gone from the lists', $R->get(7, $id1)['status'] === 'cancelled' && $R->countAll(7) === 0);
+check('voice: run / create / update are voice tools; removing a routine needs a spoken yes', VoiceTools::isAllowed('run_routine') && VoiceTools::isSlow('run_routine') && VoiceTools::isAllowed('create_routine')
+    && VoiceTools::needsConfirm('update_routine', ['status' => 'cancelled']) && !VoiceTools::needsConfirm('update_routine', ['status' => 'active']));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

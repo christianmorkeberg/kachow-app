@@ -111,6 +111,34 @@ final class Routines
         return true;
     }
 
+    /** How many phrase / place routines the user has (drafts and paused ones count; cancelled ones do not). */
+    public function countAll(int $userId): int
+    {
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM scheduled_tasks WHERE user_id = :u AND trigger_type IN ('phrase','place') AND status IN ('draft','active','paused')");
+        $stmt->execute([':u' => $userId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * What a tool tells the model about one routine.
+     *
+     * @param array<int, string> $placeNames id → name, so "Leaving Home" reads as words
+     * @return array<string, mixed>|null
+     */
+    public function summary(int $userId, int $id, array $placeNames = []): ?array
+    {
+        $r = $this->get($userId, $id);
+        if ($r === null) {
+            return null;
+        }
+
+        return [
+            'id' => $r['id'], 'name' => $r['label'], 'status' => $r['status'], 'when' => self::describeTrigger($r, $placeNames), 'phrases' => $r['phrases'],
+            'conditions' => RoutineGate::describe($r['conditions']), 'mode' => $r['run_mode'], 'does' => $r['instruction'],
+        ];
+    }
+
     /**
      * One phrase / place routine of this user, any status, decoded. Null if none (or it is a plain time task).
      *
@@ -142,6 +170,29 @@ final class Routines
         $stmt->execute($p);
 
         return array_map([self::class, 'row'], $stmt->fetchAll());
+    }
+
+    /**
+     * A routine of this user in ANY status (draft, paused …) by id or exact name — for editing; null if none.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findAnyStatus(int $userId, string $query): ?array
+    {
+        $q = self::norm($query);
+        if ($q === '') {
+            return null;
+        }
+        $stmt = $this->db->prepare($this->select() . " WHERE user_id = :u AND trigger_type IN ('phrase','place') AND status IN ('draft','active','paused') ORDER BY id DESC");
+        $stmt->execute([':u' => $userId]);
+        foreach ($stmt->fetchAll() as $row) {
+            $r = self::row($row);
+            if ((string) $r['id'] === trim($query) || self::norm($r['label']) === $q) {
+                return $r;
+            }
+        }
+
+        return null;
     }
 
     /**

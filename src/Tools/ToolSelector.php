@@ -123,6 +123,7 @@ final class ToolSelector
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
             'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
+            'create_routine', 'update_routine', 'run_routine',
         ],
         // Tracked movement (OwnTracks raw points; private per user).
         'location' => [
@@ -441,6 +442,10 @@ final class ToolSelector
             'watch this page', 'watch the page', 'watch this site', 'watch the site', 'monitor this', 'monitor the',
             'keep an eye on', 'back in stock', 'tell me when the price', 'tell me if the price',
             'hold øje med', 'overvåg', 'på lager igen', 'sig til når prisen',
+            // Routines (create_routine / run_routine): "when I say X do Y", "when I leave home …"
+            'routine', 'routines', 'rutine', 'rutiner', 'automation', 'automatisering', 'when i say', 'when i leave', 'when i arrive',
+            'when i get home', 'when i go to', 'når jeg siger', 'når jeg forlader', 'når jeg går', 'når jeg kommer hjem',
+            'i\'m leaving', 'im leaving', 'i am leaving', 'i\'m home', 'im home', 'jeg smutter', 'jeg går nu', 'jeg er hjemme', 'good night routine',
             // Danish
             'mind mig', 'påmind', 'paamind', 'påmindelse', 'glem ikke at minde', 'husk mig på', 'husk mig pa',
             'hver dag', 'hver uge', 'hver time', 'tilbagevendende', 'planlagt opgave',
