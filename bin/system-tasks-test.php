@@ -156,7 +156,7 @@ $db->exec("CREATE TABLE scheduled_tasks (
     interval_minutes INTEGER, notify_always INTEGER NOT NULL DEFAULT 0,
     has_unseen_result INTEGER NOT NULL DEFAULT 0, last_result_title TEXT,
     last_summary TEXT, last_run_status TEXT, last_run_notified INTEGER NOT NULL DEFAULT 0,
-    trigger_type TEXT NOT NULL DEFAULT 'time', phrases TEXT, trigger_config TEXT, conditions TEXT, run_mode TEXT NOT NULL DEFAULT 'auto', run_requested_at TEXT, run_trigger TEXT,
+    trigger_type TEXT NOT NULL DEFAULT 'time', phrases TEXT, trigger_config TEXT, conditions TEXT, run_mode TEXT NOT NULL DEFAULT 'auto', run_requested_at TEXT, run_trigger TEXT, steps TEXT, undo_steps TEXT, undo_at TEXT,
     next_run_at TEXT NOT NULL, last_run_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 $sched = new ScheduledTasks($db);
 $users = new Users($db);

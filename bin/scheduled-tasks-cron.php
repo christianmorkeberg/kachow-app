@@ -65,6 +65,7 @@ use App\Receipts\ReceiptStorage;
 use App\Data\SystemTasks;
 use App\Support\Household;
 use App\Support\HomeNow;
+use App\Support\RoutineSteps;
 use App\Support\SystemTaskDispatcher;
 use App\Support\SystemTaskRunner;
 use App\Support\ToolMemory;
@@ -176,12 +177,47 @@ try {
     exit(0);
 }
 
+$routines = new Routines();
+
 /**
- * Runs one CLAIMED task through the assistant — the same for a scheduled slot and for a requested routine run.
+ * Runs one CLAIMED task — the same for a scheduled slot and for a requested routine run. A task with recorded exact steps replays
+ * them straight at the home agent (about a second, the same every time, and it keeps what is needed to undo it); anything else, or
+ * a replay that fails, goes through the assistant with the stored instruction.
  *
- * @param array<string, mixed> $task id, user_id, conversation_id, instruction, notify_always
+ * @param array<string, mixed> $task id, user_id, conversation_id, instruction, notify_always, steps
  */
-$execute = static function (array $task) use ($registry, $notifier, $tasks, $conversations, $loop): void {
+$execute = static function (array $task) use ($registry, $notifier, $tasks, $conversations, $loop, $routines): void {
+    $userId = (int) $task['user_id'];
+
+    if (!empty($task['steps'])) {
+        $call = static function (string $tool, array $args) use ($registry, $userId): array {
+            try {
+                return $registry->dispatch($tool, $args, $userId);
+            } catch (\Throwable $e) {
+                return ['error' => $e->getMessage()];
+            }
+        };
+        $res = RoutineSteps::replay($task['steps'], $call);
+        $routines->saveUndo($task['id'], $res['undo']);
+        if ($res['ok']) {
+            $title = $task['label'] . ' — done';
+            $body  = 'Ran ' . $res['done'] . ' recorded step' . ($res['done'] === 1 ? '' : 's') . ($res['undo'] !== [] ? '. Say “undo that” to put it back.' : '.');
+            $conversations->addMessage($task['conversation_id'], 'user', $task['instruction']);
+            $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
+            $note = $registry->dispatch('notify_me', ['title' => $title, 'body' => $body], $userId);
+            $conversations->addMessage($task['conversation_id'], 'tool', (string) json_encode($note, JSON_UNESCAPED_UNICODE), 'notify_me');
+            $conversations->addMessage($task['conversation_id'], 'assistant', $body);
+            $tasks->recordRun($task['id'], true, $body);
+
+            return;
+        }
+        // Not the home agent being away (the model run below has its own retry for that): the recording is stale
+        // (an id that is gone, a refused path) — forget it, so the run below records fresh steps.
+        if (!RoutineSteps::unreachable((string) $res['error'])) {
+            $routines->saveSteps($task['id'], null);
+        }
+    }
+
     $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
     $seen = count($conversations->messages($task['conversation_id']));
     $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
@@ -195,12 +231,18 @@ $execute = static function (array $task) use ($registry, $notifier, $tasks, $con
         sleep(RETRY_AFTER_SECONDS);
         $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
     }
+    // A run that was only home-device writes is kept as the routine's exact steps, so the next one is a replay.
+    if (empty($task['steps']) && !RoutineSteps::conditional((string) $task['instruction'])) {
+        $steps = RoutineSteps::record($loop->lastCalls());
+        if ($steps !== null) {
+            $routines->saveSteps($task['id'], $steps);
+        }
+    }
     // What the run came to, for the scheduled-tasks card (its closing words; a notify_me has its own title).
     $tasks->recordRun($task['id'], true, (string) $reply);
 };
 
 // ---- Routine runs that were REQUESTED (a phrase, the card's Run now, an approved question, a place trigger) ----
-$routines = new Routines();
 $ranRequested = 0;
 foreach ($routines->requested() as $r) {
     try {
@@ -274,6 +316,13 @@ foreach ($due as $task) {
             if (!$tasks->claimAndReschedule($task['id'], $next->format('Y-m-d H:i:s'))) {
                 continue;
             }
+        }
+
+        // "Ask first": the slot is used up (it moves on as usual), the question waits on the card and in a push, and only a yes runs it.
+        if (($task['run_mode'] ?? 'auto') === 'ask' && $task['frequency'] !== 'once') {
+            $routines->createRequest($task['id'], $task['user_id'], 'scheduled time');
+            $notifier->notify($task['user_id'], NotificationTypes::ROUTINE_ASK, 'Run “' . $task['label'] . '”?', 'It is time — tap to run it or skip it.');
+            continue;
         }
 
         $execute($task);

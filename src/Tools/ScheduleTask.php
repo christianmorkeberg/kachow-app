@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\Conversations;
 use App\Data\PushSubscriptions;
+use App\Data\Routines;
 use App\Data\ScheduledTasks;
 
 /**
@@ -27,6 +28,7 @@ final class ScheduleTask implements Tool
         private ScheduledTasks $tasks,
         private Conversations $conversations,
         private PushSubscriptions $subscriptions,
+        private ?Routines $routines = null,
     ) {
     }
 
@@ -95,6 +97,11 @@ final class ScheduleTask implements Tool
                 'day_of_week' => [
                     'type'        => 'string',
                     'description' => 'Required for weekly: the weekday name (e.g. "monday", Danish "mandag").',
+                ],
+                'mode' => [
+                    'type'        => 'string', 'enum' => ['auto', 'ask'],
+                    'description' => '"ask" = when it is time, send a question first and run only after the user says yes (for a recurring task that '
+                        . 'acts on something and the user wants a say). Default "auto".',
                 ],
                 'label' => [
                     'type'        => 'string',
@@ -176,6 +183,8 @@ final class ScheduleTask implements Tool
             $userId, $conversationId, $label, $instruction, $frequency, $timeOfDay, $dayOfWeek,
             $interval, $notifyAlways, $onceAt,
         );
+        $asks = ($arguments['mode'] ?? 'auto') === 'ask' && $frequency !== 'once' && $this->routines !== null
+            && $this->routines->setRunMode($userId, $id, 'ask');
         $next = ($onceAt ?? ScheduledTasks::nextRunAtUtc($frequency, $timeOfDay, $dayOfWeek, null, $interval))
             ->setTimezone(new \DateTimeZone('Europe/Copenhagen'));
 
@@ -185,6 +194,7 @@ final class ScheduleTask implements Tool
             'label'            => $label,
             'first_run_local'  => $next->format('D j M, H:i'),
             'notify_always'    => $notifyAlways,
+            'asks_first'       => $asks,
             'has_device'       => $this->subscriptions->hasAny($userId),
             'note'             => $this->subscriptions->hasAny($userId)
                 ? 'Confirm briefly — mention when it first runs and ' . ($notifyAlways

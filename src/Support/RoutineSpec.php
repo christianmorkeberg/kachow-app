@@ -23,6 +23,9 @@ final class RoutineSpec
             'trigger_event' => ['type' => 'string', 'enum' => ['leave', 'enter'], 'description' => 'For a LOCATION routine: run when the user leaves or arrives. Needs trigger_place or trigger_place_type.'],
             'trigger_place' => ['type' => 'string', 'description' => 'The name of one of the user\'s saved places (list_places), e.g. "Home".'],
             'trigger_place_type' => ['type' => 'string', 'description' => 'Or any place of a type: home, work, business, commute, private, other.'],
+            'trigger_sensor' => ['type' => 'string', 'description' => 'For a SENSOR routine: the sensor\'s name as the user chose it ("kitchen light"). It runs when a reading CROSSES the condition (needs trigger_sensor_op + trigger_sensor_value). The sensor reports itself to the web address from get_sensor_setup.'],
+            'trigger_sensor_op' => ['type' => 'string', 'enum' => ['below', 'above', 'is'], 'description' => 'below / above a number (light level, temperature), or "is" a state ("open", "on").'],
+            'trigger_sensor_value' => ['type' => 'string', 'description' => 'The number or state to compare with, e.g. "50" or "open".'],
             'conditions'  => [
                 'type' => 'object',
                 'description' => 'Optional. When it should (not) run. weekdays: ISO days 1=Mon..7=Sun. between: ["07:00","22:00"] local. cooldown_minutes. away: only when the user is NOT at home. others_away: only when nobody else in the household is home.',
@@ -72,6 +75,18 @@ final class RoutineSpec
             $f['run_mode'] = (string) $a['mode'];
         }
 
+        $sensor = trim((string) ($a['trigger_sensor'] ?? ''));
+        if ($sensor !== '') {
+            $cfg = SensorTrigger::normalize(['sensor' => $sensor, 'op' => $a['trigger_sensor_op'] ?? 'is', 'value' => $a['trigger_sensor_value'] ?? null]);
+            if ($cfg === null) {
+                return ['error' => 'A sensor routine needs trigger_sensor (its name), trigger_sensor_op (below / above / is) and trigger_sensor_value (a number, or a state like "open").'];
+            }
+            $f['trigger_config'] = $cfg;
+            $f['trigger_kind']   = 'sensor';
+
+            return ['fields' => $f];
+        }
+
         $placeName = trim((string) ($a['trigger_place'] ?? ''));
         $placeType = trim((string) ($a['trigger_place_type'] ?? ''));
         if ($placeName !== '' || $placeType !== '' || isset($a['trigger_event'])) {
@@ -93,6 +108,7 @@ final class RoutineSpec
                 return ['error' => 'A location routine needs trigger_place (a saved place) or trigger_place_type.'];
             }
             $f['trigger_config'] = $trigger;
+            $f['trigger_kind']   = 'place';
         }
 
         return ['fields' => $f];

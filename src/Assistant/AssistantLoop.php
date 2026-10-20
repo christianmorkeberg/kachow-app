@@ -272,6 +272,9 @@ final class AssistantLoop
     /** Diagnostics captured this turn (routing, tool calls, model, thoughts). */
     private ?array $lastDiagnostics = null;
 
+    /** Every tool call of the last handle() with its FULL arguments — what a routine records as its exact steps. @var list<array{name:string, args:array<string, mixed>, ok:bool}> */
+    private array $lastCalls = [];
+
     /** DB id of the user message persisted this turn (for "report this message"). */
     private ?int $lastUserMessageId = null;
 
@@ -428,6 +431,16 @@ final class AssistantLoop
         return $this->lastSuggestions;
     }
 
+    /**
+     * The tool calls the last handle() made, in order, with full arguments and whether each worked.
+     *
+     * @return list<array{name:string, args:array<string, mixed>, ok:bool}>
+     */
+    public function lastCalls(): array
+    {
+        return $this->lastCalls;
+    }
+
     /** Diagnostics from the last handle() call (routing, tool calls, model, thoughts). */
     public function lastDiagnostics(): ?array
     {
@@ -507,6 +520,7 @@ final class AssistantLoop
         $this->lastRender = null;
         $this->lastSuggestions = null;
         $this->lastAssistantMessageId = null;
+        $this->lastCalls = [];
 
         // One read of the history: the text turns the model replays, plus a digest of what
         // earlier turns created (tool rows are stored but never replayed — see ToolMemory).
@@ -794,6 +808,12 @@ final class AssistantLoop
                     }
                     unset($result['_render']);
                 }
+
+                $this->lastCalls[] = [
+                    'name' => (string) $call['name'],
+                    'args' => is_array($call['args']) ? $call['args'] : [],
+                    'ok'   => !(is_array($result) && isset($result['error'])),
+                ];
 
                 // Record the call in this turn's diagnostics (args truncated).
                 $argsJson = json_encode($call['args'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

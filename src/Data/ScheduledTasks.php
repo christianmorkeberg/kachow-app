@@ -215,7 +215,7 @@ final class ScheduledTasks
         $limit = max(1, min(200, $limit));
         $stmt  = $this->db->query(
             "SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week,
-                    interval_minutes, notify_always, next_run_at
+                    interval_minutes, notify_always, next_run_at, run_mode, steps
              FROM scheduled_tasks
              WHERE status = 'active' AND next_run_at <= UTC_TIMESTAMP()
              ORDER BY next_run_at ASC, id ASC
@@ -236,6 +236,8 @@ final class ScheduledTasks
                 'interval_minutes' => $r['interval_minutes'] !== null ? (int) $r['interval_minutes'] : null,
                 'notify_always'   => (bool) $r['notify_always'],
                 'next_run_at'     => (string) $r['next_run_at'],
+                'run_mode'        => (string) $r['run_mode'],
+                'steps'           => Routines::decodeList($r['steps']),
             ];
         }
 
@@ -469,7 +471,7 @@ final class ScheduledTasks
         };
         $items = [];
         foreach ($tasks as $t) {
-            $isRoutine = in_array($t['trigger_type'] ?? 'time', ['phrase', 'place'], true);
+            $isRoutine = in_array($t['trigger_type'] ?? 'time', ['phrase', 'place', 'sensor'], true);
             $items[] = [
                 'id'          => $t['id'],
                 'label'       => $t['label'],
@@ -484,6 +486,10 @@ final class ScheduledTasks
                 'conditions_text' => RoutineGate::describe($t['conditions'] ?? []),
                 'run_mode'    => $t['run_mode'] ?? 'auto',
                 'run_trigger' => $t['run_trigger'] ?? null,
+                'trigger'     => $t['trigger'] ?? [],
+                'conditions'  => $t['conditions'] ?? [],
+                'steps'       => count($t['steps'] ?? []),
+                'can_undo'    => $t['can_undo'] ?? false,
                 'once'        => $t['frequency'] === 'once',
                 'tell_always' => $t['notify_always'],
                 'next_run'    => $t['status'] === 'active' && $t['frequency'] !== 'event' ? $local($t['next_run_at'], 'D j M, H:i') : null,
@@ -501,6 +507,7 @@ final class ScheduledTasks
             'title' => 'Scheduled tasks',
             'items' => $items,
             // "Ask first" routines waiting for a yes / no (see Routines::pendingRequests)
+            'places'   => array_values(array_map(static fn ($id, $name): array => ['id' => (int) $id, 'name' => (string) $name], array_keys($placeNames), $placeNames)),
             'requests' => array_map(static fn (array $q): array => [
                 'id' => $q['id'], 'task_id' => $q['task_id'], 'label' => $q['label'], 'trigger_text' => $q['trigger_text'],
                 'at' => $local($q['created_at'], 'H:i'),
@@ -518,7 +525,7 @@ final class ScheduledTasks
         return 'SELECT id, user_id, conversation_id, label, instruction, frequency, time_of_day, day_of_week, interval_minutes,
                        notify_always, status, next_run_at, last_run_at, has_unseen_result, last_result_title,
                        last_summary, last_run_status, last_run_notified,
-                       trigger_type, phrases, trigger_config, conditions, run_mode, run_trigger
+                       trigger_type, phrases, trigger_config, conditions, run_mode, run_trigger, steps, undo_steps, undo_at
                 FROM scheduled_tasks';
     }
 
@@ -553,6 +560,8 @@ final class ScheduledTasks
             'conditions'       => (array) json_decode((string) ($r['conditions'] ?? ''), true),
             'run_mode'         => (string) ($r['run_mode'] ?? 'auto'),
             'run_trigger'      => $r['run_trigger'] ?? null,
+            'steps'            => Routines::decodeList($r['steps'] ?? null) ?? [],
+            'can_undo'         => ($r['undo_steps'] ?? null) !== null && ($r['undo_at'] ?? null) !== null && strtotime((string) $r['undo_at'] . ' UTC') > time() - 86400,
         ];
     }
 

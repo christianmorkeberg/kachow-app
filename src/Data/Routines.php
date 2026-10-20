@@ -6,6 +6,7 @@ namespace App\Data;
 
 use App\Database;
 use App\Support\RoutineGate;
+use App\Support\SensorTrigger;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -42,7 +43,7 @@ final class Routines
      */
     public function create(int $userId, int $conversationId, array $spec): int
     {
-        $type = $spec['trigger_type'] === 'place' ? 'place' : 'phrase';
+        $type = in_array($spec['trigger_type'], ['place', 'sensor'], true) ? $spec['trigger_type'] : 'phrase';
         $this->db->prepare(
             "INSERT INTO scheduled_tasks
                 (user_id, conversation_id, label, instruction, frequency, trigger_type, phrases, trigger_config, conditions,
@@ -55,7 +56,7 @@ final class Routines
             ':instr'  => trim($spec['instruction']),
             ':type'   => $type,
             ':phrases' => self::joinPhrases($spec['phrases'] ?? []),
-            ':cfg'    => $type === 'place' ? json_encode($spec['trigger_config'] ?? [], JSON_UNESCAPED_UNICODE) : null,
+            ':cfg'    => $type !== 'phrase' ? json_encode($spec['trigger_config'] ?? [], JSON_UNESCAPED_UNICODE) : null,
             ':cond'   => ($spec['conditions'] ?? []) === [] ? null : json_encode($spec['conditions'], JSON_UNESCAPED_UNICODE),
             ':mode'   => ($spec['run_mode'] ?? 'auto') === 'ask' ? 'ask' : 'auto',
             ':status' => ($spec['status'] ?? 'draft') === 'active' ? 'active' : 'draft',
@@ -86,12 +87,15 @@ final class Routines
         if (isset($fields['instruction']) && trim((string) $fields['instruction']) !== '') {
             $set[] = 'instruction = :instr';
             $p[':instr'] = trim((string) $fields['instruction']);
+            if (trim((string) $fields['instruction']) !== $r['instruction']) {
+                $set[] = 'steps = NULL';   // what it does changed: the recorded steps are stale, the next run records again
+            }
         }
         if (array_key_exists('phrases', $fields) && is_array($fields['phrases'])) {
             $set[] = 'phrases = :phrases';
             $p[':phrases'] = self::joinPhrases($fields['phrases']);
         }
-        if (array_key_exists('trigger_config', $fields) && is_array($fields['trigger_config']) && $r['trigger_type'] === 'place') {
+        if (array_key_exists('trigger_config', $fields) && is_array($fields['trigger_config']) && $r['trigger_type'] !== 'phrase') {
             $set[] = 'trigger_config = :cfg';
             $p[':cfg'] = json_encode($fields['trigger_config'], JSON_UNESCAPED_UNICODE);
         }
@@ -114,7 +118,7 @@ final class Routines
     /** How many phrase / place routines the user has (drafts and paused ones count; cancelled ones do not). */
     public function countAll(int $userId): int
     {
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM scheduled_tasks WHERE user_id = :u AND trigger_type IN ('phrase','place') AND status IN ('draft','active','paused')");
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM scheduled_tasks WHERE user_id = :u AND trigger_type IN ('phrase','place','sensor') AND status IN ('draft','active','paused')");
         $stmt->execute([':u' => $userId]);
 
         return (int) $stmt->fetchColumn();
@@ -146,7 +150,7 @@ final class Routines
      */
     public function get(int $userId, int $id): ?array
     {
-        $stmt = $this->db->prepare($this->select() . " WHERE user_id = :u AND id = :id AND trigger_type IN ('phrase','place')");
+        $stmt = $this->db->prepare($this->select() . " WHERE user_id = :u AND id = :id AND trigger_type IN ('phrase','place','sensor')");
         $stmt->execute([':u' => $userId, ':id' => $id]);
         $r = $stmt->fetch();
 
@@ -160,7 +164,7 @@ final class Routines
      */
     public function active(int $userId, ?string $triggerType = null): array
     {
-        $sql = $this->select() . " WHERE user_id = :u AND status = 'active' AND trigger_type IN ('phrase','place')";
+        $sql = $this->select() . " WHERE user_id = :u AND status = 'active' AND trigger_type IN ('phrase','place','sensor')";
         $p   = [':u' => $userId];
         if ($triggerType !== null) {
             $sql .= ' AND trigger_type = :t';
@@ -183,7 +187,7 @@ final class Routines
         if ($q === '') {
             return null;
         }
-        $stmt = $this->db->prepare($this->select() . " WHERE user_id = :u AND trigger_type IN ('phrase','place') AND status IN ('draft','active','paused') ORDER BY id DESC");
+        $stmt = $this->db->prepare($this->select() . " WHERE user_id = :u AND trigger_type IN ('phrase','place','sensor') AND status IN ('draft','active','paused') ORDER BY id DESC");
         $stmt->execute([':u' => $userId]);
         foreach ($stmt->fetchAll() as $row) {
             $r = self::row($row);
@@ -279,6 +283,87 @@ final class Routines
         $this->db->prepare('UPDATE scheduled_tasks SET run_requested_at = NULL WHERE id = :id')->execute([':id' => $id]);
     }
 
+    // ---------- recorded steps + undo ----------
+
+    /** Any task (time, phrase, place …) of this user in any status, decoded — or null. @return array<string, mixed>|null */
+    public function getAny(int $userId, int $id): ?array
+    {
+        $stmt = $this->db->prepare($this->select() . ' WHERE user_id = :u AND id = :id');
+        $stmt->execute([':u' => $userId, ':id' => $id]);
+        $r = $stmt->fetch();
+
+        return $r === false ? null : self::row($r);
+    }
+
+    /** Keeps (or with null forgets) the exact steps; forgetting also drops the undo, which belonged to them. @param list<array<string, mixed>>|null $steps */
+    public function saveSteps(int $id, ?array $steps): void
+    {
+        $this->db->prepare('UPDATE scheduled_tasks SET steps = :s' . ($steps === null ? ', undo_steps = NULL, undo_at = NULL' : '') . ' WHERE id = :id')
+            ->execute([':s' => $steps === null ? null : json_encode($steps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ':id' => $id]);
+    }
+
+    /** What would put things back after the last run (newest first); an empty list forgets it. @param list<array<string, mixed>> $undo */
+    public function saveUndo(int $id, array $undo): void
+    {
+        $this->db->prepare('UPDATE scheduled_tasks SET undo_steps = :u, undo_at = :at WHERE id = :id')
+            ->execute([':u' => $undo === [] ? null : json_encode($undo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ':at' => $undo === [] ? null : self::now(), ':id' => $id]);
+    }
+
+    /** Takes the undo (once): the steps, if there are any and the run was within $maxAgeHours. @return list<array<string, mixed>> */
+    public function takeUndo(int $userId, int $id, int $maxAgeHours = 24): array
+    {
+        $r = $this->getAny($userId, $id);
+        if ($r === null || $r['undo_steps'] === [] || $r['undo_at'] === null || strtotime($r['undo_at'] . ' UTC') < time() - $maxAgeHours * 3600) {
+            return [];
+        }
+        $this->saveUndo($id, []);
+
+        return $r['undo_steps'];
+    }
+
+    /** The newest routine / task of this user with something to undo, within $maxAgeHours — for "undo that" without a name. @return array<string, mixed>|null */
+    public function lastUndoable(int $userId, int $maxAgeHours = 24): ?array
+    {
+        $stmt = $this->db->prepare($this->select() . ' WHERE user_id = :u AND undo_steps IS NOT NULL AND undo_at >= :old ORDER BY undo_at DESC, id DESC LIMIT 1');
+        $stmt->execute([':u' => $userId, ':old' => gmdate('Y-m-d H:i:s', time() - $maxAgeHours * 3600)]);
+        $r = $stmt->fetch();
+
+        return $r === false ? null : self::row($r);
+    }
+
+    /** Ask-first on or off for any recurring task or routine (a one-off cannot ask: its slot is gone once it is claimed). */
+    public function setRunMode(int $userId, int $id, string $mode): bool
+    {
+        $r = $this->getAny($userId, $id);
+        if ($r === null || !in_array($mode, ['auto', 'ask'], true) || ($mode === 'ask' && $r['frequency'] === 'once')) {
+            return false;
+        }
+        $this->db->prepare('UPDATE scheduled_tasks SET run_mode = :m WHERE id = :id AND user_id = :u')->execute([':m' => $mode, ':id' => $id, ':u' => $userId]);
+
+        return true;
+    }
+
+    // ---------- sensor state (was the condition true at the last reading) ----------
+
+    public function sensorState(int $taskId): ?bool
+    {
+        $stmt = $this->db->prepare('SELECT matched FROM routine_sensor_state WHERE task_id = :t');
+        $stmt->execute([':t' => $taskId]);
+        $v = $stmt->fetchColumn();
+
+        return $v === false ? null : (bool) $v;
+    }
+
+    public function saveSensorState(int $taskId, bool $matched, string $value): void
+    {
+        $u = $this->db->prepare('UPDATE routine_sensor_state SET matched = :m, last_value = :v, updated_at = :at WHERE task_id = :t');
+        $u->execute([':m' => $matched ? 1 : 0, ':v' => mb_substr($value, 0, 40), ':at' => self::now(), ':t' => $taskId]);
+        if ($u->rowCount() === 0 && $this->sensorState($taskId) === null) {
+            $this->db->prepare('INSERT INTO routine_sensor_state (task_id, matched, last_value, updated_at) VALUES (:t, :m, :v, :at)')
+                ->execute([':t' => $taskId, ':m' => $matched ? 1 : 0, ':v' => mb_substr($value, 0, 40), ':at' => self::now()]);
+        }
+    }
+
     // ---------- place state (enter / leave detection) ----------
 
     /** @return array{inside:bool, streak:int}|null */
@@ -366,7 +451,8 @@ final class Routines
     private function select(): string
     {
         return 'SELECT id, user_id, conversation_id, label, instruction, frequency, trigger_type, phrases, trigger_config, conditions,
-                       run_mode, status, notify_always, run_requested_at, run_trigger, last_run_at, last_run_status, last_summary, created_at
+                       run_mode, status, notify_always, run_requested_at, run_trigger, last_run_at, last_run_status, last_summary, created_at,
+                       steps, undo_steps, undo_at
                 FROM scheduled_tasks';
     }
 
@@ -386,6 +472,7 @@ final class Routines
             'label'           => (string) $r['label'],
             'instruction'     => (string) $r['instruction'],
             'trigger_type'    => (string) $r['trigger_type'],
+            'frequency'       => (string) ($r['frequency'] ?? ''),
             'phrases'         => self::splitPhrases((string) ($r['phrases'] ?? '')),
             'trigger'         => is_array($cfg) ? $cfg : [],
             'conditions'      => is_array($cond) ? $cond : [],
@@ -397,7 +484,18 @@ final class Routines
             'last_run_at'     => $r['last_run_at'] !== null ? (string) $r['last_run_at'] : null,
             'last_run_status' => $r['last_run_status'] !== null ? (string) $r['last_run_status'] : null,
             'last_summary'    => $r['last_summary'] !== null ? (string) $r['last_summary'] : null,
+            'steps'           => self::decodeList($r['steps'] ?? null),
+            'undo_steps'      => self::decodeList($r['undo_steps'] ?? null) ?? [],
+            'undo_at'         => ($r['undo_at'] ?? null) !== null ? (string) $r['undo_at'] : null,
         ];
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    public static function decodeList(mixed $json): ?array
+    {
+        $d = is_string($json) && $json !== '' ? json_decode($json, true) : null;
+
+        return is_array($d) && $d !== [] ? array_values($d) : null;
     }
 
     /** @param list<string> $phrases */
@@ -454,6 +552,9 @@ final class Routines
             return 'Say: ' . implode(' / ', array_map(static fn (string $p): string => '“' . $p . '”', $r['phrases'] ?? []));
         }
         $t     = $r['trigger'] ?? [];
+        if (($r['trigger_type'] ?? '') === 'sensor') {
+            return 'When ' . lcfirst(SensorTrigger::describe($t));
+        }
         $names = [];
         foreach ($t['place_ids'] ?? [] as $id) {
             $names[] = $placeNames[$id] ?? ('place ' . $id);

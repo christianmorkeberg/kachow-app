@@ -172,7 +172,8 @@ final class ToolRegistry
         $registry->register(new GetHomeAgentSetup($apiTokens, $homeOwner));
         $agentCommands = new AgentCommands();
         $hueSync       = new HueSync(new HomeDevices(), HueSync::viaAgent($agentCommands));
-        $registry->register(new HomeDeviceCall($agentCommands, $apiTokens, $hueSync, $homeOwner));
+        $homeCall = new HomeDeviceCall($agentCommands, $apiTokens, $hueSync, $homeOwner);
+        $registry->register($homeCall);
         $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner));
         $locationPoints = new LocationPoints();
         $places         = new Places();
@@ -262,7 +263,7 @@ final class ToolRegistry
         $registry->register(new ListReminders($reminders));
         $registry->register(new CancelReminder($reminders));
         $scheduledTasks = new ScheduledTasks();
-        $registry->register(new ScheduleTask($scheduledTasks, new Conversations(), new PushSubscriptions()));
+        $registry->register(new ScheduleTask($scheduledTasks, new Conversations(), new PushSubscriptions(), new Routines()));
         $systemTasks = new SystemTasks();
         $registry->register(new ListScheduledTasks($scheduledTasks, $systemTasks, $users));
         $registry->register(new SetScheduledTaskActive($scheduledTasks, $systemTasks, $users));
@@ -273,6 +274,8 @@ final class ToolRegistry
         $registry->register(new CreateRoutine($routines, $scheduledTasks, new Conversations(), new Places()));
         $registry->register(new UpdateRoutine($routines, $scheduledTasks, new Places()));
         $registry->register(new RunRoutine($routines));
+        $registry->register(new GetSensorSetup($apiTokens));
+        $registry->register(new UndoRoutine($routines, $homeCall));
         $feedback = new FeedbackReports();
         $registry->register(new ListFeedback($users, $feedback));
         $registry->register(new ResolveFeedback($users, $feedback));
