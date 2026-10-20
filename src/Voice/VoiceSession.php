@@ -47,6 +47,7 @@ final class VoiceSession
         string $agenda = '',
         ?DateTimeImmutable $now = null,
         string $language = 'auto',
+        array $stopWords = [],
     ): array {
         $language = self::language($language);
         $speech   = ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice !== '' ? $voice : self::DEFAULT_VOICE]]];
@@ -60,7 +61,7 @@ final class VoiceSession
                 'responseModalities' => ['AUDIO'],
                 'speechConfig'       => $speech,
             ],
-            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now, $language)]]],
+            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now, $language, $stopWords)]]],
             'tools'                    => [['functionDeclarations' => VoiceTools::declarations($registry, $toolMode)]],
             'inputAudioTranscription'  => new \stdClass(),
             'outputAudioTranscription' => new \stdClass(),
@@ -83,6 +84,37 @@ final class VoiceSession
         return str_starts_with(strtolower(trim($browserHint)), 'da') ? 'da' : 'en';
     }
 
+    /**
+     * The words that end a voice conversation, from the voice_stop_words setting: comma / newline separated, lower-cased,
+     * unique, at most 20, each at most 40 characters.
+     *
+     * @return list<string>
+     */
+    public static function stopWords(?string $setting): array
+    {
+        $out = [];
+        foreach (preg_split('/[,\n;]+/', mb_strtolower((string) $setting)) ?: [] as $w) {
+            $w = trim(preg_replace('/\s+/u', ' ', $w) ?? $w);
+            if ($w !== '' && mb_strlen($w) <= 40 && !in_array($w, $out, true)) {
+                $out[] = $w;
+            }
+            if (count($out) >= 20) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /** @param list<string> $words */
+    public static function stopWordsRule(array $words): string
+    {
+        $list = $words === [] ? '' : ' (for example: "' . implode('", "', $words) . '")';
+
+        return 'ENDING THE CONVERSATION: when the user says goodbye or wants to stop talking' . $list . ', say ONE very short goodbye in their language '
+            . 'and then call ' . VoiceTools::END . '. Only then — never end it on your own, and never because of a word inside a longer request.';
+    }
+
     /** 'auto' (English or Danish, following the user), 'en' or 'da'. */
     public static function language(?string $v): string
     {
@@ -95,7 +127,7 @@ final class VoiceSession
      * @param list<array{content:string}> $memories
      * @param list<array{instruction:string}> $instructions
      */
-    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null, string $language = 'auto'): string
+    public static function prompt(array $memories, array $instructions, string $agenda, ?DateTimeImmutable $now = null, string $language = 'auto', array $stopWords = []): string
     {
         $lang = match (self::language($language)) {
             'en'    => 'LANGUAGE: always speak English, whatever language the user uses.',
@@ -125,6 +157,7 @@ final class VoiceSession
             . "not do it on the first call but tell you to ask — then ask ONE short question naming exactly what goes (\"Delete the potato "
             . "event at five?\"), and only on a clear yes call it again with the same arguments. For deleting other kinds of things use "
             . VoiceTools::GATEWAY . " and relay its question.\n\n"
+            . self::stopWordsRule($stopWords) . "\n\n"
             . AssistantLoop::nowLine($now);
 
         if ($agenda !== '') {

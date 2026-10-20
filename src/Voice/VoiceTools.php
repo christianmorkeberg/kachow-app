@@ -18,6 +18,9 @@ final class VoiceTools
 {
     public const GATEWAY = 'ask_kachow';
 
+    /** Handled by the browser, not the server: it closes the voice session (stop words: "farvel", "goodbye" …). */
+    public const END = 'end_conversation';
+
     /** Answer within about a second. */
     public const FAST = [
         'get_calendar_events', 'insert_calendar_event', 'update_calendar_event',
@@ -95,8 +98,20 @@ final class VoiceTools
             $out[] = self::withBehavior($d, $mode);
         }
         $out[] = self::withBehavior(self::gatewayDeclaration(), $mode);
+        $out[] = self::endDeclaration();
 
         return $out;
+    }
+
+    /** @return array<string, mixed> */
+    public static function endDeclaration(): array
+    {
+        return [
+            'name'        => self::END,
+            'description' => 'Ends the voice conversation. Call it right after a very short goodbye, when the user says goodbye or one of their stop words, '
+                . 'or clearly wants to stop talking. Never call it for any other reason.',
+            'behavior'    => 'BLOCKING',
+        ];
     }
 
     /** @return array<string, mixed> */

@@ -171,6 +171,12 @@ final class UserSettings
                 . 'route and places), calendar (this month), cycle, books, moms, cash, pl (profit & loss), mileage, scheduled_tasks. '
                 . 'Empty = the default rail.',
         ],
+        'voice_stop_words' => [
+            'default'     => 'farvel, stop tale, hej hej, det var det, tak for nu, goodbye, bye bye, stop talking, that\'s all',
+            'label'       => 'Voice stop words',
+            'description' => 'Voice mode: words or short phrases that end the conversation (comma separated; Danish and English), e.g. '
+                . '"farvel, stop tale, goodbye". Saying one ends the voice session after a short goodbye.',
+        ],
         'voice_language' => [
             'default'     => 'auto',
             'label'       => 'Voice language',
