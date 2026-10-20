@@ -28,7 +28,7 @@ final class GetLocationDay implements Tool
 
     public function description(): string
     {
-        return 'The user\'s day from location tracking (OwnTracks): a map card plus the TIMELINE — stays '
+        return 'The user\'s day from location tracking (OwnTracks): ONE Location card (a Day tab with the map and TIMELINE; a Places tab with the saved places, one tap away) plus the TIMELINE — stays '
             . '(where they were, from–to, by saved place name or "unnamed place") and trips between them (km, '
             . 'minutes, mode walk/bike/vehicle — car and train look alike), time per saved place (in_places), '
             . 'and data-quality stats (points, interval, gaps, accuracy, battery). Use for "what did I do '

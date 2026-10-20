@@ -134,7 +134,7 @@ final class WorkEvents
     public function eventsWithSource(int $userId, string $fromUtc, string $toUtc): array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, kind, occurred_at, location, source FROM work_events
+            'SELECT id, kind, occurred_at, location, source, note FROM work_events
              WHERE user_id = :u AND occurred_at >= :from AND occurred_at < :to
              ORDER BY occurred_at ASC, id ASC'
         );
@@ -445,6 +445,11 @@ final class WorkEvents
                 $displaySessions[] = [
                     'in_id'    => $s['in_id'],
                     'out_id'   => $s['out_id'],
+                    // Who made the punches: 'location' (the automatic work clock), 'assistant' (chat / voice), or another source
+                    // (a Shortcut …). The only honest answer to "how did this get here?".
+                    'in_source'  => $s['in_source'] ?? null,
+                    'out_source' => $s['out_source'] ?? null,
+                    'in_note'    => $s['in_note'] ?? null,   // e.g. "Working from home"
                     'place'    => $s['location'],
                     'day'      => $this->toLocal($s['in'])->format('D j M'),
                     'date'     => $this->toLocal($s['in'])->format('Y-m-d'),
@@ -974,6 +979,9 @@ final class WorkEvents
                         'out'    => $e['occurred_at'],
                         'in_id'  => $openIn['id'],
                         'out_id' => $e['id'],
+                        'in_source'  => $openIn['source'] ?? null,
+                        'out_source' => $e['source'] ?? null,
+                        'in_note'    => $openIn['note'] ?? null,
                     ];
                     $openIn = null;
                 }
@@ -981,7 +989,7 @@ final class WorkEvents
             }
         }
         if ($openIn !== null) {
-            $sessions[] = ['in' => $openIn['occurred_at'], 'out' => null, 'in_id' => $openIn['id'], 'out_id' => null];
+            $sessions[] = ['in' => $openIn['occurred_at'], 'out' => null, 'in_id' => $openIn['id'], 'out_id' => null, 'in_source' => $openIn['source'] ?? null, 'out_source' => null, 'in_note' => $openIn['note'] ?? null];
         }
 
         return $sessions;
@@ -993,7 +1001,7 @@ final class WorkEvents
     private function eventsBetween(int $userId, string $fromUtc, string $toUtc): array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, kind, occurred_at, location FROM work_events
+            'SELECT id, kind, occurred_at, location, source, note FROM work_events
              WHERE user_id = :u AND occurred_at >= :from AND occurred_at < :to
              ORDER BY occurred_at ASC, id ASC'
         );

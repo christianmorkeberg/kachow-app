@@ -25,7 +25,8 @@ final class LogWorkEvent implements Tool
      */
     private array $touchedDates = [];
 
-    public function __construct(private WorkEvents $events)
+    /** @param (callable(int): bool)|null $atHome whether the user is at a home place right now (location tracking) */
+    public function __construct(private WorkEvents $events, private $atHome = null)
     {
     }
 
@@ -174,6 +175,12 @@ final class LogWorkEvent implements Tool
 
                 return ['recorded' => false, 'error' => 'More than one session is open (' . implode(', ', $names) . '). Ask which workplace they are leaving, then call again with place.'];
             }
+        }
+
+        // A clock-in made from chat while location tracking says the user is at a home place is a work-from-home punch: say so in
+        // the note (unless they gave one), so the hours can later explain themselves (report #49).
+        if ($kind === 'in' && $atUtc === null && ($note === null || trim($note) === '') && $this->atHome !== null && ($this->atHome)($userId)) {
+            $note = 'Working from home';
         }
 
         try {
