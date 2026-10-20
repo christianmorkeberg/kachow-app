@@ -57,8 +57,8 @@ final class UpdateRoutine implements Tool
             return ['error' => $parsed['error']];
         }
         $fields = $parsed['fields'];
-        if (isset($fields['trigger_config']) && $r['trigger_type'] !== 'place') {
-            return ['error' => 'That is a say-a-phrase routine, not a location one — create a new routine for a place trigger.'];
+        if (isset($fields['trigger_config']) && ($fields['trigger_kind'] ?? '') !== $r['trigger_type']) {
+            return ['error' => 'That is a ' . $r['trigger_type'] . ' routine — a different kind of trigger needs a new routine.'];
         }
         $this->routines->update($userId, $r['id'], $fields);
 

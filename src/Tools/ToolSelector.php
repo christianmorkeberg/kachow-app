@@ -123,7 +123,7 @@ final class ToolSelector
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
             'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
-            'create_routine', 'update_routine', 'run_routine',
+            'create_routine', 'update_routine', 'run_routine', 'undo_routine', 'get_sensor_setup',
         ],
         // Tracked movement (OwnTracks raw points; private per user).
         'location' => [
@@ -445,7 +445,7 @@ final class ToolSelector
             // Routines (create_routine / run_routine): "when I say X do Y", "when I leave home …"
             'routine', 'routines', 'rutine', 'rutiner', 'automation', 'automatisering', 'when i say', 'when i leave', 'when i arrive',
             'when i get home', 'when i go to', 'når jeg siger', 'når jeg forlader', 'når jeg går', 'når jeg kommer hjem',
-            'i\'m leaving', 'im leaving', 'i am leaving', 'i\'m home', 'im home', 'jeg smutter', 'jeg går nu', 'jeg er hjemme', 'good night routine',
+            'i\'m leaving', 'im leaving', 'i am leaving', 'i\'m home', 'im home', 'jeg smutter', 'jeg går nu', 'jeg er hjemme', 'good night routine', 'sensor', 'light level', 'lysniveau', 'light sensor', 'lyssensor', 'undo that', 'undo it', 'put it back', 'put them back', 'fortryd', 'sæt det tilbage',
             // Danish
             'mind mig', 'påmind', 'paamind', 'påmindelse', 'glem ikke at minde', 'husk mig på', 'husk mig pa',
             'hver dag', 'hver uge', 'hver time', 'tilbagevendende', 'planlagt opgave',

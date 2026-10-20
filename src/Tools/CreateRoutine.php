@@ -31,11 +31,11 @@ final class CreateRoutine implements Tool
     public function description(): string
     {
         return 'Creates a ROUTINE: something the assistant does for the user when they SAY a phrase ("I\'m leaving" → lights off, heating down), '
-            . 'when they LEAVE or ARRIVE at a saved place, or both — optionally only under conditions (weekdays, a time window, only when away, '
+            . 'when they LEAVE or ARRIVE at a saved place, when a SENSOR reading crosses a value (light level below 50, a window opens), or both — optionally only under conditions (weekdays, a time window, only when away, '
             . 'only if nobody else is home) and optionally asking first. Use for "make a routine…", "when I say X, do Y", "when I leave home, …", '
             . '"når jeg forlader …, så …", "lav en rutine". Give a name, an `instruction` (exactly what to do, self-contained — the future run has '
             . 'all your tools but nobody is watching), the `phrases` the user will say, and for a location routine trigger_event + trigger_place (or '
-            . 'trigger_place_type). It is saved as a DRAFT and the card shows it for the user to Save — tell them to tap Save, or save=true when they '
+            . 'trigger_place_type), or for a sensor trigger_sensor + trigger_sensor_op + trigger_sensor_value. It is saved as a DRAFT and the card shows it for the user to Save — tell them to tap Save, or save=true when they '
             . 'already said "yes, save it". For a time schedule ("every weekday at 7") use schedule_task instead. Never put irreversible actions '
             . '(deleting, sending, unlocking) in a routine unless the user explicitly asked for them.';
     }
@@ -61,10 +61,11 @@ final class CreateRoutine implements Tool
         if (($f['label'] ?? '') === '' || ($f['instruction'] ?? '') === '') {
             return ['error' => 'A routine needs a name and an instruction (what to do).'];
         }
-        $isPlace  = isset($f['trigger_config']);
+        $kind     = $f['trigger_kind'] ?? null;
+        $isPlace  = $kind !== null;
         $phrases  = $f['phrases'] ?? [];
         if (!$isPlace && $phrases === []) {
-            return ['error' => 'A routine needs something to start it: the phrases the user will say, or a place to leave / arrive at.'];
+            return ['error' => 'A routine needs something to start it: the phrases the user will say, a place to leave / arrive at, or a sensor.'];
         }
         if ($this->routines->countAll($userId) >= self::MAX_PER_USER) {
             return ['error' => 'They already have ' . self::MAX_PER_USER . ' routines — remove one first.'];
@@ -74,7 +75,7 @@ final class CreateRoutine implements Tool
         $conv = $this->conversations->start($userId);
         $this->conversations->setTitle($userId, $conv, 'Routine: ' . $f['label']);
         $id = $this->routines->create($userId, $conv, [
-            'label' => $f['label'], 'instruction' => $f['instruction'], 'trigger_type' => $isPlace ? 'place' : 'phrase',
+            'label' => $f['label'], 'instruction' => $f['instruction'], 'trigger_type' => $kind ?? 'phrase',
             'phrases' => $phrases, 'trigger_config' => $f['trigger_config'] ?? [], 'conditions' => $f['conditions'] ?? [],
             'run_mode' => $f['run_mode'] ?? 'auto', 'status' => $save ? 'active' : 'draft',
         ]);

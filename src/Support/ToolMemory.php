@@ -123,8 +123,7 @@ final class ToolMemory
         }
         $err = is_array($last) && is_string($last['error'] ?? null) ? $last['error'] : '';
 
-        return $err !== '' && (str_contains($err, 'never connected') || str_contains($err, 'is offline')
-            || str_contains($err, 'No answer from the home agent'));
+        return $err !== '' && RoutineSteps::unreachable($err);
     }
 
     private const HOME_MAX_ENTRIES = 60;
