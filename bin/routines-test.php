@@ -17,6 +17,7 @@ use App\Data\ScheduledTasks;
 use App\Tools\CreateRoutine;
 use App\Tools\RunRoutine;
 use App\Tools\UpdateRoutine;
+use App\Notify\RoutinePlaceRunner;
 use App\Support\BackgroundRun;
 use App\Support\Household;
 use App\Voice\VoiceTools;
@@ -165,6 +166,30 @@ echo "5) household and background runs\n";
 check('nobody could be judged → unknown; anyone known home → true; all known away → false', Household::summarize([]) === null && Household::summarize([null, null]) === null
     && Household::summarize([false, true, null]) === true && Household::summarize([false, null]) === false);
 check('a background kick needs an existing script (and exec); otherwise it is a quiet no-op', BackgroundRun::kick('/nonexistent/script.php') === false);
+
+echo "6) place routines from a stream of positions\n";
+$u = 3;
+$places->add($u, ['name' => 'Flat', 'type' => 'home', 'shape' => 'circle', 'lat' => 56.0, 'lon' => 13.0, 'radius_m' => 85]);
+$campusPoly = $places->add($u, ['name' => 'Campus', 'type' => 'work', 'shape' => 'polygon', 'polygon' => [[56.05, 13.05], [56.05, 13.06], [56.06, 13.06], [56.06, 13.05]]]);
+$leave = $R->create($u, 30, ['label' => 'Left home', 'instruction' => 'Lights off.', 'trigger_type' => 'place', 'trigger_config' => Routines::normalizePlaceTrigger(['event' => 'leave', 'place_types' => ['home']]), 'status' => 'active']);
+$arrive = $R->create($u, 31, ['label' => 'At campus', 'instruction' => 'Say hi.', 'trigger_type' => 'place', 'trigger_config' => Routines::normalizePlaceTrigger(['event' => 'enter', 'place_ids' => [$campusPoly['id']]]), 'status' => 'active']);
+$kicks = 0;
+$now = 1_800_000_000;
+$runner = new RoutinePlaceRunner($R, $places, static function () use (&$kicks): void { $kicks++; }, $now);
+$pt = static fn (int $ago, float $lat, float $lon, ?int $acc = 10, ?int $vel = 0): array => ['ts' => $now - $ago, 'lat' => $lat, 'lon' => $lon, 'acc' => $acc, 'vel' => $vel];
+check('at home: only the baseline is stored, nothing starts', $runner->onPoints($u, [$pt(600, 56.0, 13.0)]) === [] && $kicks === 0);
+check('one point outside is not leaving', $runner->onPoints($u, [$pt(480, 56.01, 13.01)]) === []);
+$got = $runner->onPoints($u, [$pt(360, 56.012, 13.012)]);
+check('the second accurate point outside = left: the routine is requested and the runner started', $got === [$leave] && $kicks === 1
+    && array_values(array_filter($R->requested(), static fn (array $x): bool => $x['id'] === $leave))[0]['run_trigger'] === 'you left Flat');
+check('no second run while the first waits, and none for further points outside', $runner->onPoints($u, [$pt(240, 56.02, 13.02), $pt(120, 56.03, 13.03)]) === []);
+$R->claimRequest($leave);
+check('driving into the campus polygon fast is not arriving; a slow accurate point in it is', $runner->onPoints($u, [$pt(100, 56.055, 13.055, 10, 70)]) === [] && $runner->onPoints($u, [$pt(90, 56.055, 13.055, 10, 4)]) === [$arrive]);
+check('arriving home does not start a LEAVE routine; leaving again later does', $runner->onPoints($u, [$pt(80, 56.0, 13.0, 10, 3)]) === [] && $runner->onPoints($u, [$pt(70, 56.02, 13.02), $pt(60, 56.021, 13.021)]) === [$leave]);
+$R->claimRequest($leave);
+$old = new RoutinePlaceRunner($R, $places, static function () use (&$kicks): void { $kicks++; }, $now + 7200);
+check('positions older than half an hour update the state but start nothing', $old->onPoints($u, [$pt(0, 56.0, 13.0, 10, 3), $pt(-1, 56.02, 13.02), $pt(-2, 56.021, 13.021)]) === []);
+check('a user with no place routines costs nothing', $runner->onPoints(99, [$pt(10, 56.0, 13.0)]) === []);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
