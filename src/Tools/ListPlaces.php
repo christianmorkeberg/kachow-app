@@ -21,7 +21,7 @@ final class ListPlaces implements Tool
 
     public function description(): string
     {
-        return 'Lists the user\'s saved places (name, type, circle radius or polygon) and opens the places map card, '
+        return 'Lists the user\'s saved places (name, type, circle radius or polygon) and opens the Location card on its Places tab (the same card as the day view: a Day | Places switch, one shared map), '
             . 'where they can add a place by tapping the map, resize a circle, draw a polygon, or delete one. Use '
             . 'for "my places", "show/edit my places", "mine steder", or when they want to draw a place.';
     }
