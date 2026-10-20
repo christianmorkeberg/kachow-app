@@ -429,7 +429,7 @@ final class UserSettings
     }
 
     /**
-     * Canonical home_cards: lower-case keys from HOME_CARD_KEYS only, in the order given, no duplicates, at most 6, comma-separated.
+     * Canonical home_cards: lower-case keys from HOME_CARD_KEYS only, in the order given, no duplicates, comma-separated.
      * Unknown words are dropped.
      */
     public static function normalizeHomeCards(?string $value): string
@@ -439,9 +439,6 @@ final class UserSettings
             $k = str_replace('-', '_', $k);
             if (in_array($k, self::HOME_CARD_KEYS, true) && !in_array($k, $out, true)) {
                 $out[] = $k;
-            }
-            if (count($out) >= 6) {
-                break;
             }
         }
 
