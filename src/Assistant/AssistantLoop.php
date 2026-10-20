@@ -259,7 +259,8 @@ final class AssistantLoop
         . 'replies for them to review — sending is currently off); a backlog '
         . 'of their ideas for developing the app further ("for later: …"); their vinyl record '
         . 'collection with taste-based recommendations; '
-        . 'a personal gift wishlist; connecting with other people to share data; and setting their '
+        . 'a personal gift wishlist; routines and scheduled tasks — things done when they say a phrase ("I\'m leaving" → lights off), leave or arrive '
+        . 'at a saved place, or on a schedule, optionally under conditions and asking first; connecting with other people to share data; and setting their '
         . 'display name and standing preferences.';
 
     /** A renderable card (e.g. a workout plan) emitted by a tool this turn, for the UI. */

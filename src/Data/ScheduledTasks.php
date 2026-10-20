@@ -383,7 +383,14 @@ final class ScheduledTasks
             }
         }
 
-        return self::card($this->listForCard($userId), $system, $names);
+        $requests = [];
+        try {
+            $requests = (new Routines($this->db))->pendingRequests($userId);
+        } catch (\Throwable) {
+            // not migrated yet: no questions
+        }
+
+        return self::card($this->listForCard($userId), $system, $names, $requests);
     }
 
     /**
@@ -454,7 +461,7 @@ final class ScheduledTasks
      * @param list<array<string, mixed>>|null $system null for a non-developer (no system section)
      * @return array<string, mixed>
      */
-    public static function card(array $tasks, ?array $system = null, array $placeNames = []): array
+    public static function card(array $tasks, ?array $system = null, array $placeNames = [], array $requests = []): array
     {
         $tz    = new DateTimeZone(self::LOCAL_TZ);
         $local = static function (?string $utc, string $fmt) use ($tz): ?string {
@@ -493,6 +500,11 @@ final class ScheduledTasks
             'kind'  => 'scheduled_tasks',
             'title' => 'Scheduled tasks',
             'items' => $items,
+            // "Ask first" routines waiting for a yes / no (see Routines::pendingRequests)
+            'requests' => array_map(static fn (array $q): array => [
+                'id' => $q['id'], 'task_id' => $q['task_id'], 'label' => $q['label'], 'trigger_text' => $q['trigger_text'],
+                'at' => $local($q['created_at'], 'H:i'),
+            ], $requests),
         ];
         if ($system !== null) {
             $card['system'] = $system;
