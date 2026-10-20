@@ -168,8 +168,8 @@ final class UserSettings
             'label'       => 'Start cards',
             'description' => 'Which cards the app shows on the start screen and keeps one tap away in the card rail (desktop): a comma-separated '
                 . 'list, the FIRST one opens at start. Allowed: work_hours (today\'s hours), work_week (last week), work_log, location (today\'s '
-                . 'route and places), calendar (this month), cycle, books, moms, cash, pl (profit & loss), mileage, scheduled_tasks. '
-                . 'Empty = the default rail.',
+                . 'route and places), calendar (this month), cycle, books, moms, cash, pl (profit & loss), mileage, scheduled_tasks, feedback (reports, developer only), dev_ideas (the ideas list). '
+                . 'Empty = the default rail. When the user wants to SET / CHOOSE their start cards, do not ask them to type names: call get_settings with show_card=true and card="home_cards" (a picker card opens, and NOT the personality card).',
         ],
         'voice_stop_words' => [
             'default'     => 'farvel, stop tale, hej hej, det var det, tak for nu, goodbye, bye bye, stop talking, that\'s all',
@@ -417,8 +417,16 @@ final class UserSettings
 
     /** The cards the start screen / rail can show (see the home_cards setting). */
     public const HOME_CARD_KEYS = [
-        'work_hours', 'work_week', 'work_log', 'location', 'calendar', 'cycle', 'books', 'moms', 'cash', 'pl', 'mileage', 'scheduled_tasks',
+        'work_hours', 'work_week', 'work_log', 'location', 'calendar', 'cycle', 'books', 'moms', 'cash', 'pl', 'mileage', 'scheduled_tasks', 'feedback', 'dev_ideas',
     ];
+
+    /** The start-cards card: which cards are chosen (in order); the card lets the user pick and order them. @return array<string, mixed> */
+    public static function homeCardsCard(string $saved): array
+    {
+        $chosen = self::normalizeHomeCards($saved);
+
+        return ['kind' => 'home_cards', 'title' => 'Start cards', 'chosen' => $chosen === '' ? [] : explode(',', $chosen), 'options' => self::HOME_CARD_KEYS];
+    }
 
     /**
      * Canonical home_cards: lower-case keys from HOME_CARD_KEYS only, in the order given, no duplicates, at most 6, comma-separated.

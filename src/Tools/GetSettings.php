@@ -26,7 +26,7 @@ final class GetSettings implements Tool
             . 'name is used for work-log tracking). Use for "what are my settings?", "which calendar do '
             . 'you use for work?", Danish "hvilke indstillinger har jeg?", "hvilken kalender bruger du '
             . 'til mit arbejde?". It is a LOOKUP: it only opens the settings card on screen when show_card is true — set that '
-            . 'ONLY when the user asked to SEE or open their settings; when you are just reading a value to answer a question or before '
+            . 'ONLY when the user asked to SEE or open their settings (or to pick their start / default cards: then also pass card="home_cards"); when you are just reading a value to answer a question or before '
             . 'changing one, leave it out (the card would pop up for no reason).';
     }
 
@@ -36,6 +36,7 @@ final class GetSettings implements Tool
             'type'       => 'object',
             'properties' => [
                 'show_card' => ['type' => 'boolean', 'description' => 'True only when the user asked to see/open their settings: shows the settings card.'],
+                'card'      => ['type' => 'string', 'enum' => ['personality', 'home_cards'], 'description' => 'Which card to show with show_card: "home_cards" when they want to set / choose their START or DEFAULT cards (opens a picker — do not ask them to type card names); otherwise "personality" (default).'],
             ],
             'required'   => [],
         ];
@@ -48,7 +49,9 @@ final class GetSettings implements Tool
         // something else must not throw a card onto the screen (reports #45, #47, #49).
         if (filter_var($arguments['show_card'] ?? false, FILTER_VALIDATE_BOOL)) {
             $out['note']    = 'The app displays a personality slider card. Give a brief spoken summary of the settings — do not re-list every setting as text.';
-            $out['_render'] = UserSettings::personalityCard($this->settings->get($userId, 'personality') ?? '2');
+            $out['_render'] = ($arguments['card'] ?? '') === 'home_cards'
+                ? UserSettings::homeCardsCard($this->settings->get($userId, 'home_cards') ?? '')
+                : UserSettings::personalityCard($this->settings->get($userId, 'personality') ?? '2');
         }
 
         return $out;

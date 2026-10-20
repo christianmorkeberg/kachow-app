@@ -106,6 +106,8 @@ final class UpdateSetting implements Tool
             $result['_render'] = UserSettings::personalityCard((string) $result['value']);
         } elseif (in_array($key, ['theme', 'theme_dark', 'theme_light'], true)) {
             $result['_render'] = $this->settings->appearance($userId);
+        } elseif ($key === 'home_cards') {
+            $result['_render'] = UserSettings::homeCardsCard((string) $result['value']);
         }
 
         return $result;
