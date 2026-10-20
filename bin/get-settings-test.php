@@ -36,5 +36,12 @@ check('show_card opens the settings card', ($shown['_render']['kind'] ?? '') ===
 check('"false" as a string does not', !isset($tool->execute(['show_card' => 'false'], 1)['_render']));
 check('the schema offers show_card', isset($tool->parameters()['properties']['show_card']));
 
+check('home_cards: known keys only, in order, no duplicates, max 6',
+    UserSettings::normalizeHomeCards('Work_Hours, bogus, location work-hours;books moms cash pl mileage') === 'work_hours,location,books,moms,cash,pl'
+    && UserSettings::normalizeHomeCards('nope') === '' && UserSettings::normalizeHomeCards(null) === '');
+$us = new UserSettings($db);
+$upd = new \App\Tools\UpdateSetting($us);
+check('update_setting refuses a home_cards list with nothing valid (before any write)', isset($upd->execute(['key' => 'home_cards', 'value' => 'junk'], 1)['error']));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

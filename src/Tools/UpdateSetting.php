@@ -75,6 +75,13 @@ final class UpdateSetting implements Tool
         if (in_array($key, ['theme', 'theme_dark', 'theme_light'], true) && $value !== '') {
             $value = UserSettings::normalizeThemeFor($key, $value);
         }
+        if ($key === 'home_cards' && $value !== '') {
+            $clean = UserSettings::normalizeHomeCards($value);
+            if ($clean === '') {
+                return ['error' => 'None of those are start cards. Allowed: ' . implode(', ', UserSettings::HOME_CARD_KEYS) . '.'];
+            }
+            $value = $clean;
+        }
         if ($key === 'work_clock' && $value !== '') {
             $v = mb_strtolower(trim($value));
             if (in_array($v, ['location', 'gps', 'auto', 'automatic', 'on', 'lokation', 'automatisk'], true)) {

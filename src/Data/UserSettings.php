@@ -162,6 +162,21 @@ final class UserSettings
             'description' => 'Voice mode: the assistant\'s speaking voice, one of Google\'s prebuilt voices (e.g. Puck, Kore, Charon, '
                 . 'Fenrir, Aoede, Leda, Orus, Zephyr).',
         ],
+        // The cards the app opens on start and pins in its card rail (see HOME_CARD_KEYS). Empty = the app's own default.
+        'home_cards' => [
+            'default'     => '',
+            'label'       => 'Start cards',
+            'description' => 'Which cards the app shows on the start screen and keeps one tap away in the card rail (desktop): a comma-separated '
+                . 'list, the FIRST one opens at start. Allowed: work_hours (today\'s hours), work_week (last week), work_log, location (today\'s '
+                . 'route and places), calendar (this month), cycle, books, moms, cash, pl (profit & loss), mileage, scheduled_tasks. '
+                . 'Empty = the default rail.',
+        ],
+        'voice_stop_words' => [
+            'default'     => 'farvel, stop tale, hej hej, det var det, tak for nu, goodbye, bye bye, stop talking, that\'s all',
+            'label'       => 'Voice stop words',
+            'description' => 'Voice mode: words or short phrases that end the conversation (comma separated; Danish and English), e.g. '
+                . '"farvel, stop tale, goodbye". Saying one ends the voice session after a short goodbye.',
+        ],
         'voice_language' => [
             'default'     => 'auto',
             'label'       => 'Voice language',
@@ -398,6 +413,31 @@ final class UserSettings
     public static function personalityCard(string $level): array
     {
         return ['kind' => 'personality', 'level' => self::normalizePersonality($level)];
+    }
+
+    /** The cards the start screen / rail can show (see the home_cards setting). */
+    public const HOME_CARD_KEYS = [
+        'work_hours', 'work_week', 'work_log', 'location', 'calendar', 'cycle', 'books', 'moms', 'cash', 'pl', 'mileage', 'scheduled_tasks',
+    ];
+
+    /**
+     * Canonical home_cards: lower-case keys from HOME_CARD_KEYS only, in the order given, no duplicates, at most 6, comma-separated.
+     * Unknown words are dropped.
+     */
+    public static function normalizeHomeCards(?string $value): string
+    {
+        $out = [];
+        foreach (preg_split('/[\s,;]+/', mb_strtolower(trim((string) $value))) ?: [] as $k) {
+            $k = str_replace('-', '_', $k);
+            if (in_array($k, self::HOME_CARD_KEYS, true) && !in_array($k, $out, true)) {
+                $out[] = $k;
+            }
+            if (count($out) >= 6) {
+                break;
+            }
+        }
+
+        return implode(',', $out);
     }
 
     /** @return array<int, string> the valid setting keys */

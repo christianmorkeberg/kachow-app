@@ -66,9 +66,10 @@ check('auto: fast tools block, slow tools are NON_BLOCKING', $by['update_calenda
     && $by[VoiceTools::GATEWAY]['behavior'] === 'NON_BLOCKING');
 check('slow tools say SLOW in their description, fast ones do not', str_starts_with($by['get_current_weather']['description'], 'SLOW') && !str_starts_with($by['update_calendar_event']['description'], 'SLOW')
     && str_starts_with($by[VoiceTools::GATEWAY]['description'], 'SLOW'));
-check('the other modes make every tool the same', array_unique(array_column(VoiceTools::declarations($registry, 'nonblocking'), 'behavior')) === ['NON_BLOCKING']
-    && array_unique(array_column(VoiceTools::declarations($registry, 'blocking'), 'behavior')) === ['BLOCKING']);
-check('each declaration has name, description, parameters', isset($by['set_reminder']['parameters']['type']) && $by['set_reminder']['description'] !== '');
+$forTools = static fn (string $mode): array => array_values(array_unique(array_column(array_filter(VoiceTools::declarations($registry, $mode), static fn (array $d): bool => $d['name'] !== VoiceTools::END), 'behavior')));
+check('the other modes make every server tool the same (end_conversation always blocks)', $forTools('nonblocking') === ['NON_BLOCKING'] && $forTools('blocking') === ['BLOCKING']
+    && VoiceTools::endDeclaration()['behavior'] === 'BLOCKING');
+check('each tool declaration has name, description, parameters', isset($by['set_reminder']['parameters']['type']) && $by['set_reminder']['description'] !== '');
 
 echo "2) the session setup\n";
 $agenda = VoiceSession::agenda([
@@ -228,6 +229,11 @@ check('language choice: saved wins; unset follows the browser (Danish → da, el
     && VoiceSession::resolveLanguage('auto', 'da-DK') === 'da' && VoiceSession::resolveLanguage('auto', 'en-GB') === 'en' && VoiceSession::resolveLanguage(null, '') === 'en');
 check('the voice name stays set, and the prompt asks for one consistent voice', $setupAuto['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] === 'Puck'
     && str_contains($setupAuto['systemInstruction']['parts'][0]['text'], 'same voice, accent and tone'));
+check('end_conversation is declared for the model but is not a server tool', in_array(VoiceTools::END, array_column($decl, 'name'), true) && !VoiceTools::isAllowed(VoiceTools::END)
+    && VoiceToolRunner::describe(VoiceTools::END, [], true) !== '');
+check('stop words: parsed lower-case, unique, capped', VoiceSession::stopWords("Farvel, STOP tale,\nfarvel ; goodbye,, ") === ['farvel', 'stop tale', 'goodbye'] && count(VoiceSession::stopWords(implode(',', range(1, 40)))) === 20);
+$pr = VoiceSession::prompt([], [], '', null, 'auto', ['farvel', 'stop tale']);
+check('the prompt names the stop words and the end tool, and says never to end it alone', str_contains($pr, '"farvel", "stop tale"') && str_contains($pr, 'end_conversation') && str_contains($pr, 'never end it on your own'));
 check('the prompt tells the model how deleting works', str_contains(VoiceSession::prompt([], [], ''), 'ONE short question'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);

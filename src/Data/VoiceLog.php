@@ -19,7 +19,7 @@ final class VoiceLog
     public const KINDS = [
         'session_start', 'setup_complete', 'first_audio', 'tool_call', 'tool_error', 'interrupted', 'cancelled',
         'goaway', 'resume', 'idle_close', 'limit_close', 'session_end', 'client_error', 'auto_report', 'gateway',
-        'confirm_ask', 'confirm_done',
+        'confirm_ask', 'confirm_done', 'stop_word',
     ];
 
     private PDO $db;
