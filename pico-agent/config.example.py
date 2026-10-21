@@ -30,14 +30,21 @@ DEVICES = {
         ],
         "methods": ["GET", "PUT"],
     },
-    # Radiator thermostats: a Shelly BLU gateway on your network (the valves talk Bluetooth to it). Plain http on your LAN;
-    # only the three valve calls are allowed — nothing else on the gateway can be reached through the Pico.
+    # Radiator thermostats: a Shelly BLU gateway on your network (the valves talk Bluetooth to it). Plain http on your LAN.
+    # Only the valve calls are allowed. NEVER allow all of /rpc: the gateway also has Script.* (runs code on it), HTTP.* (makes
+    # it call other hosts), Shelly.FactoryReset / SetAuth / Reboot / Update, OTA.*, Wifi.SetConfig, Webhook.* ... (see its
+    # /rpc/Shelly.ListMethods). Pairing, removing and flashing valves stay in the Shelly app.
     "shelly": {
         "base": "http://192.168.1.60",
         "allow": [
-            "/rpc/BluTrv.Call",
-            "/rpc/BluTrv.GetRemoteStatus",
-            "/rpc/BluTrv.GetStatus",
+            "/rpc/BluTrv.Call",                  # set the target, calibrate ... (TRV.* methods, sent as a POST body)
+            "/rpc/BluTrv.GetRemoteStatus",       # current temperature, target, valve position
+            "/rpc/BluTrv.GetRemoteConfig",
+            "/rpc/BluTrv.GetRemoteDeviceInfo",
+            "/rpc/BluTrv.GetStatus",             # battery, signal, paired
+            "/rpc/BluTrv.GetConfig",
+            "/rpc/BluTrv.CheckForUpdates",
+            "/rpc/Shelly.GetDeviceInfo",
         ],
         "methods": ["GET", "POST"],
     },
