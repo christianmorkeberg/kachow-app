@@ -46,7 +46,16 @@ final class GetThermostats implements Tool
             if ($d['error'] !== null) {
                 return ['error' => $d['error']];
             }
-            $all = $d['found'] === [] ? $all : array_map(static fn (int $id): array => ['name' => count($d['found']) === 1 ? 'Thermostat' : 'Thermostat ' . $id, 'id' => $id], $d['found']);
+            if ($d['found'] !== []) {
+                // The name the user gave each valve in the Shelly app is part of its config on the gateway.
+                $all = array_map(function (int $id) use ($d, $userId): array {
+                    $cfg  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetConfig?id=' . $id], $userId);
+                    $c    = is_array($cfg['response'] ?? null) ? $cfg['response'] : [];
+                    $name = trim((string) ($c['name'] ?? ''));
+
+                    return ['name' => $name !== '' ? $name : (count($d['found']) === 1 ? 'Thermostat' : 'Thermostat ' . $id), 'id' => $id];
+                }, $d['found']);
+            }
         }
         $query = trim((string) ($arguments['thermostat'] ?? ''));
         if ($query !== '') {
