@@ -115,7 +115,14 @@ final class AssistantLoop
         . 'marks, event-by-event agendas, or measurement dumps): re-typing them just duplicates the card '
         . 'as plain prose. Still CALL the tool rather than answering a plan/list/schedule/weather/hours '
         . 'question from memory (e.g. when the user is about to train or asks what they are doing today or '
-        . 'this week, call get_workout_plan / get_week_plan). If a tool reports a data source is busy or '
+        . 'this week, call get_workout_plan / get_week_plan — a day of their saved TRAINING PROGRAMME is put into the plan '
+        . 'automatically, so just report it). TRAINING PROGRAMMES: when the user gives you a programme (a note in any '
+        . 'format, often by calendar week — "uge 43" = ISO week 43, see the current-time line), do not memorise it as a fact: '
+        . 'save_training_program (source_note = their text), then add_program_days a week or two per call with their EXACT '
+        . 'sets / reps / weights (anything else goes in note), then show it with get_training_program and ask them to check '
+        . 'it. If they ask what to train and nothing is saved for the day or in a programme, call find_program_in_memory: an '
+        . 'old note may hold the programme — offer to turn it into a real programme (same steps) and only after they confirm '
+        . 'it is right offer to forget the old note. If a tool reports a data source is busy or '
         . 'unavailable even after retrying, say so plainly and offer to try again shortly. '
         . 'Separately, there is a WORK LOG for what they did at each job (each job is the first word of an '
         . 'event in the user\'s work calendar, which is configurable per user): when the user describes '
@@ -1015,7 +1022,7 @@ final class AssistantLoop
         $now   = $now ?? new DateTimeImmutable('now');
         $local = $now->setTimezone(new DateTimeZone(WorkEvents::LOCAL_TZ));
 
-        return 'Current local time for the user: ' . $local->format('l Y-m-d H:i') . ' (' . WorkEvents::LOCAL_TZ
+        return 'Current local time for the user: ' . $local->format('l Y-m-d H:i') . ' (ISO week ' . $local->format('W') . ', ' . WorkEvents::LOCAL_TZ
             . ', UTC' . $local->format('P') . '). Every time you give a tool, and every time you mention to the '
             . 'user, is this local time — work out relative times ("20 minutes ago", "i morgen kl. 9") from it. '
             . '(UTC now: ' . $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i') . '.)';

@@ -30,7 +30,8 @@ final class CreateWorkoutPlan implements Tool
             . 'weight) when known so they can be logged on tick; use note for things like "5k run". '
             . 'Dates are YYYY-MM-DD; omit for today. This is PLANNING, separate from logging done sets. An '
             . 'exercise already in that day\'s plan is not added twice (its missing targets are filled in), so '
-            . 'sending the same program again is harmless.';
+            . 'sending the same program again is harmless. When the user hands you a whole programme (several days or weeks), '
+            . 'offer to enter it day by day with this tool so the plan card shows it, and keep the exact sets, reps and weights.';
     }
 
     public function parameters(): array
