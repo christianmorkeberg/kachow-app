@@ -128,6 +128,10 @@ final class HomeCard
                 $b['on'] = ['on' => false];
             }
         }
+        if (isset($in['mirek']) && is_numeric($in['mirek'])) {
+            $b['color_temperature'] = ['mirek' => max(HueColor::MIREK_MIN, min(HueColor::MIREK_MAX, (int) round((float) $in['mirek'])))];
+            $b['on'] = ['on' => true];
+        }
         if (isset($in['color']) && is_string($in['color']) && trim($in['color']) !== '') {
             $c = HueColor::body($in['color']);
             if ($c === null) {
