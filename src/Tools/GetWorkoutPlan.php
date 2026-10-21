@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\WorkoutPlans;
+use App\Support\ProgramPlanner;
 
 /**
  * Tool: show a day's workout plan (its exercises and which are done).
  */
 final class GetWorkoutPlan implements Tool
 {
-    public function __construct(private WorkoutPlans $plans)
+    public function __construct(private WorkoutPlans $plans, private ?ProgramPlanner $planner = null)
     {
     }
 
@@ -41,6 +42,8 @@ final class GetWorkoutPlan implements Tool
     public function execute(array $arguments, int $userId): array
     {
         $date = CreateWorkoutPlan::resolveDate($arguments['date'] ?? null);
+        // No plan saved for today / a future day, but the user's training programme prescribes one: that becomes the day's plan now.
+        $fromProgram = $this->planner !== null ? $this->safe(fn () => $this->planner->ensureDay($userId, $date)) : null;
         $card = $this->plans->cardForDate($userId, $date);
         $day  = $card['days'][0];
 
@@ -56,8 +59,21 @@ final class GetWorkoutPlan implements Tool
                 $day['items']
             ),
             'note'       => 'The card shows this plan to the user — use the exercise names to answer '
-                . 'their question but do NOT just re-list them as text.',
+                . 'their question but do NOT just re-list them as text.'
+                . ($fromProgram !== null ? ' This plan was just taken from their training programme "' . $fromProgram['label'] . '" — say so in a few words.' : ''),
             '_render'    => $card,
-        ];
+        ] + ($fromProgram !== null ? ['from_program' => $fromProgram['label']] : []);
+    }
+
+    /** The programme tables may not be migrated yet: then it is simply not there, and the plan lookup works as before. */
+    private function safe(callable $fn): mixed
+    {
+        try {
+            return $fn();
+        } catch (\Throwable $e) {
+            error_log('GetWorkoutPlan programme: ' . $e->getMessage());
+
+            return null;
+        }
     }
 }

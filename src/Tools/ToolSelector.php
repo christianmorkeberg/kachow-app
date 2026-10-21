@@ -50,6 +50,8 @@ final class ToolSelector
             'log_connected_workout', 'training_load',
             'create_workout_plan', 'get_workout_plan', 'get_week_plan', 'check_off_exercise',
             'uncheck_exercise', 'add_plan_exercise', 'remove_plan_exercise', 'delete_workout_plan',
+            'save_training_program', 'add_program_days', 'get_training_program', 'update_training_program', 'remove_program_days', 'delete_training_program',
+            'find_program_in_memory', 'get_about_me', 'forget_about_me', 'forget_instruction',
         ],
         'wishlist' => [
             'add_wishlist_item', 'get_wishlist', 'update_wishlist_item', 'delete_wishlist_item',
@@ -159,6 +161,7 @@ final class ToolSelector
             'same exercise', 'same lift', 'standardi', 'samme øvelse',
             // planning
             'workout plan', 'training plan', 'my plan', 'workout program', 'training program', 'routine', 'session',
+            'training programme', 'workout programme', 'my programme', 'træningsprogram', 'træningsplan', 'program for uge', 'uge 4', 'uge 5', 'week 4', 'week 5', 'hvad skal jeg træne', 'what should i train',
             'schedule my', "what's left", 'remaining', 'done with', 'checklist', 'tick off',
             // Danish
             'træn', 'motion', 'løft', 'øvelse', 'bænkpres', 'dødløft', 'markløft',

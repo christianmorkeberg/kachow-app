@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\WorkoutPlans;
+use App\Support\ProgramPlanner;
 
 /**
  * Tool: show the whole week's workout plan and what remains.
  */
 final class GetWeekPlan implements Tool
 {
-    public function __construct(private WorkoutPlans $plans)
+    public function __construct(private WorkoutPlans $plans, private ?ProgramPlanner $planner = null)
     {
     }
 
@@ -41,6 +42,15 @@ final class GetWeekPlan implements Tool
     public function execute(array $arguments, int $userId): array
     {
         $date = CreateWorkoutPlan::resolveDate($arguments['date'] ?? null);
+        // Days of this week that the training programme prescribes but have no plan yet become plans (today and later only).
+        $fromProgram = [];
+        if ($this->planner !== null) {
+            try {
+                $fromProgram = $this->planner->ensureWeek($userId, $date);
+            } catch (\Throwable $e) {
+                error_log('GetWeekPlan programme: ' . $e->getMessage());   // not migrated yet: the week plan works as before
+            }
+        }
         $card = $this->plans->cardForWeek($userId, $date);
 
         return [
@@ -52,7 +62,8 @@ final class GetWeekPlan implements Tool
                 'exercises' => array_map(static fn (array $i): string => (string) $i['label'], $d['items'] ?? []),
             ], $card['days']),
             'note'         => 'The card shows the week plan to the user — use it to answer their question '
-                . 'but do NOT re-list every exercise as text.',
+                . 'but do NOT re-list every exercise as text.'
+                . ($fromProgram !== [] ? ' Some days were just taken from their training programme "' . $fromProgram[0]['label'] . '" — say so in a few words.' : ''),
             '_render'      => $card,
         ];
     }
