@@ -175,6 +175,7 @@ final class ToolRegistry
         $homeCall = new HomeDeviceCall($agentCommands, $apiTokens, $hueSync, $homeOwner);
         $registry->register($homeCall);
         $registry->register(new HueColorTool());
+        $registry->register(new ShowHome());
         $registry->register(new SetThermostat($homeCall, $userSettings));
         $registry->register(new GetThermostats($homeCall, $userSettings));
         $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner));
