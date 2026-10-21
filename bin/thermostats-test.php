@@ -80,5 +80,7 @@ check('find digs a number out of a nested answer, wherever the firmware puts it'
 $home->fail = ['http_status' => 500, 'response' => ['code' => -114, 'message' => 'timeout']];
 $g = $get->execute(['thermostat' => '200'], 1);
 check('a valve answer with no temperatures shows the raw answer instead of nothing', str_contains($g['thermostats'][0]['note'] ?? '', 'timeout'));
+$real = ['v' => 57, 'ts' => 1792531101, 'status' => ['sys' => ['time' => '23:18'], 'temperature:0' => ['id' => 0, 'tC' => 21.59, 'errors' => []], 'trv:0' => ['id' => 0, 'pos' => 0, 'steps' => 16688, 'current_C' => 21.62, 'target_C' => 4.00, 'schedule_rev' => 0, 'errors' => []]]];
+check('the real gateway reply: current, target and valve position are found', Thermostats::find($real, 'current_C') === 21.62 && Thermostats::find($real, 'target_C') === 4.0 && Thermostats::find($real, 'pos') === 0);
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

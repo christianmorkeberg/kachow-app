@@ -25,7 +25,7 @@ final class GetThermostats implements Tool
     {
         return 'Reads the user\'s radiator thermostats: current temperature, target, how open the valve is (%), battery. Use for "how warm is it", '
             . '"what is the heating set to", Danish "hvad er varmen sat til". Pass `thermostat` for one, or leave it out for all. With no names saved it asks the gateway which valves are paired, so it shows every valve — name them with update_setting `thermostats` ("Living room=200, Bedroom=201") once the user says which is which. Report only the numbers '
-            . 'returned. current_c is measured at the valve, which sits on the radiator, so it reads warmer than the room.';
+            . 'returned. current_c is measured at the valve, which sits on the radiator, so it reads warmer than the room. target_c 4 means the valve is at its minimum (heating off). last_heard_minutes_ago says how fresh the reading is: valves report every few minutes, so a big number means the reading is old — say so.';
     }
 
     public function parameters(): array
@@ -82,6 +82,7 @@ final class GetThermostats implements Tool
                 'valve_open_pct' => Thermostats::find($r, 'pos'),
                 'battery_pct'    => $s['battery'] ?? Thermostats::find($r, 'battery'),
                 'signal_dbm'     => $s['rssi'] ?? null,
+                'last_heard_minutes_ago' => isset($s['last_updated_ts']) && is_numeric($s['last_updated_ts']) ? max(0, (int) round((time() - (int) $s['last_updated_ts']) / 60)) : null,
                 'paired'    => $s['paired'] ?? null,
                 'errors'    => !empty(Thermostats::find($r, 'errors')) ? Thermostats::find($r, 'errors') : null,
             ], static fn ($v): bool => $v !== null);
