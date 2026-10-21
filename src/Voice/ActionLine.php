@@ -40,6 +40,10 @@ final class ActionLine
                 return 'Asked the full assistant' . ($s('request') !== '' ? ' · ' . $q(mb_substr($s('request'), 0, 80)) : '');
             case 'home_device_call':
                 return self::home($a, $homeName);
+            case 'set_thermostat':
+                return 'Set ' . ($s('thermostat') !== '' ? $q($s('thermostat')) : 'the thermostat') . ' to ' . $s('temperature_c') . ' °C';
+            case 'get_thermostats':
+                return 'Checked the thermostats';
             case 'insert_calendar_event':
                 return 'Created event ' . $q($s('summary')) . self::when($a, ['start']);
             case 'update_calendar_event':

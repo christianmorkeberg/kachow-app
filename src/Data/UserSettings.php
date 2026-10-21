@@ -171,6 +171,13 @@ final class UserSettings
                 . 'route and places), calendar (this month), cycle, books, moms, cash, pl (profit & loss), mileage, scheduled_tasks, feedback (reports, developer only), dev_ideas (the ideas list). '
                 . 'Empty = the default rail. When the user wants to SET / CHOOSE their start cards, do not ask them to type names: call get_settings with show_card=true and card="home_cards" (a picker card opens, and NOT the personality card).',
         ],
+        // Radiator thermostats (Shelly BLU TRV): a name for each valve's id on the gateway.
+        'thermostats' => [
+            'default'     => '',
+            'label'       => 'Thermostats',
+            'description' => 'Names for the radiator thermostats, as "name=id" pairs separated by commas, e.g. "Living room=200, Bedroom=201" (the id is '
+                . 'the valve\'s id on the Shelly gateway; the first one is 200). Empty = one thermostat, id 200.',
+        ],
         'voice_stop_words' => [
             'default'     => 'farvel, stop tale, hej hej, det var det, tak for nu, goodbye, bye bye, stop talking, that\'s all',
             'label'       => 'Voice stop words',

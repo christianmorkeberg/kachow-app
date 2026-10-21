@@ -58,7 +58,7 @@ final class VoiceTools
 
     /** May take several seconds (weather, maps and geocoding, Discogs, the full assistant). */
     public const SLOW = [
-        'get_current_weather', 'get_weather_forecast', self::GATEWAY, 'run_routine', 'undo_routine',
+        'get_current_weather', 'get_weather_forecast', self::GATEWAY, 'run_routine', 'undo_routine', 'set_thermostat', 'get_thermostats',
         // map / geocoding / Discogs lookups
         'log_trip', 'save_place', 'update_place', 'suggest_places', 'get_driving_distance', 'add_vinyl',
     ];
