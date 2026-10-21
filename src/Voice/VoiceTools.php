@@ -30,7 +30,7 @@ final class VoiceTools
         'log_workout', 'get_workout_history', 'get_workout_plan',
         // Blocking on purpose: a NON_BLOCKING result makes the model speak a new turn per call, so switching off
         // five lights gave five separate confirmations.
-        'home_device_call',
+        'home_device_call', 'hue_color',
         // scheduled tasks and notifications
         'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'notify_me', 'set_place_reminder',
         // workouts and health

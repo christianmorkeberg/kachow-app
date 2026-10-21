@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\UserSettings;
+use App\Home\ThermostatService;
 use App\Support\Thermostats;
 
 /**
@@ -12,8 +13,11 @@ use App\Support\Thermostats;
  */
 final class GetThermostats implements Tool
 {
-    public function __construct(private Tool $home, private UserSettings $settings)
+    private ThermostatService $service;
+
+    public function __construct(Tool $home, private UserSettings $settings)
     {
+        $this->service = new ThermostatService($home, $settings);
     }
 
     public function name(): string
@@ -38,25 +42,11 @@ final class GetThermostats implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
-        $named = trim((string) $this->settings->get($userId, 'thermostats'));
-        $all   = Thermostats::parse($named);
-        if ($named === '') {
-            // Nothing named yet: ask the gateway which valves are paired (ids 200–204) rather than assume one.
-            $d = Thermostats::discover(fn (int $id): array => $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $id], $userId));
-            if ($d['error'] !== null) {
-                return ['error' => $d['error']];
-            }
-            if ($d['found'] !== []) {
-                // The name the user gave each valve in the Shelly app is part of its config on the gateway.
-                $all = array_map(function (int $id) use ($d, $userId): array {
-                    $cfg  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetConfig?id=' . $id], $userId);
-                    $c    = is_array($cfg['response'] ?? null) ? $cfg['response'] : [];
-                    $name = trim((string) ($c['name'] ?? ''));
-
-                    return ['name' => $name !== '' ? $name : (count($d['found']) === 1 ? 'Thermostat' : 'Thermostat ' . $id), 'id' => $id];
-                }, $d['found']);
-            }
+        $l = $this->service->list($userId);
+        if ($l['error'] !== null) {
+            return ['error' => $l['error']];
         }
+        $all   = $l['list'];
         $query = trim((string) ($arguments['thermostat'] ?? ''));
         if ($query !== '') {
             $one = Thermostats::resolve($all, $query);
@@ -67,31 +57,11 @@ final class GetThermostats implements Tool
         }
         $out = [];
         foreach ($all as $t) {
-            $remote = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetRemoteStatus?id=' . $t['id']], $userId);
-            if (isset($remote['error'])) {
-                return ['error' => $remote['error']];
+            $r = $this->service->read($userId, $t);
+            if (isset($r['error'])) {
+                return ['error' => $r['error']];
             }
-            $r   = is_array($remote['response'] ?? null) ? $remote['response'] : [];
-            $st  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $t['id']], $userId);
-            $s   = is_array($st['response'] ?? null) ? $st['response'] : [];
-            $row = array_filter([
-                'name'      => $t['name'],
-                'id'        => $t['id'],
-                'current_c' => Thermostats::find($r, 'current_C') ?? Thermostats::find($r, 'tmp'),
-                'target_c'  => Thermostats::find($r, 'target_C'),
-                'valve_open_pct' => Thermostats::find($r, 'pos'),
-                'battery_pct'    => $s['battery'] ?? Thermostats::find($r, 'battery'),
-                'signal_dbm'     => $s['rssi'] ?? null,
-                'last_heard_minutes_ago' => isset($s['last_updated_ts']) && is_numeric($s['last_updated_ts']) ? max(0, (int) round((time() - (int) $s['last_updated_ts']) / 60)) : null,
-                'paired'    => $s['paired'] ?? null,
-                'errors'    => !empty(Thermostats::find($r, 'errors')) ? Thermostats::find($r, 'errors') : null,
-            ], static fn ($v): bool => $v !== null);
-            if (!isset($row['current_c']) && !isset($row['target_c'])) {
-                // The valve answered but no temperatures were found in it: show what came back instead of pretending it said nothing.
-                $row['note'] = 'No temperature in the valve\'s answer — it may not have reported yet (it reports every few minutes). Raw answer: '
-                    . mb_substr((string) json_encode($remote, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 0, 600);
-            }
-            $out[] = $row;
+            $out[] = $r['row'];
         }
 
         return ['thermostats' => $out];
