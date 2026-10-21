@@ -26,7 +26,7 @@ final class SetThermostat implements Tool
     {
         return 'Sets the target temperature of one of the user\'s radiator thermostats (4–30 °C, half degrees): "set the living room to 21", "heating down to '
             . '17", Danish "sæt varmen i stuen til 21". Pass `thermostat` (its name or id, as in get_thermostats — call get_thermostats first if you do not know them) unless they have only one, and `temperature_c`. '
-            . 'The valve can take several seconds to answer; if it says it timed out the change may still have applied — say so and offer to check with '
+            . 'The valve can take a minute to confirm; a result of set="sent" means the command was delivered and will apply shortly — say it is sent and offer to check later with '
             . 'get_thermostats. "Turn it off" is a LOW target (e.g. 5 °C — frost protection), never a number outside 4–30.';
     }
 
@@ -58,6 +58,19 @@ final class SetThermostat implements Tool
             'body'   => ['id' => $t['id'], 'method' => 'TRV.SetTarget', 'params' => ['id' => 0, 'target_C' => $target]],
         ], $userId);
         if (isset($res['error'])) {
+            // A valve sleeps between its reports, so the gateway often holds the answer longer than the Pico waits. If the gateway
+            // itself still answers, the command was delivered: it is sent, not failed.
+            if (self::timedOut((string) $res['error'])) {
+                $ping = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $t['id']], $userId);
+                if (!isset($ping['error']) && !empty($ping['response']['paired'])) {
+                    return [
+                        'set' => 'sent', 'thermostat' => $t['name'], 'target_c' => $target,
+                        'note' => 'The command is sent to the valve, but the valve has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
+                            . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.',
+                    ];
+                }
+            }
+
             return ['set' => false, 'thermostat' => $t['name'], 'error' => $res['error']];
         }
         if (($res['http_status'] ?? 200) >= 400 || isset($res['response']['error'])) {
@@ -65,5 +78,10 @@ final class SetThermostat implements Tool
         }
 
         return ['set' => true, 'thermostat' => $t['name'], 'target_c' => $target, 'note' => 'The valve moves to it within a minute or two. Say it is set in a few words.'];
+    }
+
+    private static function timedOut(string $error): bool
+    {
+        return stripos($error, 'ETIMEDOUT') !== false || stripos($error, 'timed out') !== false || stripos($error, 'No answer from the home agent') !== false;
     }
 }
