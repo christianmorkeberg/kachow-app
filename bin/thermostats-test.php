@@ -26,6 +26,8 @@ echo "2) the tools against a fake gateway\n";
 $calls = [];
 $home = new class ($calls) implements Tool {
     public array $fail = [];
+    public array $failPost = [];
+    public bool $failProbe = false;
     public function __construct(public array &$calls) {}
     public function name(): string { return 'home_device_call'; }
     public function description(): string { return ''; }
@@ -34,6 +36,8 @@ $home = new class ($calls) implements Tool {
     {
         $this->calls[] = $a;
         if ($this->fail !== []) { return $this->fail; }
+        if ($this->failPost !== [] && $a['method'] === 'POST') { return $this->failPost; }
+        if ($this->failProbe && str_contains($a['path'], 'GetStatus')) { return ['error' => 'The home agent could not complete that: agent error: [Errno 110] ETIMEDOUT']; }
         if (str_contains($a['path'], 'GetRemoteStatus')) { return ['http_status' => 200, 'response' => ['current_C' => 19.5, 'target_C' => 21, 'pos' => 40, 'errors' => []]]; }
         if (str_contains($a['path'], 'GetConfig')) { $id = (int) substr($a['path'], strrpos($a['path'], '=') + 1); return ['http_status' => 200, 'response' => $id === 200 ? ['id' => 200, 'name' => 'Stue'] : ['id' => $id]]; }
         if (str_contains($a['path'], 'GetStatus')) {
@@ -82,5 +86,17 @@ $g = $get->execute(['thermostat' => '200'], 1);
 check('a valve answer with no temperatures shows the raw answer instead of nothing', str_contains($g['thermostats'][0]['note'] ?? '', 'timeout'));
 $real = ['v' => 57, 'ts' => 1792531101, 'status' => ['sys' => ['time' => '23:18'], 'temperature:0' => ['id' => 0, 'tC' => 21.59, 'errors' => []], 'trv:0' => ['id' => 0, 'pos' => 0, 'steps' => 16688, 'current_C' => 21.62, 'target_C' => 4.00, 'schedule_rev' => 0, 'errors' => []]]];
 check('the real gateway reply: current, target and valve position are found', Thermostats::find($real, 'current_C') === 21.62 && Thermostats::find($real, 'target_C') === 4.0 && Thermostats::find($real, 'pos') === 0);
+$home->fail = [];
+$home->failPost = ['error' => 'The home agent could not complete that: agent error: [Errno 110] ETIMEDOUT'];
+$r = $set->execute(['thermostat' => 'stue', 'temperature_c' => 25], 1);
+check('a slow valve (the write times out, the gateway still answers) is "sent", not failed', ($r['set'] ?? null) === 'sent' && str_contains($r['note'], 'not that it failed'));
+$home->fail = ['error' => 'The home agent (Pico) is offline — last contact 900 seconds ago.'];
+$r = $set->execute(['thermostat' => 'stue', 'temperature_c' => 25], 1);
+check('an offline agent is still a failure', $r['set'] === false);
+$home->fail = [];
+$home->failPost = ['error' => 'agent error: [Errno 110] ETIMEDOUT'];
+$home->failProbe = true;
+$r = $set->execute(['thermostat' => 'stue', 'temperature_c' => 25], 1);
+check('if the gateway does not answer either, it really failed', $r['set'] === false);
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
