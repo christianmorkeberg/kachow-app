@@ -25,7 +25,7 @@ final class SetThermostat implements Tool
     public function description(): string
     {
         return 'Sets the target temperature of one of the user\'s radiator thermostats (4–30 °C, half degrees): "set the living room to 21", "heating down to '
-            . '17", Danish "sæt varmen i stuen til 21". Pass `thermostat` (its name, as in get_thermostats) unless they have only one, and `temperature_c`. '
+            . '17", Danish "sæt varmen i stuen til 21". Pass `thermostat` (its name or id, as in get_thermostats — call get_thermostats first if you do not know them) unless they have only one, and `temperature_c`. '
             . 'The valve can take several seconds to answer; if it says it timed out the change may still have applied — say so and offer to check with '
             . 'get_thermostats. "Turn it off" is a LOW target (e.g. 5 °C — frost protection), never a number outside 4–30.';
     }

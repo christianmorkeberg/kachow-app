@@ -35,7 +35,10 @@ $home = new class ($calls) implements Tool {
         $this->calls[] = $a;
         if ($this->fail !== []) { return $this->fail; }
         if (str_contains($a['path'], 'GetRemoteStatus')) { return ['http_status' => 200, 'response' => ['current_C' => 19.5, 'target_C' => 21, 'pos' => 40, 'errors' => []]]; }
-        if (str_contains($a['path'], 'GetStatus')) { return ['http_status' => 200, 'response' => ['id' => 200, 'battery' => 100, 'paired' => true]]; }
+        if (str_contains($a['path'], 'GetStatus')) {
+            $id = (int) substr($a['path'], strrpos($a['path'], '=') + 1);
+            if ($id > 201) { return ['error' => 'The home agent could not complete that: 500 no such valve']; }
+            return ['http_status' => 200, 'response' => ['id' => $id, 'battery' => 100, 'paired' => true]]; }
         return ['http_status' => 200, 'response' => []];
     }
 };
@@ -63,7 +66,14 @@ check('a home-agent error is passed on, not called a success', $r['set'] === fal
 $home->fail = [];
 $get = new GetThermostats($home, $settings);
 $g = $get->execute([], 1);
-check('get reads every thermostat: temperature, target, valve, battery', count($g['thermostats']) === 2 && $g['thermostats'][0] === ['name' => 'Living room', 'current_c' => 19.5, 'target_c' => 21, 'valve_open_pct' => 40, 'battery_pct' => 100, 'paired' => true]);
+check('get reads every thermostat: temperature, target, valve, battery', count($g['thermostats']) === 2 && $g['thermostats'][0] === ['name' => 'Living room', 'id' => 200, 'current_c' => 19.5, 'target_c' => 21, 'valve_open_pct' => 40, 'battery_pct' => 100, 'paired' => true]);
 check('get one by name, or say which exist', count($get->execute(['thermostat' => 'bedroom'], 1)['thermostats']) === 1 && str_contains($get->execute(['thermostat' => 'garage'], 1)['error'], 'Living room'));
+$put('');
+$g = $get->execute([], 1);
+check('nothing named: the gateway is asked and both paired valves show, with ids', count($g['thermostats']) === 2 && $g['thermostats'][0]['name'] === 'Thermostat 200' && $g['thermostats'][1]['id'] === 201);
+$r = $set->execute(['thermostat' => '201', 'temperature_c' => 19], 1);
+check('an unnamed valve can be set by its id', $r['set'] === true && $calls[count($calls) - 1]['body']['id'] === 201);
+$home->fail = ['error' => 'The home agent (Pico) is offline — last contact 900 seconds ago.'];
+check('an unreachable gateway is an error, not "no valves"', isset($get->execute([], 1)['error']));
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
