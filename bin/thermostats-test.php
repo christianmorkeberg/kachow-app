@@ -88,15 +88,15 @@ $real = ['v' => 57, 'ts' => 1792531101, 'status' => ['sys' => ['time' => '23:18'
 check('the real gateway reply: current, target and valve position are found', Thermostats::find($real, 'current_C') === 21.62 && Thermostats::find($real, 'target_C') === 4.0 && Thermostats::find($real, 'pos') === 0);
 $home->fail = [];
 $home->failPost = ['error' => 'The home agent could not complete that: agent error: [Errno 110] ETIMEDOUT'];
-$r = $set->execute(['thermostat' => 'stue', 'temperature_c' => 25], 1);
+$r = $set->execute(['thermostat' => '200', 'temperature_c' => 25], 1);
 check('a slow valve (the write times out, the gateway still answers) is "sent", not failed', ($r['set'] ?? null) === 'sent' && str_contains($r['note'], 'not that it failed'));
 $home->fail = ['error' => 'The home agent (Pico) is offline — last contact 900 seconds ago.'];
-$r = $set->execute(['thermostat' => 'stue', 'temperature_c' => 25], 1);
+$r = $set->execute(['thermostat' => '200', 'temperature_c' => 25], 1);
 check('an offline agent is still a failure', $r['set'] === false);
 $home->fail = [];
 $home->failPost = ['error' => 'agent error: [Errno 110] ETIMEDOUT'];
 $home->failProbe = true;
-$r = $set->execute(['thermostat' => 'stue', 'temperature_c' => 25], 1);
+$r = $set->execute(['thermostat' => '200', 'temperature_c' => 25], 1);
 check('if the gateway does not answer either, it really failed', $r['set'] === false);
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
