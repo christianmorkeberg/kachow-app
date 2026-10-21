@@ -72,19 +72,25 @@ final class GetThermostats implements Tool
                 return ['error' => $remote['error']];
             }
             $r   = is_array($remote['response'] ?? null) ? $remote['response'] : [];
-            $tr  = is_array($r['status'] ?? null) ? $r['status'] : $r;    // answers come either wrapped in "status" or bare
             $st  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $t['id']], $userId);
             $s   = is_array($st['response'] ?? null) ? $st['response'] : [];
-            $out[] = array_filter([
+            $row = array_filter([
                 'name'      => $t['name'],
                 'id'        => $t['id'],
-                'current_c' => $tr['current_C'] ?? ($tr['tmp']['value'] ?? null),
-                'target_c'  => $tr['target_C'] ?? ($tr['trv']['target_C'] ?? null),
-                'valve_open_pct' => $tr['pos'] ?? null,
-                'battery_pct'    => $s['battery'] ?? null,
+                'current_c' => Thermostats::find($r, 'current_C') ?? Thermostats::find($r, 'tmp'),
+                'target_c'  => Thermostats::find($r, 'target_C'),
+                'valve_open_pct' => Thermostats::find($r, 'pos'),
+                'battery_pct'    => $s['battery'] ?? Thermostats::find($r, 'battery'),
+                'signal_dbm'     => $s['rssi'] ?? null,
                 'paired'    => $s['paired'] ?? null,
-                'errors'    => !empty($tr['errors']) ? $tr['errors'] : null,
+                'errors'    => !empty(Thermostats::find($r, 'errors')) ? Thermostats::find($r, 'errors') : null,
             ], static fn ($v): bool => $v !== null);
+            if (!isset($row['current_c']) && !isset($row['target_c'])) {
+                // The valve answered but no temperatures were found in it: show what came back instead of pretending it said nothing.
+                $row['note'] = 'No temperature in the valve\'s answer — it may not have reported yet (it reports every few minutes). Raw answer: '
+                    . mb_substr((string) json_encode($remote, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 0, 600);
+            }
+            $out[] = $row;
         }
 
         return ['thermostats' => $out];
