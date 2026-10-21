@@ -88,6 +88,25 @@ final class Thermostats
         return count($hits) === 1 ? $hits[0] : null;
     }
 
+    /** First value for $key anywhere in a nested answer (the gateway wraps a valve's numbers differently from firmware to firmware), or null. */
+    public static function find(mixed $data, string $key): mixed
+    {
+        if (!is_array($data)) {
+            return null;
+        }
+        if (array_key_exists($key, $data) && !is_array($data[$key]) && $data[$key] !== null) {
+            return $data[$key];
+        }
+        foreach ($data as $v) {
+            $hit = self::find($v, $key);
+            if ($hit !== null) {
+                return $hit;
+            }
+        }
+
+        return null;
+    }
+
     /** A target in °C, rounded to the valve's half degrees, or null if it is outside what the valve accepts. */
     public static function target(mixed $value): ?float
     {

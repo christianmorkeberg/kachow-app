@@ -25,7 +25,7 @@ final class GetThermostats implements Tool
     {
         return 'Reads the user\'s radiator thermostats: current temperature, target, how open the valve is (%), battery. Use for "how warm is it", '
             . '"what is the heating set to", Danish "hvad er varmen sat til". Pass `thermostat` for one, or leave it out for all. With no names saved it asks the gateway which valves are paired, so it shows every valve — name them with update_setting `thermostats` ("Living room=200, Bedroom=201") once the user says which is which. Report only the numbers '
-            . 'returned. current_c is measured at the valve, which sits on the radiator, so it reads warmer than the room.';
+            . 'returned. current_c is measured at the valve, which sits on the radiator, so it reads warmer than the room. target_c 4 means the valve is at its minimum (heating off). last_heard_minutes_ago says how fresh the reading is: valves report every few minutes, so a big number means the reading is old — say so.';
     }
 
     public function parameters(): array
@@ -72,19 +72,26 @@ final class GetThermostats implements Tool
                 return ['error' => $remote['error']];
             }
             $r   = is_array($remote['response'] ?? null) ? $remote['response'] : [];
-            $tr  = is_array($r['status'] ?? null) ? $r['status'] : $r;    // answers come either wrapped in "status" or bare
             $st  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $t['id']], $userId);
             $s   = is_array($st['response'] ?? null) ? $st['response'] : [];
-            $out[] = array_filter([
+            $row = array_filter([
                 'name'      => $t['name'],
                 'id'        => $t['id'],
-                'current_c' => $tr['current_C'] ?? ($tr['tmp']['value'] ?? null),
-                'target_c'  => $tr['target_C'] ?? ($tr['trv']['target_C'] ?? null),
-                'valve_open_pct' => $tr['pos'] ?? null,
-                'battery_pct'    => $s['battery'] ?? null,
+                'current_c' => Thermostats::find($r, 'current_C') ?? Thermostats::find($r, 'tmp'),
+                'target_c'  => Thermostats::find($r, 'target_C'),
+                'valve_open_pct' => Thermostats::find($r, 'pos'),
+                'battery_pct'    => $s['battery'] ?? Thermostats::find($r, 'battery'),
+                'signal_dbm'     => $s['rssi'] ?? null,
+                'last_heard_minutes_ago' => isset($s['last_updated_ts']) && is_numeric($s['last_updated_ts']) ? max(0, (int) round((time() - (int) $s['last_updated_ts']) / 60)) : null,
                 'paired'    => $s['paired'] ?? null,
-                'errors'    => !empty($tr['errors']) ? $tr['errors'] : null,
+                'errors'    => !empty(Thermostats::find($r, 'errors')) ? Thermostats::find($r, 'errors') : null,
             ], static fn ($v): bool => $v !== null);
+            if (!isset($row['current_c']) && !isset($row['target_c'])) {
+                // The valve answered but no temperatures were found in it: show what came back instead of pretending it said nothing.
+                $row['note'] = 'No temperature in the valve\'s answer — it may not have reported yet (it reports every few minutes). Raw answer: '
+                    . mb_substr((string) json_encode($remote, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 0, 600);
+            }
+            $out[] = $row;
         }
 
         return ['thermostats' => $out];
