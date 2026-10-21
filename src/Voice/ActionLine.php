@@ -97,6 +97,9 @@ final class ActionLine
         if (isset($body['on']['on'])) {
             return ($body['on']['on'] ? 'Turned on ' : 'Turned off ') . $target;
         }
+        if (isset($body['color']) || isset($body['color_temperature'])) {
+            return 'Changed the colour of ' . $target;
+        }
         if (isset($body['dimming']['brightness'])) {
             return 'Dimmed ' . $target . ' to ' . (int) $body['dimming']['brightness'] . '%';
         }

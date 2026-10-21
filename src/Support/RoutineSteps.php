@@ -91,8 +91,11 @@ final class RoutineSteps
         if (isset($item['dimming']['brightness']) && is_numeric($item['dimming']['brightness'])) {
             $body['dimming'] = ['brightness' => (float) $item['dimming']['brightness']];
         }
+        // A light is either in colour mode (colour_temperature.mirek is null) or in white mode: put back whichever it was in.
         if (isset($item['color_temperature']['mirek']) && is_numeric($item['color_temperature']['mirek'])) {
             $body['color_temperature'] = ['mirek' => (int) $item['color_temperature']['mirek']];
+        } elseif (isset($item['color']['xy']['x'], $item['color']['xy']['y'])) {
+            $body['color'] = ['xy' => ['x' => (float) $item['color']['xy']['x'], 'y' => (float) $item['color']['xy']['y']]];
         }
 
         return ['device' => (string) $step['device'], 'method' => 'PUT', 'path' => (string) $step['path'], 'body' => $body];

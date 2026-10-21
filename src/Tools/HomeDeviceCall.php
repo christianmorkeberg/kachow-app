@@ -43,7 +43,7 @@ final class HomeDeviceCall implements Tool
             . '(a Raspberry Pi Pico W) and returns the device\'s answer. device is the alias configured on the '
             . 'Pico: "hue" = the Philips Hue bridge (CLIP v2 API: GET /clip/v2/resource/light, '
             . '/clip/v2/resource/room, /clip/v2/resource/scene to look things up; PUT '
-            . '/clip/v2/resource/light/<id> with {"on":{"on":true},"dimming":{"brightness":50}} to change one; '
+            . '/clip/v2/resource/light/<id> with {"on":{"on":true},"dimming":{"brightness":50}} to change one (a COLOUR: call hue_color for the exact body — never make up xy numbers); '
             . 'PUT /clip/v2/resource/grouped_light/<id> for a whole room; PUT /clip/v2/resource/scene/<id> with '
             . '{"recall":{"action":"active"}} to activate a scene); "pico" = the agent itself (GET /ping to '
             . 'test the connection). Look ids up with a GET first — never guess them — but ids you already looked '
