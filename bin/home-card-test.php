@@ -38,6 +38,7 @@ check('controls: on / off', HomeCard::body(['on' => true]) === ['on' => ['on' =>
 check('brightness is clamped, and 0 means off', HomeCard::body(['brightness' => 140])['dimming']['brightness'] === 100.0 && HomeCard::body(['brightness' => 0]) === ['on' => ['on' => false]]);
 $col = HomeCard::body(['color' => '#00ff00']);
 check('a colour turns the light on and carries xy', $col['on'] === ['on' => true] && isset($col['color']['xy']['x']));
+check('a white strip value is a mirek, clamped, and turns the light on', HomeCard::body(['mirek' => 366]) === ['color_temperature' => ['mirek' => 366], 'on' => ['on' => true]] && HomeCard::body(['mirek' => 900])['color_temperature']['mirek'] === 500 && HomeCard::body(['mirek' => 10])['color_temperature']['mirek'] === 153);
 check('nothing valid to send, or an unknown colour, is refused', HomeCard::body([]) === null && HomeCard::body(['color' => 'banana']) === null && HomeCard::body(['brightness' => 'x']) === null);
 check('only real Hue ids pass', HomeCard::validId($u(1)) && !HomeCard::validId('../x') && !HomeCard::validId('abc'));
 printf("\n%d passed, %d failed\n", $pass, $fail);
