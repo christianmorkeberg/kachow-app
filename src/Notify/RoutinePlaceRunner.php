@@ -62,15 +62,17 @@ final class RoutinePlaceRunner
                 continue;   // the place was deleted: nothing to watch
             }
             $state = $this->routines->placeState($r['id'], 0);   // place_id 0 = "inside ANY of the watched places"
+            // a commute place (a stretch of motorway, a region) is meant to be driven INTO: entering it counts at any speed
+            $pass  = count(array_filter($targets, static fn (array $p): bool => (string) $p['type'] === 'commute')) > 0;
             foreach ($points as $pt) {
-                $step = PlaceTransitions::step($state, $targets, $pt);
+                $step = PlaceTransitions::step($state, $targets, $pt, $pass);
                 if ($step['state'] !== null) {
                     $state = $step['state'];
                     $this->routines->savePlaceState($r['id'], 0, $state['inside'], $state['streak']);
                 }
                 if ($step['event'] !== null && $step['event'] === ($cfg['event'] ?? 'leave') && $now - $pt['ts'] <= self::FRESH_SECONDS) {
                     $what = implode(' or ', array_map(static fn (array $p): string => (string) $p['name'], $targets));
-                    $text = ($step['event'] === 'leave' ? 'you left ' : 'you arrived at ') . $what;
+                    $text = ($step['event'] === 'leave' ? 'you left ' : ($pass ? 'you entered ' : 'you arrived at ')) . $what;
                     if ($this->routines->requestRun($userId, $r['id'], $text)) {
                         $requested[] = $r['id'];
                     }

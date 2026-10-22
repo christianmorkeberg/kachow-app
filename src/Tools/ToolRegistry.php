@@ -290,6 +290,8 @@ final class ToolRegistry
         $registry->register(new CreateRoutine($routines, $scheduledTasks, new Conversations(), new Places()));
         $registry->register(new UpdateRoutine($routines, $scheduledTasks, new Places()));
         $registry->register(new RunRoutine($routines));
+        $registry->register(new SaveRegion(new Places(), $locationPoints, $mapDistance));
+        $registry->register(new WhereAmI(new Places(), $locationPoints, $mapDistance));
         $registry->register(new GetSensorSetup($apiTokens));
         $registry->register(new UndoRoutine($routines, $homeCall));
         $feedback = new FeedbackReports();

@@ -483,7 +483,7 @@ final class ScheduledTasks
                 'routine'     => $isRoutine,
                 'trigger_type' => $t['trigger_type'] ?? 'time',
                 'phrases'     => $t['phrases'] ?? [],
-                'conditions_text' => RoutineGate::describe($t['conditions'] ?? []),
+                'conditions_text' => RoutineGate::describe($t['conditions'] ?? [], $placeNames),
                 'run_mode'    => $t['run_mode'] ?? 'auto',
                 'run_trigger' => $t['run_trigger'] ?? null,
                 'trigger'     => $t['trigger'] ?? [],

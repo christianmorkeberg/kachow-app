@@ -308,5 +308,35 @@ check('create_routine builds a sensor routine', ($res['created'] ?? false) === t
 $res = (new CreateRoutine($R, new ScheduledTasks($db), new Conversations($db), $places))->execute(['name' => 'Bad', 'instruction' => 'x', 'trigger_sensor' => 'window'], 1);
 check('…and refuses a sensor with no value', isset($res['error']));
 
+
+echo "10) one-off routines and location conditions\n";
+$sat = $at('2026-10-24 13:00');   // Saturday 24 Oct
+check('from: held back before it, allowed after (a date alone = from the start of that day)', RoutineGate::check(['from' => '2026-10-24'], $at('2026-10-23 23:00'), null) !== null && RoutineGate::check(['from' => '2026-10-24'], $at('2026-10-24 00:05'), null) === null
+    && RoutineGate::check(['from' => '2026-10-24 14:00'], $sat, null) !== null);
+check('until: a date alone is the whole day; after it the routine has expired', RoutineGate::check(['until' => '2026-10-24'], $at('2026-10-24 23:30'), null) === null && str_contains((string) RoutineGate::check(['until' => '2026-10-24'], $at('2026-10-25 00:10'), null), 'expired')
+    && RoutineGate::expired(['until' => '2026-10-24 12:00'], $sat) && !RoutineGate::expired(['until' => '2026-10-24 12:00'], $at('2026-10-24 11:59')) && !RoutineGate::expired([], $sat));
+check('"only this Saturday" = from + until that date', RoutineGate::check(['from' => '2026-10-24', 'until' => '2026-10-24'], $sat, null) === null && RoutineGate::check(['from' => '2026-10-24', 'until' => '2026-10-24'], $at('2026-10-31 13:00'), null) !== null);
+check('in_places: held back when known to be outside all of them, allowed inside any or when unknown', RoutineGate::check(['in_places' => [5, 6]], $sat, null, ['inside' => [5 => false, 6 => false]]) !== null
+    && RoutineGate::check(['in_places' => [5, 6]], $sat, null, ['inside' => [5 => false, 6 => true]]) === null && RoutineGate::check(['in_places' => [5, 6]], $sat, null, ['inside' => [5 => false, 6 => null]]) === null && RoutineGate::check(['in_places' => [5]], $sat, null, []) === null);
+check('out_places: held back when known to be inside one', RoutineGate::check(['out_places' => [5]], $sat, null, ['inside' => [5 => true]]) !== null && RoutineGate::check(['out_places' => [5]], $sat, null, ['inside' => [5 => false]]) === null && RoutineGate::check(['out_places' => [5]], $sat, null, ['inside' => [5 => null]]) === null);
+check('normalize keeps the new keys and drops junk', RoutineGate::normalize(['once' => 'true', 'from' => '2026-10-24', 'until' => 'soon', 'in_places' => ['3', 0, 'x', 3], 'out_places' => []]) === ['from' => '2026-10-24', 'in_places' => [3], 'once' => true]);
+check('they read as words on the card', RoutineGate::describe(['in_places' => [5], 'until' => '2026-10-24', 'once' => true], [5 => 'East of Roskilde']) === 'only when I\'m in East of Roskilde · until 2026-10-24 · once only');
+
+$one = $R->create(1, 70, ['label' => 'Heat on', 'instruction' => 'Set the heating to 21.', 'trigger_type' => 'phrase', 'phrases' => ['heat on'], 'conditions' => ['once' => true], 'status' => 'active']);
+$old = $R->create(1, 71, ['label' => 'Old', 'instruction' => 'x', 'trigger_type' => 'phrase', 'phrases' => ['old one'], 'conditions' => ['until' => '2020-01-01'], 'status' => 'active']);
+$fut = $R->create(1, 72, ['label' => 'Future', 'instruction' => 'x', 'trigger_type' => 'phrase', 'phrases' => ['future one'], 'conditions' => ['until' => '2999-01-01'], 'status' => 'active']);
+check('finish marks a routine done: it is no longer found or listed live, and cannot be requested', ($R->finish($one) ?? true) && $R->find(1, 'heat on') === null && $R->requestRun(1, $one, 'x') === false);
+check('finishExpired closes the ones past their until and leaves the rest', $R->finishExpired() >= 1 && $R->find(1, 'old one') === null && $R->find(1, 'future one') !== null);
+
+// names → ids in the spec; an unknown place is refused with what exists
+$pl1 = $places->add(1, ['name' => 'East of Roskilde', 'type' => 'commute', 'shape' => 'polygon', 'polygon' => [[55.6, 12.1], [55.6, 14.0], [55.9, 14.0], [55.9, 12.1]]]);
+$parsed = \App\Support\RoutineSpec::parse(['conditions' => ['in_places' => ['east of roskilde'], 'once' => true, 'until' => '2026-10-24']], $places, 1);
+check('the spec turns place names into ids (any case) and keeps once / until', ($parsed['fields']['conditions'] ?? null) === ['until' => '2026-10-24', 'in_places' => [(int) $pl1['id']], 'once' => true]);
+check('an unknown place in a condition is an error that lists what exists', str_contains((string) (\App\Support\RoutineSpec::parse(['conditions' => ['in_places' => ['Mars']]], $places, 1)['error'] ?? ''), 'East of Roskilde'));
+$inside = \App\Support\PlaceNow::inside(['recorded_at' => gmdate('Y-m-d H:i:s', time() - 60), 'lat' => 55.7, 'lon' => 13.0, 'acc' => 10], $places->list(1), [(int) $pl1['id']], time());
+check('where the user is now: inside the region from a fresh point', $inside === [(int) $pl1['id'] => true]);
+check('a stale or inaccurate point says "unknown", never a guess', \App\Support\PlaceNow::inside(['recorded_at' => gmdate('Y-m-d H:i:s', time() - 3600), 'lat' => 55.7, 'lon' => 13.0, 'acc' => 10], $places->list(1), [(int) $pl1['id']], time()) === [(int) $pl1['id'] => null]
+    && \App\Support\PlaceNow::inside(['recorded_at' => gmdate('Y-m-d H:i:s', time() - 60), 'lat' => 55.7, 'lon' => 13.0, 'acc' => 500], $places->list(1), [(int) $pl1['id']], time()) === [(int) $pl1['id'] => null]
+    && \App\Support\PlaceNow::inside(null, $places->list(1), [(int) $pl1['id']], time()) === [(int) $pl1['id'] => null]);
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

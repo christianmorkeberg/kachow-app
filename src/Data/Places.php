@@ -22,7 +22,7 @@ final class Places
     public const TYPES = ['work', 'business', 'commute', 'home', 'private', 'other'];
 
     public const MIN_RADIUS_M = 25;
-    public const MAX_RADIUS_M = 2000;
+    public const MAX_RADIUS_M = 30000;   // a big circle (a stretch of motorway) is fine; the app's slider covers the usual 25–1000 m, bigger ones are made by the assistant
     private const MAX_VERTICES = 60;
 
     private PDO $db;
