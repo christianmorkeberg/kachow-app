@@ -28,13 +28,22 @@ final class RoutineSpec
             'trigger_sensor_value' => ['type' => 'string', 'description' => 'The number or state to compare with, e.g. "50" or "open".'],
             'conditions'  => [
                 'type' => 'object',
-                'description' => 'Optional. When it should (not) run. weekdays: ISO days 1=Mon..7=Sun. between: ["07:00","22:00"] local. cooldown_minutes. away: only when the user is NOT at home. others_away: only when nobody else in the household is home.',
+                'description' => 'Optional. When it should (not) run — say ONLY what the user asked for. weekdays: ISO days 1=Mon..7=Sun. between: ["07:00","22:00"] local. cooldown_minutes. '
+                    . 'away: only when the user is NOT at home. others_away: only when nobody else in the household is home. in_places: only while the user is inside one of these '
+                    . 'saved places / regions (names). out_places: only while inside none of them. from / until: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" local — only within that period '
+                    . '("only this Saturday" = from and until that date). once: true = a ONE-OFF, finished after its first run. After saving, read the conditions back from the result '
+                    . 'and tell the user exactly those — never claim a condition the result does not show.',
                 'properties' => [
                     'weekdays' => ['type' => 'array', 'items' => ['type' => 'integer']],
                     'between'  => ['type' => 'array', 'items' => ['type' => 'string']],
                     'cooldown_minutes' => ['type' => 'integer'],
                     'away'     => ['type' => 'boolean'],
                     'others_away' => ['type' => 'boolean'],
+                    'in_places'  => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'out_places' => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'from'     => ['type' => 'string'],
+                    'until'    => ['type' => 'string'],
+                    'once'     => ['type' => 'boolean'],
                 ],
             ],
             'mode'        => ['type' => 'string', 'enum' => ['auto', 'ask'], 'description' => '"auto" (default): runs by itself when triggered by a place or the clock. "ask": sends a question first and runs only after the user says yes. Saying the phrase always runs it at once.'],
@@ -69,7 +78,25 @@ final class RoutineSpec
             $f['phrases'] = array_values(array_map('strval', $a['phrases']));
         }
         if (isset($a['conditions']) && is_array($a['conditions'])) {
-            $f['conditions'] = RoutineGate::normalize($a['conditions']);
+            $c = $a['conditions'];
+            foreach (['in_places', 'out_places'] as $k) {
+                if (!isset($c[$k]) || !is_array($c[$k])) {
+                    continue;
+                }
+                $ids = [];
+                foreach ($c[$k] as $nameOrId) {
+                    $pl = is_numeric($nameOrId) ? null : $places->findByName($userId, (string) $nameOrId);
+                    if ($pl === null && !is_numeric($nameOrId)) {
+                        $have = array_map(static fn (array $x): string => (string) $x['name'], $places->list($userId));
+
+                        return ['error' => 'No saved place or region called "' . $nameOrId . '"' . ($have !== [] ? ' (they have: ' . implode(', ', $have) . ')' : '')
+                            . '. Make it first (save_place, or save_region for "east of …").'];
+                    }
+                    $ids[] = $pl !== null ? (int) $pl['id'] : (int) $nameOrId;
+                }
+                $c[$k] = $ids;
+            }
+            $f['conditions'] = RoutineGate::normalize($c);
         }
         if (isset($a['mode']) && in_array($a['mode'], ['auto', 'ask'], true)) {
             $f['run_mode'] = (string) $a['mode'];

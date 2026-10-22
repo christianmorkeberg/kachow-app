@@ -15,20 +15,24 @@ use App\Data\Places;
  *  - The first accurate point only sets the baseline: no event.
  *  - LEFT: the user was inside and then LEAVE_POINTS accurate points in a row are outside (one stray jump is not leaving).
  *  - ARRIVED: the user was outside and an accurate point is inside and slow (≤ MAX_KMH — driving past is not arriving).
+ *  - ENTERED (pass-through, for "commute" places such as a stretch of motorway or a region): ENTER_POINTS accurate points in a row inside,
+ *    at any speed — the point of such a place is to notice a drive INTO it.
  */
 final class PlaceTransitions
 {
     public const MAX_ACC_M     = 100;
     public const MAX_KMH       = 10;
     public const LEAVE_POINTS  = 2;
+    public const ENTER_POINTS  = 2;
 
     /**
      * @param array{inside:bool, streak:int}|null $state null = never seen
      * @param list<array<string, mixed>> $targets the watched places (Places::list rows)
      * @param array{lat:float, lon:float, acc:?int, vel:?int} $point
+     * @param bool $passThrough entering counts after ENTER_POINTS inside points at any speed (commute places / regions), not only a slow arrival
      * @return array{state:array{inside:bool, streak:int}|null, event:?string} event is 'enter' | 'leave' | null; state null = unchanged
      */
-    public static function step(?array $state, array $targets, array $point): array
+    public static function step(?array $state, array $targets, array $point, bool $passThrough = false): array
     {
         if ($targets === [] || ($point['acc'] !== null && $point['acc'] > self::MAX_ACC_M)) {
             return ['state' => null, 'event' => null];
@@ -56,6 +60,14 @@ final class PlaceTransitions
             return ['state' => ['inside' => true, 'streak' => $streak], 'event' => null];
         }
         // believed outside, now inside
+        if ($passThrough) {
+            $streak = $state['streak'] + 1;
+            if ($streak >= self::ENTER_POINTS) {
+                return ['state' => ['inside' => true, 'streak' => 0], 'event' => 'enter'];
+            }
+
+            return ['state' => ['inside' => false, 'streak' => $streak], 'event' => null];
+        }
         if ($point['vel'] !== null && $point['vel'] > self::MAX_KMH) {
             return ['state' => null, 'event' => null];            // passing through
         }

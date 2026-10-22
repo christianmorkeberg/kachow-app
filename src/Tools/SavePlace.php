@@ -29,9 +29,9 @@ final class SavePlace implements Tool
         return 'Saves a named place for location tracking, as a circle at the user\'s CURRENT tracked position '
             . '(default: "mark where I am as Office", "gem stedet her som Arbejde") or at an address. type: work '
             . '(a workplace — will drive the automatic work clock), business (client/business trips), commute, '
-            . 'home, private or other. radius_m defaults to 100 (25–2000; ~150–300 suits a large workplace). '
+            . 'home, private or other. radius_m defaults to 100 (25–30000; ~150–300 suits a large workplace; for a wide zone such as a stretch of motorway use 5000–10000). '
             . 'Shows the places map card, where the user can fine-tune the circle or draw a polygon. Ask for the '
-            . 'type if it isn\'t clear. Never invent coordinates.';
+            . 'type if it isn\'t clear. Give lat + lon ONLY when the user typed coordinates themselves; for "east of …" areas use save_region. Never invent coordinates.';
     }
 
     public function parameters(): array
@@ -42,6 +42,8 @@ final class SavePlace implements Tool
                 'name'     => ['type' => 'string', 'description' => 'What the user calls the place, e.g. "Office".'],
                 'type'     => ['type' => 'string', 'enum' => Places::TYPES],
                 'radius_m' => ['type' => 'integer', 'description' => 'Circle radius in metres (default 100).'],
+                'lat'      => ['type' => 'number', 'description' => 'Coordinates the user gave (with lon), instead of an address.'],
+                'lon'      => ['type' => 'number'],
                 'address'  => ['type' => 'string', 'description' => 'A real street address or named '
                     . 'location to geocode ("Main Street 2, Townsville"), instead of the current position. Leave it '
                     . 'out when the user is AT the place ("I\'m at home right now") — never pass "home"/"here".'],
@@ -52,7 +54,11 @@ final class SavePlace implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
-        $pos = PlacePosition::resolve($this->points, $this->maps, $userId, $arguments['address'] ?? null);
+        if (isset($arguments['lat'], $arguments['lon']) && is_numeric($arguments['lat']) && is_numeric($arguments['lon'])) {
+            $pos = ['lat' => (float) $arguments['lat'], 'lon' => (float) $arguments['lon'], 'from' => 'coordinates the user gave'];
+        } else {
+            $pos = PlacePosition::resolve($this->points, $this->maps, $userId, $arguments['address'] ?? null);
+        }
         if (isset($pos['error'])) {
             return $pos;
         }

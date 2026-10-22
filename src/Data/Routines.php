@@ -139,7 +139,7 @@ final class Routines
 
         return [
             'id' => $r['id'], 'name' => $r['label'], 'status' => $r['status'], 'when' => self::describeTrigger($r, $placeNames), 'phrases' => $r['phrases'],
-            'conditions' => RoutineGate::describe($r['conditions']), 'mode' => $r['run_mode'], 'does' => $r['instruction'],
+            'conditions' => RoutineGate::describe($r['conditions'], $placeNames), 'mode' => $r['run_mode'], 'does' => $r['instruction'],
         ];
     }
 
@@ -239,6 +239,29 @@ final class Routines
             ->execute([':s' => $status, ':id' => $id, ':u' => $userId]);
 
         return true;
+    }
+
+    /** A one-off that has run, or a routine past its `until`: finished (status done — it stays on the card, no longer live). */
+    public function finish(int $id): void
+    {
+        $this->db->prepare("UPDATE scheduled_tasks SET status = 'done', run_requested_at = NULL WHERE id = :id AND status IN ('active','paused')")->execute([':id' => $id]);
+    }
+
+    /** Routines past their `until` are over: marks them done (the per-minute cron calls this). Returns how many. */
+    public function finishExpired(): int
+    {
+        $n = 0;
+        $now = self::nowLocal();
+        $stmt = $this->db->query("SELECT id, conditions FROM scheduled_tasks WHERE status = 'active' AND trigger_type IN ('phrase','place','sensor') AND conditions LIKE '%\"until\"%'");
+        foreach ($stmt->fetchAll() as $r) {
+            $c = json_decode((string) $r['conditions'], true);
+            if (is_array($c) && RoutineGate::expired($c, $now)) {
+                $this->finish((int) $r['id']);
+                $n++;
+            }
+        }
+
+        return $n;
     }
 
     /** Asks for a run now (the per-minute cron does it). False if it is not active or a run is already waiting. */

@@ -65,6 +65,8 @@ use App\Receipts\ReceiptStorage;
 use App\Data\SystemTasks;
 use App\Support\Household;
 use App\Support\HomeNow;
+use App\Support\PlaceNow;
+use App\Support\RoutineGate;
 use App\Support\RoutineSteps;
 use App\Support\SystemTaskDispatcher;
 use App\Support\SystemTaskRunner;
@@ -259,10 +261,18 @@ foreach ($routines->requested() as $r) {
             if (!empty($c['others_away'])) {
                 $ctx['others_home'] = Household::othersHome(new \App\Data\Connections(), new LocationPoints(), new Places(), $r['user_id']);
             }
+            $placeIds = array_values(array_unique(array_map('intval', array_merge((array) ($c['in_places'] ?? []), (array) ($c['out_places'] ?? [])))));
+            if ($placeIds !== []) {
+                $ctx['inside'] = PlaceNow::check(new LocationPoints(), new Places(), $r['user_id'], $placeIds);
+            }
             $why = Routines::gate($r, $ctx);
             if ($why !== null) {
                 $routines->clearRequest($r['id']);
                 $tasks->recordRun($r['id'], true, 'Skipped (' . $trigger . ') — ' . $why . '.');
+                // past its `until`: it is over, so it stops showing as live and stops listening
+                if (RoutineGate::expired($r['conditions'], Routines::nowLocal())) {
+                    $routines->finish($r['id']);
+                }
                 continue;
             }
             if ($r['run_mode'] === 'ask') {
@@ -277,6 +287,9 @@ foreach ($routines->requested() as $r) {
         }
         $execute($r);
         $ranRequested++;
+        if (!empty($r['conditions']['once'])) {
+            $routines->finish($r['id']);   // a one-off has done its one run
+        }
     } catch (\Throwable $e) {
         error_log('scheduled-tasks-cron routine ' . $r['id'] . ': ' . $e->getMessage());
         try {
@@ -291,6 +304,11 @@ if ($ranRequested > 0) {
 }
 if ($requestedOnly) {
     exit(0);
+}
+try {
+    $routines->finishExpired();   // routines past their `until` are over
+} catch (\Throwable $e) {
+    error_log('scheduled-tasks-cron finishExpired: ' . $e->getMessage());
 }
 
 $due = $tasks->due();

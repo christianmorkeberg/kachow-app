@@ -125,12 +125,12 @@ final class ToolSelector
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
             'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
-            'create_routine', 'update_routine', 'run_routine', 'undo_routine', 'get_sensor_setup',
+            'create_routine', 'update_routine', 'run_routine', 'undo_routine', 'get_sensor_setup', 'save_region', 'where_am_i', 'save_place', 'list_places',
         ],
         // Tracked movement (OwnTracks raw points; private per user).
         'location' => [
             'get_location_day', 'get_location_tracking_setup',
-            'save_place', 'list_places', 'update_place', 'delete_place',
+            'save_place', 'list_places', 'update_place', 'delete_place', 'save_region', 'where_am_i',
             'get_stays', 'get_trips', 'suggest_places',
         ],
         'settings' => [
@@ -388,6 +388,8 @@ final class ToolSelector
             // places (phase 2)
             'my places', 'a place', 'this place', 'the place', 'where i am', "where i'm", 'mark here', 'save place',
             'new place', 'geofence', 'radius', 'workplace',
+            // regions and coordinates
+            'east of', 'west of', 'north of', 'south of', 'koordinat', 'coordinate', 'lat ', 'er jeg øst', 'er jeg vest', 'øst for', 'vest for', 'nord for', 'syd for', 'how far am i', 'hvor langt er jeg',
             // Danish: sted/steder, "gem stedet", "hvor jeg er", arbejdsplads
             'mine steder', 'stedet', ' sted ', 'steder', 'hvor jeg er', 'gem her', 'nyt sted', 'arbejdsplads', 'radius',
             // timeline / stays / trips (phase 3)
