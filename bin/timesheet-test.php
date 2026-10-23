@@ -66,6 +66,10 @@ check('dates, hours, total, rounding note and a print button that is hidden when
 $enHtml = Timesheet::html(Timesheet::build($sessions), 'en', [], false);
 check('English page, no notes column, no rounding note', str_contains($enHtml, '<h1>Timesheet</h1>') && !str_contains($enHtml, 'Description') && !str_contains($enHtml, 'rounded to'));
 
+$plain = Timesheet::html(Timesheet::build($sessions), 'da', ['title' => 'Timeseddel – Studio X', 'person' => 'Studio X', 'made' => '23.10.2026']);
+check('a custom heading replaces the default (also in <title>) and the sender name is printed', str_contains($plain, '<h1>Timeseddel – Studio X</h1>') && str_contains($plain, '<title>Timeseddel – Studio X</title>') && str_contains($plain, '<span>Navn</span> Studio X'));
+check('no signature block by default, one when asked', !str_contains($plain, 'class="sign"') && !str_contains($plain, 'Underskrift') && str_contains(Timesheet::html(Timesheet::build($sessions), 'da', [], false, true), 'Underskrift'));
+
 echo "6) generic table export\n";
 use App\Support\DataExport;
 $res = ['range' => 'x', 'total' => 3, 'items' => [['date' => '2026-10-01', 'amount' => 12.5, 'paid' => true, 'note' => null, 'nested' => ['a' => 1], '_hidden' => 'x'], ['date' => '2026-10-02', 'amount' => 7, 'paid' => false, 'note' => 'Lunch; "quoted"']], 'tags' => [['k' => 'v']], '_render' => ['kind' => 'card']];
@@ -108,6 +112,9 @@ if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\
     $mis = $tool->execute(['source' => 'get_work_hours', 'args' => $args + ['break_minutes' => 30, 'break_after_hours' => 4, 'customer' => 'Client Z'], 'layout' => 'timesheet'], 1);
     $mspec = json_decode(rawurldecode(explode('&format=', substr($mis['csv_url'], strpos($mis['csv_url'], 'spec=') + 5))[0]), true);
     check('options the model put inside args still count, and are not passed on to the source tool', ($mis['summary']['total'] ?? '') === '16:13' && ($mspec['break'] ?? 0) === 30 && ($mspec['customer'] ?? '') === 'Client Z' && !isset($mspec['args']['break_minutes']), json_encode($mspec));
+    $fn = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'layout' => 'timesheet', 'from_name' => 'Studio X', 'title' => 'Hours', 'signature' => true], 1);
+    $fspec = json_decode(rawurldecode(explode('&format=', substr($fn['csv_url'], strpos($fn['csv_url'], 'spec=') + 5))[0]), true);
+    check('from_name, title and signature travel in the link; signature defaults off', ($fspec['from_name'] ?? '') === 'Studio X' && ($fspec['title'] ?? '') === 'Hours' && ($fspec['signature'] ?? false) === true && (json_decode(rawurldecode(explode('&format=', substr($mis['csv_url'], strpos($mis['csv_url'], 'spec=') + 5))[0]), true)['signature'] ?? null) === false);
     check('no enum on integers anywhere in the schema (Gemini accepts only string enums)', !preg_match('/"enum":\[\d/', json_encode($tool->parameters())));
     $tbl = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'columns' => ['date', 'in', 'out', 'minutes']], 1);
     check('table layout: one row per clocked session with the chosen columns', ($tbl['summary']['rows'] ?? 0) === 3 && ($tbl['summary']['columns'] ?? []) === ['date', 'in', 'out', 'minutes'], json_encode($tbl));

@@ -51,8 +51,10 @@ final class ExportData implements Tool
                 'args'          => ['type' => 'object', 'description' => 'The arguments to call that tool with (e.g. {"from":"2026-10-01","to":"2026-10-31","place":"Office"}).'],
                 'layout'        => ['type' => 'string', 'enum' => ['table', 'timesheet'], 'description' => 'table (default: one row per record) or timesheet (get_work_hours only: hours per day + total).'],
                 'columns'       => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Only these columns, in this order (table layout). Default: all.'],
-                'title'         => ['type' => 'string', 'description' => 'Heading on the printable page.'],
+                'title'         => ['type' => 'string', 'description' => 'Heading of the printed page (a timesheet\'s default is "Timeseddel"). Not the sender name — that is from_name.'],
                 'customer'      => ['type' => 'string', 'description' => 'Customer name on the printed timesheet.'],
+                'from_name'     => ['type' => 'string', 'description' => 'Timesheet only: who the sheet is from (printed as "Navn"), e.g. the user\'s company. Default: the user\'s profile name.'],
+                'signature'     => ['type' => 'boolean', 'description' => 'Timesheet only: add a signature line. Default false — only when asked.'],
                 'round_minutes' => ['type' => 'integer', 'description' => 'Timesheet only: round each day to the nearest N minutes — 5, 10, 15 or 30 (0 = exact, the default).'],
                 'break_minutes' => ['type' => 'integer', 'description' => 'Timesheet only: lunch break to deduct from each day with more than break_after_hours of work (e.g. 30). Use when the user says a break was deducted on the invoice.'],
                 'break_after_hours' => ['type' => 'number', 'description' => 'Timesheet only: the break is deducted only on days with MORE than this many hours worked. Default 4.'],
@@ -70,7 +72,7 @@ final class ExportData implements Tool
         }
         $args = is_array($arguments['args'] ?? null) ? $arguments['args'] : [];
         // The model sometimes puts the export's own options inside args; they are not the source tool's arguments.
-        foreach (['break_minutes', 'break_after_hours', 'round_minutes', 'customer', 'language', 'layout', 'title'] as $own) {
+        foreach (['break_minutes', 'break_after_hours', 'round_minutes', 'customer', 'from_name', 'signature', 'language', 'layout', 'title'] as $own) {
             if (array_key_exists($own, $args)) {
                 $arguments[$own] ??= $args[$own];
                 unset($args[$own]);
@@ -83,6 +85,8 @@ final class ExportData implements Tool
             'columns'  => array_values(array_filter(array_map('strval', (array) ($arguments['columns'] ?? [])), static fn (string $c): bool => $c !== '')),
             'title'    => trim((string) ($arguments['title'] ?? '')),
             'customer' => trim((string) ($arguments['customer'] ?? '')),
+            'from_name' => trim((string) ($arguments['from_name'] ?? '')),
+            'signature' => (bool) ($arguments['signature'] ?? false),
             'round'    => (int) ($arguments['round_minutes'] ?? 0),
             'break'    => max(0, (int) ($arguments['break_minutes'] ?? 0)),
             'break_over' => (int) round(max(0.0, (float) ($arguments['break_after_hours'] ?? 4)) * 60),

@@ -125,13 +125,14 @@ final class Timesheet
      * A standalone printable page (A4, black on white) — "Print / save as PDF" in the browser.
      *
      * @param array<string, mixed> $sheet build()
-     * @param array{person?:string, customer?:string, job?:string, period?:string, made?:string} $head
+     * @param array{title?:string, person?:string, customer?:string, job?:string, period?:string, made?:string} $head
      */
-    public static function html(array $sheet, string $lang, array $head, bool $withNotes = false): string
+    public static function html(array $sheet, string $lang, array $head, bool $withNotes = false, bool $signature = false): string
     {
         $lang = isset(self::T[$lang]) ? $lang : 'da';
         $t    = self::T[$lang];
         $e    = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = ($head['title'] ?? '') !== '' ? (string) $head['title'] : $t['title'];
         $meta = '';
         foreach (['person' => 'person', 'customer' => 'customer', 'job' => 'job', 'period' => 'period'] as $k => $label) {
             if (($head[$k] ?? '') !== '') {
@@ -150,7 +151,7 @@ final class Timesheet
         $round = ($brk ? '<p class="note">' . $e(sprintf($t['break_note'], $sheet['break_minutes'], rtrim(rtrim(number_format($sheet['break_over'] / 60, 2, $lang === 'da' ? ',' : '.', ''), '0'), ',.'))) . '</p>' : '')
             . ($sheet['round'] > 0 ? '<p class="note">' . $e(sprintf($t['rounded'], $sheet['round'])) . '</p>' : '');
 
-        return '<!doctype html><html lang="' . $lang . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . $e($t['title']) . '</title><style>'
+        return '<!doctype html><html lang="' . $lang . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . $e($title) . '</title><style>'
             . 'body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#111;background:#fff;margin:0;padding:28px;max-width:820px}'
             . 'h1{font-size:22px;margin:0 0 10px}.meta{display:grid;gap:2px;margin-bottom:16px}.meta span{color:#666;display:inline-block;min-width:92px}'
             . 'table{border-collapse:collapse;width:100%}th,td{padding:7px 9px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#555;border-bottom:2px solid #111}'
@@ -159,11 +160,11 @@ final class Timesheet
             . '.bar{margin:0 0 18px}.bar button{font:inherit;padding:8px 14px;border:1px solid #111;background:#fff;border-radius:8px;cursor:pointer}'
             . '@media print{.bar{display:none}body{padding:0}}'
             . '</style></head><body><div class="bar"><button onclick="window.print()">' . $e($t['print']) . '</button></div>'
-            . '<h1>' . $e($t['title']) . '</h1><div class="meta">' . $meta . '</div>'
+            . '<h1>' . $e($title) . '</h1><div class="meta">' . $meta . '</div>'
             . '<table><thead><tr><th>' . $e($t['date']) . '</th><th>' . $e($t['weekday']) . '</th><th>' . $e($t['times']) . '</th>' . ($withNotes ? '<th>' . $e($t['notes']) . '</th>' : '')
             . ($brk ? '<th class="n">' . $e($t['break']) . '</th>' : '')
             . '<th class="n">' . $e($t['hours']) . '</th><th class="n">' . $e($t['decimal']) . '</th></tr></thead><tbody>' . $rows . '</tbody>'
             . '<tfoot><tr><td colspan="' . ($cols - 2 - ($brk ? 1 : 0)) . '">' . $e($t['total']) . ' (' . count($sheet['days']) . ' ' . $e($t['days']) . ')</td>' . ($brk ? '<td class="n">' . $e(self::hm(array_sum(array_column($sheet['days'], 'break')))) . '</td>' : '') . '<td class="n">' . $e(self::hm($sheet['total_minutes'])) . '</td><td class="n">' . $e(self::decimal($sheet['total_minutes'], $lang)) . '</td></tr></tfoot></table>'
-            . $round . '<div class="sign"><div>' . $e($t['sign']) . '</div><div>' . $e($t['made']) . ' ' . $e((string) ($head['made'] ?? '')) . '</div></div></body></html>';
+            . $round . ($signature ? '<div class="sign"><div>' . $e($t['sign']) . '</div><div>' . $e($t['made']) . ' ' . $e((string) ($head['made'] ?? '')) . '</div></div>' : '') . '</body></html>';
     }
 }
