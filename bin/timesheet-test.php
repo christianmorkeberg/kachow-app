@@ -30,6 +30,18 @@ check('each day rounds to the nearest quarter, the total adds the rounded days',
 check('the exact minutes are kept beside the rounded ones', $r['days'][0]['minutes'] === 574);
 check('an unsupported rounding is ignored', Timesheet::build($sessions, 7)['round'] === 0);
 
+echo "2b) lunch break\n";
+$bk = Timesheet::build($sessions, 0, [], 30);
+check('30 min off each day over 4 h (the 40-min-only day would not count, here all three days exceed)', array_column($bk['days'], 'counted') === [544, 466, 227] && array_column($bk['days'], 'break') === [30, 30, 30] && $bk['total_minutes'] === 1237, json_encode(array_column($bk['days'], 'counted')));
+$short = Timesheet::build([$s('2026-10-15', '09:00', '12:00', 180), $s('2026-10-16', '09:00', '13:00', 240), $s('2026-10-17', '09:00', '13:01', 241)], 0, [], 30);
+check('only days with MORE than 4 h lose the break (exactly 4 h keeps it)', array_column($short['days'], 'break') === [0, 0, 30] && array_column($short['days'], 'counted') === [180, 240, 211]);
+check('the break is capped at the day and applied before rounding', Timesheet::build([$s('2026-10-15', '09:00', '09:20', 20)], 0, [], 30, 0)['days'][0]['counted'] === 0 && Timesheet::build([$s('2026-10-15', '09:00', '14:00', 300)], 15, [], 30)['days'][0]['counted'] === 270);
+$bkRows = Timesheet::csvRows($bk, 'da');
+check('CSV gets a Pause column and a break total', $bkRows[0] === ['Dato', 'Ugedag', 'Tidspunkter', 'Pause', 'Timer', 'Timer (decimal)'] && $bkRows[1][3] === '0:30' && $bkRows[4][3] === '1:30' && $bkRows[4][4] === '20:37', json_encode($bkRows[4]));
+$bkHtml = Timesheet::html($bk, 'da', ['job' => 'Office']);
+check('printed page: Pause column and the note', str_contains($bkHtml, '<th class="n">Pause</th>') && str_contains($bkHtml, 'fratrukket 30 min. frokostpause') && str_contains($bkHtml, 'mere end 4 timers'));
+check('no break → the old columns', count(Timesheet::csvRows($sheet, 'da')[0]) === 5);
+
 echo "3) formats\n";
 check('h:mm', Timesheet::hm(574) === '9:34' && Timesheet::hm(61) === '1:01' && Timesheet::hm(0) === '0:00');
 check('decimal with comma for Danish, point for English', Timesheet::decimal(574, 'da') === '9,57' && Timesheet::decimal(574, 'en') === '9.57' && Timesheet::decimal(1978, 'da') === '32,97');
@@ -89,6 +101,11 @@ if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\
     $b = App\Tools\ExportData::build($reg, $spec, 1);
     check('the endpoint rebuilds the same sheet from the link', $b['sheet']['total_minutes'] === 1033 && count($b['sheet']['days']) === 2);
     check('rounding in the timesheet layout', App\Tools\ExportData::build($reg, array_merge($spec, ['round' => 30]), 1)['sheet']['total_minutes'] === 1020);
+    $rb = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'layout' => 'timesheet', 'break_minutes' => 30, 'break_after_hours' => 4], 1);
+    check('tool: break deducted from both days (17:13 − 1:00)', ($rb['summary']['total'] ?? '') === '16:13' && ($rb['summary']['break_deducted_days'] ?? 0) === 2, json_encode($rb['summary'] ?? $rb));
+    $bspec = json_decode(rawurldecode(explode('&format=', substr($rb['csv_url'], strpos($rb['csv_url'], 'spec=') + 5))[0]), true);
+    check('the link carries the break', ($bspec['break'] ?? 0) === 30 && ($bspec['break_over'] ?? 0) === 240 && App\Tools\ExportData::build($reg, $bspec, 1)['sheet']['total_minutes'] === 973);
+    check('no enum on integers anywhere in the schema (Gemini accepts only string enums)', !preg_match('/"enum":\[\d/', json_encode($tool->parameters())));
     $tbl = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'columns' => ['date', 'in', 'out', 'minutes']], 1);
     check('table layout: one row per clocked session with the chosen columns', ($tbl['summary']['rows'] ?? 0) === 3 && ($tbl['summary']['columns'] ?? []) === ['date', 'in', 'out', 'minutes'], json_encode($tbl));
     check('nothing in the period → a clear error, not an empty file', isset($tool->execute(['source' => 'get_work_hours', 'args' => ['from' => '2025-01-01', 'to' => '2025-01-02'], 'layout' => 'timesheet'], 1)['error']));
