@@ -268,6 +268,36 @@ try {
     error_log('notify-cron tracking-silent: ' . $e->getMessage());
 }
 
+// ---------- Home agent (Pico) has gone silent ----------
+// The Pico long-polls every few seconds; when it stops (power, router, a hang) lights / thermostats / routines silently stop working
+// until someone tries them. One daytime push per outage, keyed on the last time it checked in.
+try {
+    $agentTokens = new \App\Data\ApiTokens();
+    foreach ($agentTokens->userIdsWithScope(\App\Data\AgentCommands::SCOPE) as $uid) {
+        if (!isset($subscribed[$uid])) {
+            continue;
+        }
+        $silent = $agentTokens->secondsSinceUse($uid, \App\Data\AgentCommands::SCOPE);
+        $lastAt = $agentTokens->lastUsedAt($uid, \App\Data\AgentCommands::SCOPE);
+        if ($lastAt === null || !\App\Support\AgentHealth::shouldAlert($silent, $nowLocal)) {
+            continue;
+        }
+        if (!$log->claim($uid, NotificationTypes::HOME_AGENT_OFFLINE, $lastAt)) {
+            continue;
+        }
+        $seenLocal = $nowLocal->setTimestamp($nowLocal->getTimestamp() - (int) $silent);
+        $notifier->notify(
+            $uid,
+            NotificationTypes::HOME_AGENT_OFFLINE,
+            'Home agent offline',
+            'The Pico has not checked in since ' . $seenLocal->format('D j M H:i') . ' (' . fmtDur((int) round($silent / 60)) . ' ago), so lights, thermostats and routines that '
+                . 'need it will not work. It restarts itself if it hangs — so check its power and that the router is up.'
+        );
+    }
+} catch (\Throwable $e) {
+    error_log('notify-cron home-agent: ' . $e->getMessage());
+}
+
 // ---------- Location work clock: finalise yesterday, ask about skipped visits ----------
 // For users who switched the work clock to location: one last sync of yesterday (the day is
 // complete now), and if a work visit was skipped because the phone stopped reporting around it,

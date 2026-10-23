@@ -21,19 +21,61 @@ except ImportError:  # older MicroPython
     import ussl as ssl
 
 import config
-from agent_lib import (build_request, parse_response, path_allowed, response_complete,
-                       split_url)
+from agent_lib import (build_request, parse_response, path_allowed, reset_due, response_complete,
+                       should_feed, split_url)
 
-VERSION = "1"
+VERSION = "2"
 POLL_WAIT_S = 20          # how long the server may hold a poll open (it answers instantly on a command)
 MAX_RESPONSE = 30000      # bytes of a device answer we keep (a Hue light list is a few KB)
 BOOT_MS = time.ticks_ms()
+STALL_MS = 150000         # the loop silent this long (stuck in DNS / TLS / a dead socket) = hung: stop feeding the watchdog
+NO_SUCCESS_RESET_MS = 600000   # no poll has succeeded for 10 minutes, whatever the reason: restart
+WDT_MS = 8000             # the hardware watchdog (the longest the RP2040 allows is ~8.3 s)
+
+_beat_ms = time.ticks_ms()   # the main loop reports in here; see _feed()
+_wdt = None
 
 led = machine.Pin("LED", machine.Pin.OUT)
 
 
 def log(*args):
     print("[agent]", *args)
+
+
+def beat():
+    """The main loop is alive and making progress."""
+    global _beat_ms
+    _beat_ms = time.ticks_ms()
+
+
+def _feed(_t):
+    # Runs from a timer, so it keeps running while the loop sits in a blocking call — but only FEEDS the watchdog while the
+    # loop has reported in recently. A real hang (this is what left the Pico dead for 12 h) stops the feeding, and the
+    # hardware watchdog restarts the Pico 8 seconds later.
+    if _wdt is not None and should_feed(time.ticks_diff(time.ticks_ms(), _beat_ms), STALL_MS):
+        _wdt.feed()
+
+
+def start_watchdog():
+    global _wdt
+    if not getattr(config, "WATCHDOG", True):
+        log("watchdog is off (WATCHDOG = False in config.py)")
+        return
+    try:
+        _wdt = machine.WDT(timeout=WDT_MS)
+        machine.Timer(mode=machine.Timer.PERIODIC, period=2000, callback=_feed)
+        log("watchdog on: restarts the Pico if the program hangs")
+    except Exception as e:     # an old firmware without a periodic Timer: better no watchdog than a reboot loop
+        _wdt = None
+        log("watchdog not started:", e)
+
+
+def reset_cause_name():
+    try:
+        c = machine.reset_cause()
+        return {machine.PWRON_RESET: "power-on", machine.WDT_RESET: "watchdog"}.get(c, str(c))
+    except Exception:
+        return "?"
 
 
 def blink(times, on_ms=100, off_ms=100):
@@ -58,6 +100,7 @@ def connect_wifi():
     log("connecting to Wi-Fi", config.WIFI_SSID)
     wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
     for _ in range(40):
+        beat()
         if wlan.isconnected():
             log("Wi-Fi up, IP", wlan.ifconfig()[0])
             led.on()
@@ -124,7 +167,7 @@ def run_command(cmd, wlan):
             return 200, json.dumps({
                 "ok": True, "version": VERSION, "ip": wlan.ifconfig()[0],
                 "uptime_s": time.ticks_diff(time.ticks_ms(), BOOT_MS) // 1000,
-                "free_mem": gc.mem_free(),
+                "free_mem": gc.mem_free(), "last_restart": reset_cause_name(),
             }), None
         return None, None, "the pico only supports GET /ping"
 
@@ -184,29 +227,60 @@ def poll():
 
 # --------------------------------------------------------------------------- main loop
 
+def restart_wifi(wlan):
+    """A half-dead Wi-Fi link (connected on paper, nothing flows) is cured by switching the radio off and on."""
+    log("restarting the Wi-Fi radio")
+    try:
+        wlan.disconnect()
+    except Exception:
+        pass
+    try:
+        wlan.active(False)
+        time.sleep(1)
+        wlan.active(True)
+    except Exception as e:
+        log("radio restart failed:", e)
+
+
 def main():
     # A 5-second window at power-up: press Stop in Thonny now if you need to edit files. Once the
     # polling loop starts, it keeps the Pico busy and Thonny may take a while to get its attention.
+    # (The watchdog starts only AFTER this window — it cannot be switched off again once running.)
     log("starting in 5 s — press Stop in Thonny now if you need to edit files")
     for _ in range(5):
         blink(1, 500, 500)
+    log("last restart:", reset_cause_name())
+    start_watchdog()
+    beat()
     fails = 0
     wlan = None
+    last_ok = time.ticks_ms()
     while True:
+        beat()
         try:
             if wlan is None or not wlan.isconnected():
                 wlan = connect_wifi()
             cmd = poll()
             fails = 0
+            last_ok = time.ticks_ms()
+            beat()
             led.on()
             if cmd:
                 handle(cmd, wlan)
+                beat()
         except Exception as e:
             fails += 1
             log("problem (%d):" % fails, e)
             blink(3, 600, 300)
+            if reset_due(time.ticks_diff(time.ticks_ms(), last_ok), NO_SUCCESS_RESET_MS):
+                log("no successful poll for 10 minutes — restarting")
+                machine.reset()
+            if fails in (4, 8) and wlan is not None:
+                restart_wifi(wlan)
+                wlan = None
             if fails >= 15:       # something is stuck — a clean restart fixes most things
                 machine.reset()
+            beat()
             time.sleep(min(30, 2 * fails))
 
 

@@ -27,6 +27,7 @@ final class NotificationTypes
     public const FEEDBACK_REPORT = 'feedback_report';
     public const IMPORTANT_EMAIL = 'important_email';
     public const ROUTINE_ASK = 'routine_ask';
+    public const HOME_AGENT_OFFLINE = 'home_agent_offline';
 
     /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
@@ -109,6 +110,14 @@ final class NotificationTypes
         self::ROUTINE_ASK => [
             'label'       => 'Routine asks first',
             'description' => 'When a routine you set to "ask first" is triggered (for example by leaving home): a question to run it or skip it.',
+            'default'     => true,
+        ],
+        // Sent by notify-cron when the home agent (the Pico) has not been in touch for a while — lights, thermostats and routines
+        // that need it silently stop working, and nobody notices until they try. Daytime only, once per outage.
+        self::HOME_AGENT_OFFLINE => [
+            'label'       => 'Home agent offline',
+            'description' => 'A heads-up when your Pico home agent has been silent for more than 20 minutes (power, router or Wi-Fi), so lights, '
+                . 'thermostats and routines that need it do not quietly stop working.',
             'default'     => true,
         ],
         // Sent by api/report.php when a user flags a message ("report to developer"). Replaces the

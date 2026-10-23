@@ -85,6 +85,16 @@ final class ApiTokens
         return $secs === false || $secs === null ? null : max(0, (int) $secs);
     }
 
+    /** The raw last-used timestamp (server time) of a token, or null if it was never used — identifies one "outage" for de-duplication. */
+    public function lastUsedAt(int $userId, string $scope): ?string
+    {
+        $stmt = $this->db->prepare('SELECT last_used_at FROM api_tokens WHERE user_id = :u AND scope = :s AND last_used_at IS NOT NULL LIMIT 1');
+        $stmt->execute([':u' => $userId, ':s' => $scope]);
+        $v = $stmt->fetchColumn();
+
+        return $v === false || $v === null ? null : (string) $v;
+    }
+
     /** Whether the user has a token for this scope (without creating one, unlike ensure()). */
     public function has(int $userId, string $scope): bool
     {

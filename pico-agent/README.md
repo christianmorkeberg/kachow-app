@@ -51,6 +51,16 @@ Ask the assistant *"is my home agent online?"* and then *"ping the pico"*. Then 
 - Assistant says the agent is offline: no power, or Wi-Fi down. Replug it.
 - To change `config.py` later: connect in Thonny, edit it on the Pico (File → Open → Raspberry Pi Pico), save, restart.
 
+## It restarts itself (and tells you if it can't)
+- **Watchdog:** a hardware watchdog restarts the Pico if the program ever hangs (a stuck DNS lookup, a half-dead Wi-Fi link …).
+  It is fed only while the main loop is making progress, so a real hang can no longer leave the Pico dead for hours. It also
+  restarts after 10 minutes without one successful poll, and switches the Wi-Fi radio off and on after a few failures first.
+- **Developing:** the watchdog cannot be switched off once it is running. It starts only *after* the 5-second window at power-up, so
+  press Stop in Thonny in that window — or set `WATCHDOG = False` in `config.py` while you edit files.
+- **Alert:** if the Pico has not checked in for 20 minutes, the server sends one push per outage (daytime only; turn it off under
+  Notifications → "Home agent offline"). The assistant's `ping the pico` shows `last_restart` (power-on / watchdog).
+- If the router is up and the Pico still stays offline, it is almost always power (a loose cable or a charger that sleeps) — try a different USB charger.
+
 ## Safety notes
 - The assistant can only reach devices **you list in `config.py`**, only **paths you allow**, and only the
   **methods you allow** (GET/PUT for Hue by default). The server cannot change that.
