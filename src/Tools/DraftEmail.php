@@ -14,7 +14,7 @@ use App\Email\EmailService;
  */
 final class DraftEmail implements Tool
 {
-    public function __construct(private EmailService $email)
+    public function __construct(private EmailService $email, private ?ExportData $export = null)
     {
     }
 
@@ -40,6 +40,7 @@ final class DraftEmail implements Tool
                 'body'      => ['type' => 'string', 'description' => 'Plain-text body.'],
                 'cc'        => ['type' => 'string', 'description' => 'Optional Cc address(es).'],
                 'thread_id' => ['type' => 'string', 'description' => 'Optional Gmail thread id to reply within.'],
+                'attach_export_url' => ['type' => 'string', 'description' => 'Attach an export (timesheet / table) made with export_data: pass its pdf_url (or csv_url) exactly as returned. The file is attached when the email is sent.'],
                 'account'   => ['type' => 'string', 'description' => 'The mailbox to send FROM (email address, or provider like "gmail"/"hotmail"). ALWAYS pass this when the user names a sender/from-address; otherwise the default mailbox is used.'],
             ],
             'required' => ['to', 'subject', 'body'],
@@ -57,6 +58,16 @@ final class DraftEmail implements Tool
             return ['error' => 'I need at least a recipient and a body to draft an email.'];
         }
 
+        $attachUrl   = trim((string) ($arguments['attach_export_url'] ?? ''));
+        $attachments = [];
+        if ($attachUrl !== '') {
+            $file = $this->export?->attachment($attachUrl, $userId) ?? ['error' => 'attachments are not available here'];
+            if (isset($file['error'])) {
+                return ['error' => 'I could not attach that file: ' . $file['error']];
+            }
+            $attachments[] = $file;
+        }
+
         $accountId = $this->email->matchAccount($userId, isset($arguments['account']) ? (string) $arguments['account'] : null);
         $draft     = new EmailDraft(
             to:       $to,
@@ -65,6 +76,7 @@ final class DraftEmail implements Tool
             cc:       trim((string) ($arguments['cc'] ?? '')),
             threadId: isset($arguments['thread_id']) && trim((string) $arguments['thread_id']) !== ''
                 ? (string) $arguments['thread_id'] : null,
+            attachments: $attachments,
         );
 
         try {
@@ -95,6 +107,7 @@ final class DraftEmail implements Tool
                 'draft_id'     => $res['draft_id'],
                 'thread_id'    => $draft->threadId,
                 'send_enabled' => $canSend,
+                'attachments'  => $attachments === [] ? [] : [['name' => $attachments[0]['filename'], 'url' => $attachUrl]],
             ],
         ];
     }

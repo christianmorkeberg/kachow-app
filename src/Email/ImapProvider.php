@@ -488,11 +488,9 @@ final class ImapProvider implements EmailProvider
         $domain  = str_contains($from, '@') ? substr(strrchr($from, '@'), 1) : 'localhost';
         $lines[] = 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . $domain . '>';
         $lines[] = 'MIME-Version: 1.0';
-        $lines[] = 'Content-Type: text/plain; charset=UTF-8';
-        $lines[] = 'Content-Transfer-Encoding: base64';
-        $lines[] = '';
-        $lines[] = chunk_split(base64_encode($draft->bodyText), 76, "\r\n");
+        $mime    = Mime::content($draft);
+        $lines   = array_merge($lines, $mime['headers'], ['']);
 
-        return implode("\r\n", $lines);
+        return implode("\r\n", $lines) . "\r\n" . $mime['body'];
     }
 }

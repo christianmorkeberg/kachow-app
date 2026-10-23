@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\Users;
 use App\Support\DataExport;
+use App\Support\ExportPage;
 use App\Support\Timesheet;
 
 /**
@@ -26,6 +28,10 @@ final class ExportData implements Tool
 
     private ?ToolRegistry $registry = null;
 
+    public function __construct(private ?Users $users = null)
+    {
+    }
+
     public function setRegistry(ToolRegistry $registry): void
     {
         $this->registry = $registry;
@@ -43,7 +49,7 @@ final class ExportData implements Tool
             . 'place, category …). Use for "export / download / send me / make a file of …" for work hours, the work log, expenses, income, mileage, trips, '
             . 'workouts, calendar, vinyls, books, wishlist, shopping list. For a TIMESHEET ("timeseddel", hours per day for a customer) use source '
             . 'get_work_hours with layout "timesheet" (place = the workplace / customer; break_minutes when a lunch break was deducted on the invoice; round_minutes only if asked). Returns the links and what '
-            . 'is in the file — a preview card with both links is shown to the user, so just say in one line what it contains (do not paste the links). Almost everything is OPTIONAL — build exactly what the user describes: rename headings (labels), '
+            . 'is in the file — a preview card with PDF / CSV buttons is shown to the user, so just say in one line what it contains (do not paste the links). To EMAIL it, call draft_email / send_email with attach_export_url = the pdf_url from this result (or csv_url). Almost everything is OPTIONAL — build exactly what the user describes: rename headings (labels), '
             . 'pick/reorder columns, filter rows (where), add a calculated column (calc, e.g. minutes → hours × rate), sort, group by a column or by day/week/month '
             . 'with sums, a total row, extra header lines (customer, sender, period …), a footer note, a signature line. For a timesheet you can also CHANGE or DELETE the automatic lines (name, customer, workplace, period — via header), rename their labels, and remove the heading and the automatic notes. When the user wants something changed or removed, do it with these options; never say it is not possible. Sources: ' . implode(', ', self::SOURCES) . '.';
     }
@@ -149,18 +155,58 @@ final class ExportData implements Tool
 
         $csvUrl   = $base . '&format=csv';
         $printUrl = $base . '&format=html';
+        $pdfUrl   = $base . '&format=pdf';
         $lang     = $spec['lang'];
         $line     = $spec['layout'] === 'timesheet'
             ? $built['summary']['days'] . ($lang === 'da' ? ' dage · ' : ' days · ') . $built['summary']['total']
             : $built['summary']['rows'] . ($lang === 'da' ? ' rækker' : ' rows');
 
         return [
-            'source' => $source, 'layout' => $spec['layout'], 'summary' => $built['summary'], 'csv_url' => $csvUrl, 'print_url' => $printUrl,
+            'source' => $source, 'layout' => $spec['layout'], 'summary' => $built['summary'], 'csv_url' => $csvUrl, 'print_url' => $printUrl, 'pdf_url' => $pdfUrl,
             '_render' => [
                 'kind' => 'export_preview', 'title' => ((string) ($spec['title'] ?? '')) !== '' ? $spec['title'] : ($spec['layout'] === 'timesheet' ? ($lang === 'da' ? 'Timeseddel' : 'Timesheet') : DataExport::label($source)),
-                'summary' => $line, 'print_url' => $printUrl, 'csv_url' => $csvUrl,
+                'summary' => $line, 'print_url' => $printUrl, 'csv_url' => $csvUrl, 'pdf_url' => $pdfUrl,
             ],
         ];
+    }
+
+    /**
+     * An export link (as this tool returns them) as a file to attach to an email: the same spec re-run for this user, as a PDF (or CSV when the
+     * link says so). Only this site's export.php links are accepted.
+     *
+     * @return array{filename:string, mime:string, data:string}|array{error:string}
+     */
+    public function attachment(string $url, int $userId): array
+    {
+        if ($this->registry === null) {
+            return ['error' => 'export is not available here'];
+        }
+
+        return self::attachmentFromUrl($this->registry, $url, $userId, $this->users !== null ? (string) ($this->users->findById($userId)['name'] ?? '') : '');
+    }
+
+    /** @return array{filename:string, mime:string, data:string}|array{error:string} */
+    public static function attachmentFromUrl(ToolRegistry $registry, string $url, int $userId, string $personName = ''): array
+    {
+        $parts = parse_url(trim($url));
+        if (!is_array($parts) || !str_ends_with((string) ($parts['path'] ?? ''), '/api/export.php')) {
+            return ['error' => 'that is not an export link'];
+        }
+        parse_str((string) ($parts['query'] ?? ''), $q);
+        $spec = json_decode((string) ($q['spec'] ?? ''), true);
+        if (!is_array($spec) || strlen((string) $q['spec']) > 4000) {
+            return ['error' => 'that export link is not valid'];
+        }
+        $built = self::build($registry, $spec, $userId);
+        if (isset($built['error'])) {
+            return ['error' => (string) $built['error']];
+        }
+        $file = ExportPage::render($built, $spec, ($q['format'] ?? 'pdf') === 'csv' ? 'csv' : 'pdf', $personName);
+        if (strlen($file['body']) > 8 * 1024 * 1024) {
+            return ['error' => 'the file is too large to attach'];
+        }
+
+        return ['filename' => $file['filename'], 'mime' => explode(';', $file['mime'])[0], 'data' => $file['body']];
     }
 
     /** @return array<string, string> a string map, scalars only */

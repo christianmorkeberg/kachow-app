@@ -305,12 +305,10 @@ final class GmailProvider implements EmailProvider
             $lines[] = 'References: ' . $this->headerSafe($draft->inReplyToId);
         }
         $lines[] = 'MIME-Version: 1.0';
-        $lines[] = 'Content-Type: text/plain; charset=UTF-8';
-        $lines[] = 'Content-Transfer-Encoding: base64';
-        $lines[] = '';
-        $lines[] = chunk_split(base64_encode($draft->bodyText), 76, "\r\n");
+        $mime    = Mime::content($draft);
+        $lines   = array_merge($lines, $mime['headers'], ['']);
 
-        return $this->b64urlEncode(implode("\r\n", $lines));
+        return $this->b64urlEncode(implode("\r\n", $lines) . "\r\n" . $mime['body']);
     }
 
     private function normalizeDate(string $raw): string

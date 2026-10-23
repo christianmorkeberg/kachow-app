@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Email;
 
 /**
- * A message to be drafted (and, once unlocked, sent). Plain-text body only for
- * v1 — no attachments. When replying, $inReplyToId / $threadId thread it.
+ * A message to be drafted (and, once unlocked, sent). Plain-text body, optional file attachments. When replying, $inReplyToId / $threadId thread it.
  */
 final class EmailDraft
 {
@@ -17,6 +16,8 @@ final class EmailDraft
         public readonly string $cc = '',
         public readonly ?string $inReplyToId = null,
         public readonly ?string $threadId = null,
+        /** @var list<array{filename:string, mime:string, data:string}> raw bytes, not encoded */
+        public readonly array $attachments = [],
     ) {
     }
 }

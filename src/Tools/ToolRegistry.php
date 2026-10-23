@@ -245,8 +245,9 @@ final class ToolRegistry
         $registry->register(new ReadEmail($email));
         $registry->register(new AttachEmailFile($email, $receipts, $income, $receiptStorage));
         $registry->register(new MarkEmailsRead($email));
-        $registry->register(new DraftEmail($email));
-        $registry->register(new SendEmail($email));
+        $export = new ExportData($users); // registered (and given the registry) at the end
+        $registry->register(new DraftEmail($email, $export));
+        $registry->register(new SendEmail($email, $export));
         $registry->register(new ListEmailAccounts($email));
         $registry->register(new LogPeriod($cycle));
         $registry->register(new GetCycleStatus($cycle));
@@ -299,7 +300,6 @@ final class ToolRegistry
         $registry->register(new ResolveFeedback($users, $feedback));
         $registry->register(new SetDiagnostics($users, new AppFlags()));
         $registry->register(new GetVoiceLog(new VoiceLog(), $users));
-        $export = new ExportData();
         $registry->register($export);
         $export->setRegistry($registry);
         // Registered last: it reads the registry at call time to describe the full, current tool set.
