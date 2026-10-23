@@ -45,6 +45,9 @@ $cases = [
     // The user's OWN workplace names come from their data, not from the keyword lists.
     ['msg' => 'what did I do at Client Z today', 'terms' => ['Client Z'], 'expect' => 'worklog'],
     ['msg' => 'jeg var på Client Z i dag', 'terms' => ['Client Z'], 'expect' => 'worktime'],
+    ['msg' => 'kan du lave en timeseddel til kunden', 'expect' => 'export'],
+    ['msg' => 'export my expenses for last month as a csv', 'expect' => 'export'],
+    ['msg' => 'make me a timesheet for this month', 'expect' => 'worktime'],
     ['msg' => 'kørte til Client Z', 'terms' => ['Client Z'], 'expect' => 'bookkeeping'],
     // …and a name must not match inside an unrelated word, nor route without the user's data.
     ['msg' => 'jeg var på Client Z i dag', 'absent' => 'worktime'],

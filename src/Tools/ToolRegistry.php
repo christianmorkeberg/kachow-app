@@ -299,6 +299,9 @@ final class ToolRegistry
         $registry->register(new ResolveFeedback($users, $feedback));
         $registry->register(new SetDiagnostics($users, new AppFlags()));
         $registry->register(new GetVoiceLog(new VoiceLog(), $users));
+        $export = new ExportData();
+        $registry->register($export);
+        $export->setRegistry($registry);
         // Registered last: it reads the registry at call time to describe the full, current tool set.
         $registry->register(new ExplainCapabilities($registry));
 

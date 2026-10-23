@@ -99,6 +99,9 @@ final class ToolSelector
         'worklog' => [
             'log_work_time', 'get_work_log', 'export_work_log',
         ],
+        'export' => [
+            'export_data',
+        ],
         'devideas' => [
             'note_dev_idea', 'list_dev_ideas', 'set_dev_idea_status', 'update_dev_idea', 'remove_dev_idea',
         ],
@@ -258,7 +261,7 @@ final class ToolSelector
         // "work" alone is avoided (it's inside "workout"); use specific phrases.
         'worktime' => [
             ' clock', 'clock in', 'clock out', 'clocked', 'clock-in', 'clock-out', 'work hours', 'hours worked',
-            'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
+            'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time sheet', 'timeseddel', 'timesedler', 'timeliste', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
             // hours over a period / bar chart + "how much did I work" style totals
@@ -280,6 +283,11 @@ final class ToolSelector
             // Danish
             'arbejdslog', 'hvad lavede jeg', 'hvad har jeg lavet', 'hvad jeg lavede', 'loggede',
             'log mit arbejde', 'log hvad', 'noter hvad jeg',
+        ],
+        // Files of data the user can send on (the read tools' results as CSV / a printable page).
+        'export' => [
+            'export', 'eksport', 'download', 'csv', 'spreadsheet', 'regneark', 'save as pdf', 'as a pdf', 'som pdf',
+            'timeseddel', 'timesedler', 'timeliste', 'timesheet', 'time sheet', 'send to the customer', 'send to the client', 'til kunden',
         ],
         'devideas' => [
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
