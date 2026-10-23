@@ -175,6 +175,7 @@ final class ToolRegistry
         $registry->register(new GetCurrentWeather($weatherService));
         $registry->register(new GetWeatherForecast($weatherService));
         $registry->register(new GetWorkHours($workEvents));
+        $registry->register(new ExportTimesheet($workEvents, $workLog));
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new ShowChart());
         $registry->register(new LogWorkEvent($workEvents, static fn (int $u): bool => \App\Support\HomeNow::check(new LocationPoints(), new Places(), $u)));

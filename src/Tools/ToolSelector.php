@@ -94,7 +94,7 @@ final class ToolSelector
         ],
         'worktime' => [
             'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
-            'get_work_clock', 'get_connected_work_hours',
+            'get_work_clock', 'get_connected_work_hours', 'export_timesheet',
         ],
         'worklog' => [
             'log_work_time', 'get_work_log', 'export_work_log',
@@ -258,7 +258,7 @@ final class ToolSelector
         // "work" alone is avoided (it's inside "workout"); use specific phrases.
         'worktime' => [
             ' clock', 'clock in', 'clock out', 'clocked', 'clock-in', 'clock-out', 'work hours', 'hours worked',
-            'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time tracking',
+            'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time sheet', 'timeseddel', 'timesedler', 'timeliste', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
             // hours over a period / bar chart + "how much did I work" style totals
