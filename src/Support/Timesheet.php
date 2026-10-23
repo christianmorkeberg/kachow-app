@@ -131,19 +131,27 @@ final class Timesheet
     public static function metaLines(array $head, string $lang = 'da', array $labels = []): array
     {
         $t     = self::T[isset(self::T[$lang]) ? $lang : 'da'];
+        $rename = [];
+        foreach ($labels as $name => $new) {
+            $k = self::lineKey((string) $name);
+            if ($k !== null && (string) $new !== '') {
+                $rename[$k] = (string) $new;
+            }
+        }
         $lines = [];
         $keyOf = [];
         foreach (['person', 'customer', 'job', 'period'] as $k) {
             if (($head[$k] ?? '') !== '') {
-                $label          = isset($labels[$k]) && $labels[$k] !== '' ? (string) $labels[$k] : $t[$k];
-                $lines[$label]  = (string) $head[$k];
-                $keyOf[$label]  = $k;
+                $label         = $rename[$k] ?? $t[$k];
+                $lines[$label] = (string) $head[$k];
+                $keyOf[$label] = $k;
             }
         }
         foreach ((array) ($head['extra'] ?? []) as $label => $value) {
             $label = (string) $label;
+            $k     = self::lineKey($label);
             foreach (array_keys($lines) as $have) {
-                if (mb_strtolower((string) $have) === mb_strtolower($label) || mb_strtolower($keyOf[$have] ?? '') === mb_strtolower($label)) {
+                if (mb_strtolower((string) $have) === mb_strtolower($label) || ($k !== null && ($keyOf[$have] ?? null) === $k)) {
                     $label = (string) $have;
                     break;
                 }
@@ -156,6 +164,25 @@ final class Timesheet
         }
 
         return $lines;
+    }
+
+    /** Which automatic line a name means — its key or its heading in either language, any case — or null. */
+    private static function lineKey(string $name): ?string
+    {
+        static $alias = [
+            'person' => ['person', 'name', 'navn', 'from', 'from_name', 'sender', 'afsender', 'leverandør', 'supplier'],
+            'customer' => ['customer', 'kunde', 'client'],
+            'job' => ['job', 'workplace', 'arbejdssted', 'place', 'location', 'sted'],
+            'period' => ['period', 'periode'],
+        ];
+        $n = mb_strtolower(trim($name));
+        foreach ($alias as $key => $names) {
+            if (in_array($n, $names, true)) {
+                return $key;
+            }
+        }
+
+        return null;
     }
 
     /** The date column's heading and the total row's label, with the caller's wording where given. */
