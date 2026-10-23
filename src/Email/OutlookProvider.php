@@ -290,6 +290,14 @@ final class OutlookProvider implements EmailProvider
         if ($draft->cc !== '') {
             $msg['ccRecipients'] = $recip($draft->cc);
         }
+        if ($draft->attachments !== []) {
+            $msg['attachments'] = array_map(static fn (array $a): array => [
+                '@odata.type'  => '#microsoft.graph.fileAttachment',
+                'name'         => Mime::safeName($a['filename']),
+                'contentType'  => $a['mime'],
+                'contentBytes' => base64_encode($a['data']),
+            ], $draft->attachments);
+        }
 
         return $msg;
     }

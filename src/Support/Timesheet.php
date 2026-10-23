@@ -268,7 +268,7 @@ final class Timesheet
             . 'h1{font-size:22px;margin:0 0 10px}.meta{display:grid;gap:2px;margin-bottom:16px}.meta span{color:#666;display:inline-block;min-width:92px}'
             . 'table{border-collapse:collapse;width:100%}th,td{padding:7px 9px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#555;border-bottom:2px solid #111}'
             . '.n{text-align:right;white-space:nowrap}tfoot td{font-weight:700;border-top:2px solid #111;border-bottom:0}.note{color:#555;font-size:12px}'
-            . '.sign{margin-top:46px;display:flex;gap:40px}.sign div{flex:1;border-top:1px solid #111;padding-top:4px;font-size:12px;color:#555}'
+            . '.sign{margin-top:46px}.sign div{display:inline-block;width:46%;margin-right:3%;border-top:1px solid #111;padding-top:4px;font-size:12px;color:#555;vertical-align:top}'
             . '.bar{margin:0 0 18px}.bar button{font:inherit;padding:8px 14px;border:1px solid #111;background:#fff;border-radius:8px;cursor:pointer}'
             . '@media print{.bar{display:none}body{padding:0}}'
             . '</style></head><body><div class="bar"><button onclick="window.print()">' . $e($t['print']) . '</button></div>'

@@ -200,5 +200,71 @@ if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\
     check('the description names the sources and the timesheet layout', str_contains($tool->description(), 'get_expenses') && str_contains($tool->description(), 'timeseddel'));
 }
 
+echo "8) PDF, attachments and email\n";
+use App\Email\EmailDraft;
+use App\Email\Mime;
+$pdfHtml = Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', ['person' => 'Studio X', 'customer' => 'Client Z', 'job' => 'Kontor ÆØÅ', 'period' => '01.10.2026 – 23.10.2026'], ['signature' => true]);
+$pdf = App\Support\PdfRenderer::fromHtml($pdfHtml);
+check('a real PDF comes out of the printable page', str_starts_with($pdf, '%PDF-') && strlen($pdf) > 3000 && str_contains($pdf, '%%EOF'), (string) strlen($pdf));
+
+$plain = Mime::content(new EmailDraft('a@example.com', 'Hi', 'Hello æøå'));
+check('no attachment → the same single text part as before', $plain['headers'] === ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64'] && base64_decode(str_replace("\r\n", '', $plain['body'])) === 'Hello æøå');
+$bytes = random_bytes(5000);
+$multi = Mime::content(new EmailDraft('a@example.com', 'Hi', 'Hello', attachments: [['filename' => 'Timeseddel ÆØ.pdf', 'mime' => 'application/pdf', 'data' => $bytes]]));
+preg_match('/boundary="([^"]+)"/', $multi['headers'][0], $bm);
+$partsRaw = array_values(array_filter(explode('--' . $bm[1], $multi['body']), static fn (string $p): bool => trim($p) !== '' && trim($p) !== '--'));
+check('with an attachment → multipart/mixed: a text part and a file part', str_starts_with($multi['headers'][0], 'Content-Type: multipart/mixed') && count($partsRaw) === 2 && str_contains($partsRaw[0], 'text/plain') && str_contains($partsRaw[1], 'application/pdf'));
+preg_match('/\r\n\r\n(.*)$/s', $partsRaw[1], $fm);
+check('the file survives base64 byte for byte, the name is RFC 2047 encoded, the closing boundary is there', base64_decode(str_replace("\r\n", '', trim($fm[1]))) === $bytes && str_contains($partsRaw[1], 'filename="=?UTF-8?B?') && str_contains($multi['body'], '--' . $bm[1] . '--'));
+check('header injection in a file name is stripped', !str_contains(Mime::safeName("x\r\nBcc: evil@example.com\".pdf"), "\n") && !str_contains(Mime::safeName('../../etc/passwd'), '/'));
+foreach ([App\Email\GmailProvider::class, App\Email\ImapProvider::class] as $cls) {
+    $rc = new ReflectionClass($cls);
+    $prov = $rc->newInstanceWithoutConstructor();
+    foreach (['creds' => ['username' => 'me@example.com'], 'fromAddress' => 'me@example.com'] as $prop => $val) {
+        if ($rc->hasProperty($prop)) { $rp = $rc->getProperty($prop); $rp->setAccessible(true); $rp->setValue($prov, $val); }
+    }
+    $m = $rc->getMethod('rawFor'); $m->setAccessible(true);
+    $raw = $m->invoke($prov, new EmailDraft('x@example.com', 'Timeseddel', 'Se vedhæftet', attachments: [['filename' => 'ts.pdf', 'mime' => 'application/pdf', 'data' => $pdf]]));
+    if ($cls === App\Email\GmailProvider::class) { $raw = base64_decode(strtr($raw, '-_', '+/')); }
+    check(basename(str_replace('\\', '/', $cls)) . ': the whole message has To / Subject, the multipart header and the PDF as an attachment', str_contains($raw, 'To: x@example.com') && str_contains($raw, 'multipart/mixed') && str_contains($raw, 'filename="ts.pdf"') && str_contains($raw, base64_encode(substr($pdf, 0, 30))));
+}
+if (extension_loaded('pdo_sqlite')) {
+    $att = $tool->attachment($r['pdf_url'] ?? '', 1);
+    check('export_data also returns the pdf link and the card carries it', str_contains($r['pdf_url'] ?? '', 'format=pdf') && ($r['_render']['pdf_url'] ?? '') === ($r['pdf_url'] ?? ''));
+    check('an export link becomes a PDF attachment (same spec re-run for that user)', ($att['mime'] ?? '') === 'application/pdf' && str_starts_with($att['data'] ?? '', '%PDF') && str_starts_with($att['filename'] ?? '', 'timesheet_') && str_ends_with($att['filename'] ?? '', '.pdf'), json_encode(array_keys($att)));
+    $attCsv = $tool->attachment($r['csv_url'], 1);
+    check('a csv link attaches the csv', ($attCsv['mime'] ?? '') === 'text/csv' && str_starts_with($attCsv['data'] ?? '', "\xEF\xBB\xBF"));
+    check('someone else\'s link or a foreign link is refused', isset($tool->attachment('https://evil.example/steal?spec={}', 1)['error']) && isset($tool->attachment($r['pdf_url'], 2)['error']) && isset($tool->attachment('https://assistant.kachow.dk/api/export.php?spec=nope', 1)['error']));
+}
+if (extension_loaded('pdo_sqlite')) {
+    $db2 = new PDO('sqlite::memory:');
+    $db2->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db2->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $db2->exec('CREATE TABLE email_accounts (id INTEGER PRIMARY KEY, user_id INT, provider TEXT, email TEXT, display_name TEXT, credentials TEXT, status TEXT DEFAULT "active")');
+    $db2->exec("INSERT INTO email_accounts (id, user_id, provider, email, display_name, status) VALUES (1, 1, 'gmail', 'me@gmail.test', 'me', 'active')");
+    $cap = new class implements App\Email\EmailProvider {
+        public ?EmailDraft $last = null;
+        public function listRecent(int $limit = 15, ?string $query = null): array { return []; }
+        public function get(string $messageId): ?App\Email\EmailMessage { return null; }
+        public function attachment(string $messageId, string $attachmentId): ?array { return null; }
+        public function markRead(string $messageId): void {}
+        public function markAllRead(int $limit = 100): int { return 0; }
+        public function createDraft(EmailDraft $draft): string { $this->last = $draft; return 'd1'; }
+        public function send(EmailDraft $draft): string { $this->last = $draft; return 's'; }
+        public function deleteDraft(string $draftId): void {}
+    };
+    $svc = new App\Email\EmailService(new App\Data\EmailAccounts($db2), '', '', '', '', static fn (array $meta): App\Email\EmailProvider => $cap);
+    foreach ([App\Tools\DraftEmail::class, App\Tools\SendEmail::class] as $toolCls) {
+        $et = new $toolCls($svc, $tool);
+        $res = $et->execute(['to' => 'customer@example.com', 'subject' => 'Timeseddel', 'body' => 'Se vedhæftet.', 'attach_export_url' => $r['pdf_url']], 1);
+        check(basename(str_replace('\\', '/', $toolCls)) . ': the draft carries the PDF, and the card names it and keeps the link for Send', ($res['_render']['kind'] ?? '') === 'email_draft' && count($cap->last->attachments) === 1
+            && str_starts_with($cap->last->attachments[0]['data'], '%PDF') && ($res['_render']['attachments'][0]['url'] ?? '') === $r['pdf_url'] && str_ends_with($res['_render']['attachments'][0]['name'] ?? '', '.pdf'), json_encode($res['_render']['attachments'] ?? $res));
+    }
+    $bad = (new App\Tools\DraftEmail($svc, $tool))->execute(['to' => 'c@example.com', 'subject' => 's', 'body' => 'b', 'attach_export_url' => 'https://evil.example/x'], 1);
+    check('a bad attachment link stops the draft with a clear error', isset($bad['error']) && str_contains($bad['error'], 'attach'));
+    $none = (new App\Tools\DraftEmail($svc, $tool))->execute(['to' => 'c@example.com', 'subject' => 's', 'body' => 'b'], 1);
+    check('no attachment → unchanged draft, no attachments on the card', ($none['_render']['attachments'] ?? null) === [] && $cap->last->attachments === []);
+}
+
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);
