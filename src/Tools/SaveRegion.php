@@ -30,7 +30,8 @@ final class SaveRegion implements Tool
         return 'Saves a REGION as a place: the area east_of / west_of / north_of / south_of a reference, out to extent_km (default 150) — for "tell me when I am east of '
             . 'Roskilde", "when I have crossed the Great Belt". The reference is one of their saved places (reference_place), an address or town (reference_address), or '
             . 'coordinates THE USER gave (lat + lon). It is an ordinary place afterwards: create_routine can trigger on entering it (trigger_place) or require it as a condition '
-            . '(conditions.in_places), and where_am_i says whether they are in it. Name it after what it means ("East of Roskilde"). Never invent coordinates.';
+            . '(conditions.in_places), and where_am_i says whether they are in it. A region is only an AREA to react to: it never shows up in the timeline, stays, trips or mileage. '
+            . 'Name it after what it means ("East of Roskilde"). Never invent coordinates.';
     }
 
     public function parameters(): array
@@ -45,7 +46,6 @@ final class SaveRegion implements Tool
                 'lat'               => ['type' => 'number', 'description' => 'Or coordinates the user gave (with lon).'],
                 'lon'               => ['type' => 'number'],
                 'extent_km'         => ['type' => 'integer', 'description' => 'How far the region reaches, ' . Geo::MIN_EXTENT_KM . '–' . Geo::MAX_EXTENT_KM . ' km (default ' . Geo::DEFAULT_EXTENT_KM . ').'],
-                'type'              => ['type' => 'string', 'enum' => Places::TYPES, 'description' => 'Default "commute".'],
             ],
             'required' => ['name', 'side'],
         ];
@@ -66,7 +66,7 @@ final class SaveRegion implements Tool
             return ['error' => 'That reference cannot make a region.'];
         }
         try {
-            $place = $this->places->add($userId, ['name' => $arguments['name'] ?? '', 'type' => $arguments['type'] ?? 'commute', 'polygon' => $poly]);
+            $place = $this->places->add($userId, ['name' => $arguments['name'] ?? '', 'type' => 'region', 'polygon' => $poly]);
         } catch (InvalidArgumentException $e) {
             return ['error' => $e->getMessage()];
         }

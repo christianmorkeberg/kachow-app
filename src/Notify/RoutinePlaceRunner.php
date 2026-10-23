@@ -62,8 +62,8 @@ final class RoutinePlaceRunner
                 continue;   // the place was deleted: nothing to watch
             }
             $state = $this->routines->placeState($r['id'], 0);   // place_id 0 = "inside ANY of the watched places"
-            // a commute place (a stretch of motorway, a region) is meant to be driven INTO: entering it counts at any speed
-            $pass  = count(array_filter($targets, static fn (array $p): bool => (string) $p['type'] === 'commute')) > 0;
+            // a commute place or a region (a stretch of motorway, "east of Roskilde") is meant to be driven INTO: entering it counts at any speed
+            $pass  = count(array_filter($targets, static fn (array $p): bool => in_array((string) $p['type'], ['commute', 'region'], true))) > 0;
             foreach ($points as $pt) {
                 $step = PlaceTransitions::step($state, $targets, $pt, $pass);
                 if ($step['state'] !== null) {

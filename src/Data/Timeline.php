@@ -123,15 +123,22 @@ final class Timeline
         return $set;
     }
 
+    /** The place a stay is at: when several contain it (a home inside a larger campus), the smallest wins — the most specific one. */
     private static function placeAt(array $places, float $lat, float $lon): ?array
     {
+        $best = null;
+        $bestArea = INF;
         foreach ($places as $pl) {
             if (Places::matchesStay($pl, $lat, $lon)) {
-                return $pl;
+                $a = Places::areaM2($pl);
+                if ($a < $bestArea) {
+                    $best = $pl;
+                    $bestArea = $a;
+                }
             }
         }
 
-        return null;
+        return $best;
     }
 
     /** The user's detection thresholds (settings, clamped to sane ranges). */
@@ -160,7 +167,7 @@ final class Timeline
     {
         $params = $this->params($userId);
         $det    = $this->detection($userId, $fromTs, $toTs, $params);
-        $places = $this->places->list($userId);
+        $places = $this->places->destinations($userId);   // regions are areas for routines, never somewhere you "stay"
 
         $stays = [];
         foreach ($det['stays'] as $k => $s) {

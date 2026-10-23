@@ -45,7 +45,7 @@ $maps   = new MapDistance('test-key', static fn () => throw new RuntimeException
 $places->add(1, ['name' => 'Roskilde', 'type' => 'commute', 'lat' => 55.64, 'lon' => 12.08, 'radius_m' => 500]);
 $region = new SaveRegion($places, $points, $maps);
 $r = $region->execute(['name' => 'East of Roskilde', 'side' => 'east_of', 'reference_place' => 'roskilde', 'extent_km' => 120], 1);
-check('save_region makes a polygon place from a saved place as the reference', ($r['saved'] ?? false) === true && $r['place']['shape'] === 'polygon' && $r['place']['type'] === 'commute' && str_contains($r['region'], 'east of Roskilde, out to 120 km'));
+check('save_region makes a polygon place from a saved place as the reference', ($r['saved'] ?? false) === true && $r['place']['shape'] === 'polygon' && $r['place']['type'] === 'region' && str_contains($r['region'], 'east of Roskilde, out to 120 km'));
 check('the same name twice is refused by the places rules', isset($region->execute(['name' => 'east of roskilde', 'side' => 'east_of', 'reference_place' => 'Roskilde'], 1)['error']));
 check('coordinates the user gave work as the reference; nonsense does not', ($region->execute(['name' => 'North of A', 'side' => 'north_of', 'lat' => 56.0, 'lon' => 10.0], 1)['saved'] ?? false) === true
     && isset($region->execute(['name' => 'X', 'side' => 'sideways', 'lat' => 56.0, 'lon' => 10.0], 1)['error']) && isset($region->execute(['name' => 'Y', 'side' => 'east_of', 'reference_place' => 'Nowhere'], 1)['error'])
@@ -77,5 +77,19 @@ $b = PlaceTransitions::step($a['state'], [$zone], $pt(55.0, 12.002), true);
 check('…two accurate points inside at 90 km/h = entered', $b['event'] === 'enter' && $b['state'] === ['inside' => true, 'streak' => 0]);
 check('without pass-through (a normal place) the same fast drive is still "driving past"', PlaceTransitions::step($s, [$zone], $pt(55.001, 12.001, 90), false) === ['state' => null, 'event' => null]);
 check('a single stray point inside that goes away is not an entry', PlaceTransitions::step(PlaceTransitions::step($s, [$zone], $pt(55.001, 12.001), true)['state'], [$zone], $pt(55.1, 12.1), true)['state'] === ['inside' => false, 'streak' => 0]);
+
+echo "4) a region is an area to react to, never somewhere you stay\n";
+check('save_region makes the place type "region", whatever else is passed', ($region->execute(['name' => 'West of Odense', 'side' => 'west_of', 'lat' => 55.4, 'lon' => 10.4, 'type' => 'commute'], 1)['place']['type'] ?? '') === 'region');
+$dest = $places->destinations(1);
+check('destinations() leaves regions out; list() still has them (routines and where_am_i use those)', count($dest) < count($places->list(1)) && !in_array('region', array_column($dest, 'type'), true) && in_array('region', array_column($places->list(1), 'type'), true));
+check('a trip to a region is never a mileage candidate', \App\Data\MileageSuggestions::candidates([['mode' => 'vehicle', 'date' => '2026-10-22', 'km' => 30.0, 'to_type' => 'region', 'to_place_id' => 3, 'to' => 'East of Roskilde', 'from_type' => 'home', 'from_place_id' => 1, 'from' => 'Home']]) === []);
+check('…while a commute place still is', count(\App\Data\MileageSuggestions::candidates([['mode' => 'vehicle', 'date' => '2026-10-22', 'km' => 30.0, 'to_type' => 'commute', 'to_place_id' => 3, 'to' => 'Korsør', 'from_type' => 'home', 'from_place_id' => 1, 'from' => 'Home']])) === 1);
+$home  = ['id' => 1, 'name' => 'Home', 'type' => 'home', 'shape' => 'circle', 'lat' => 55.64, 'lon' => 12.30, 'radius_m' => 85, 'polygon' => []];
+$big   = ['id' => 2, 'name' => 'Campus', 'type' => 'work', 'shape' => 'circle', 'lat' => 55.64, 'lon' => 12.30, 'radius_m' => 2000, 'polygon' => []];
+$eastP = ['id' => 3, 'name' => 'East', 'type' => 'other', 'shape' => 'polygon', 'polygon' => Geo::region('east_of', 55.64, 12.08, 150), 'lat' => 0, 'lon' => 0, 'radius_m' => null];
+check('area: a circle is πr², a polygon is its real size, so nested places can be told apart', abs(\App\Data\Places::areaM2($home) - M_PI * 85 ** 2) < 1 && \App\Data\Places::areaM2($eastP) > 1e10 && \App\Data\Places::areaM2($home) < \App\Data\Places::areaM2($big));
+$placeAt = new ReflectionMethod(\App\Data\Timeline::class, 'placeAt');
+$placeAt->setAccessible(true);
+check('a stay inside several places is the MOST SPECIFIC one (home, not the campus or the area around it)', $placeAt->invoke(null, [$eastP, $big, $home], 55.64, 12.30)['name'] === 'Home' && $placeAt->invoke(null, [$eastP, $big], 55.641, 12.301)['name'] === 'Campus');
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
