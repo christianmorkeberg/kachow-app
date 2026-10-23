@@ -442,7 +442,8 @@ final class ImapProvider implements EmailProvider
             }
         }
 
-        return $body;
+        // No / wrong charset leaves bytes that are not UTF-8; one of them breaks every JSON response that carries the mail.
+        return Utf8::clean($body);
     }
 
     /** Decode RFC 2047 encoded-word header values (=?utf-8?...?=). */
@@ -450,7 +451,7 @@ final class ImapProvider implements EmailProvider
     {
         $out = @iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
 
-        return $out !== false ? $out : $value;
+        return Utf8::clean($out !== false ? $out : $value);
     }
 
     private function normalizeDate(string $raw): string
