@@ -48,6 +48,8 @@ $cases = [
     ['msg' => 'kan du lave en timeseddel til kunden', 'expect' => 'export'],
     ['msg' => 'export my expenses for last month as a csv', 'expect' => 'export'],
     ['msg' => 'make me a timesheet for this month', 'expect' => 'worktime'],
+    ['msg' => 'dev ide: vælg mail box i mail card', 'expect' => 'devideas'],
+    ['msg' => 'dev ide: gør feedback sager mere kompakte med fold ud option', 'expect' => 'devideas'],
     ['msg' => 'email the timesheet for september to the customer', 'expect' => 'export'],
     ['msg' => 'email the timesheet for september to the customer', 'expect' => 'email'],
     ['msg' => 'kørte til Client Z', 'terms' => ['Client Z'], 'expect' => 'bookkeeping'],

@@ -290,6 +290,7 @@ final class ToolSelector
             'timeseddel', 'timesedler', 'timeliste', 'timesheet', 'time sheet', 'send to the customer', 'send to the client', 'til kunden',
         ],
         'devideas' => [
+            'dev ide', 'dev idé', 'dev-ide', 'dev-idé', 'idé til appen', 'ide til appen', 'idé til kachow', 'ide til kachow', 'udviklingsidé', 'udviklingside',
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',
             'feature idea', 'app idea', 'idea for the app', 'note this idea', 'note an idea',
             'improvement idea', 'build later', 'develop', 'my ideas', 'noted ideas',

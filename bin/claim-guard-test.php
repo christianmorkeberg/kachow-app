@@ -22,6 +22,8 @@ foreach ([
     'Your note has been saved.' => 'has been saved',
     'The entry is now logged.' => 'is now logged',
     'Færdig! Jeg har slettet den.' => 'slettet',
+    "Jeg har tilføjet din idé til udviklingsbackloggen:\n\n**Vælg mailbox direkte i mail-kortet**" => 'report #62 (dev idea "saved", no tool)',
+    'Jeg har tilføjet idéen til udviklingsbackloggen: **Gør feedback-sager mere kompakte**' => 'report #63',
 ] as $msg => $why) {
     check('claims: ' . $why, AssistantLoop::claimsChange($msg), $msg);
 }

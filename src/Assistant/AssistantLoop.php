@@ -812,6 +812,12 @@ final class AssistantLoop
 
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);
+                // Sent back once already and it STILL claims a change with no tool run: an honest "not done" beats a confident lie.
+                if ($claimNudged && $this->lastCalls === [] && self::claimsChange($reply)) {
+                    $this->lastDiagnostics['claim_blocked'] = true;
+                    $reply = "Det blev ikke gemt — jeg nåede ikke at køre det rigtige værktøj. Skriv det gerne igen, så prøver jeg igen.\n\n"
+                        . "That was NOT saved — I did not run the save step. Please say it again and I'll retry.";
+                }
                 // Pull out any quick-reply chips the assistant suggested.
                 [$reply, $this->lastSuggestions] = $this->extractSuggestions($reply);
                 $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
