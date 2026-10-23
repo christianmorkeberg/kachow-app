@@ -121,6 +121,16 @@ $noext = Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', $head, ['
 check('heading and the automatic notes can be switched off', !str_contains($noext, '<h1>') && !str_contains($noext, 'frokostpause') && str_contains($noext, 'Studio X'));
 check('…and are on by default', str_contains(Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', $head), '<h1>Timeseddel</h1>') && str_contains(Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', $head), 'frokostpause'));
 
+check('renaming works by key, by either language\'s heading and by common synonyms', array_keys(Timesheet::metaLines($head, 'da', ['Navn' => 'Leverandør', 'customer' => 'Modtager']))[0] === 'Leverandør'
+    && array_keys(Timesheet::metaLines($head, 'da', ['name' => 'Leverandør']))[0] === 'Leverandør' && array_keys(Timesheet::metaLines($head, 'en', ['Name' => 'Supplier']))[0] === 'Supplier'
+    && array_keys(Timesheet::metaLines($head, 'da', ['Navn' => 'Leverandør', 'customer' => 'Modtager']))[1] === 'Modtager');
+check('deleting or replacing works by synonym too (Workplace / Arbejdssted / Job all mean the workplace line)', array_keys(Timesheet::metaLines($head + ['extra' => ['Workplace' => '']], 'da')) === ['Navn', 'Kunde', 'Periode']
+    && Timesheet::metaLines($head + ['extra' => ['Periode' => '1.–30. sep']], 'da')['Periode'] === '1.–30. sep');
+check('the exact call from report #58 (labels Navn + name, header Periode / Arbejdssted / Job / Workplace) gives Leverandør, one period line and no workplace', (function () use ($head) {
+    $m = Timesheet::metaLines($head + ['extra' => ['Periode' => '01/09 - 29/09', 'Arbejdssted' => '', 'Job' => '', 'Workplace' => '']], 'da', ['name' => 'Leverandør', 'Navn' => 'Leverandør']);
+    return array_keys($m) === ['Leverandør', 'Kunde', 'Periode'] && $m['Periode'] === '01/09 - 29/09';
+})());
+
 echo "6c) choosing timesheet columns\n";
 $only = Timesheet::csvRows($sheet, 'da', ['show' => ['hours'], 'labels' => ['date' => 'Dag', 'hours' => 'Tid', 'total' => 'Sum']]);
 check('show only some columns, rename headings and the total label', $only[0] === ['Dag', 'Tid'] && $only[1] === ['2026-10-13', '9:34'] && $only[4][0] === 'Sum', json_encode($only[0]));
