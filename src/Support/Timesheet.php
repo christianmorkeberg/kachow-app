@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Data\WorkEvents;
-use App\Data\WorkLog;
 use DateTimeImmutable;
 
 /**
@@ -58,24 +56,6 @@ final class Timesheet
         }
 
         return ['days' => $days, 'total_minutes' => $total, 'round' => $round];
-    }
-
-    /**
-     * The sheet for a date range (inclusive, local dates) from the clock; optionally a job/place and the "what I did" notes per day.
-     *
-     * @return array{sheet: array<string, mixed>, needs_fix: list<array<string, mixed>>}
-     */
-    public static function forRange(WorkEvents $events, ?WorkLog $log, int $userId, string $from, string $to, ?string $place, int $round, bool $withNotes): array
-    {
-        $summary = $events->summary($userId, 'today', $from, $place, $to);
-        $notes   = [];
-        if ($withNotes && $log !== null) {
-            foreach (array_reverse($log->listForUser($userId, $from, $to, $place)) as $i) {
-                $notes[$i['date']] = isset($notes[$i['date']]) ? $notes[$i['date']] . '; ' . $i['description'] : $i['description'];
-            }
-        }
-
-        return ['sheet' => self::build($summary['sessions'], $round, $notes), 'needs_fix' => $summary['needs_fix'] ?? []];
     }
 
     /** "9:34" */

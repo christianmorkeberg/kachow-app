@@ -94,10 +94,13 @@ final class ToolSelector
         ],
         'worktime' => [
             'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
-            'get_work_clock', 'get_connected_work_hours', 'export_timesheet',
+            'get_work_clock', 'get_connected_work_hours',
         ],
         'worklog' => [
             'log_work_time', 'get_work_log', 'export_work_log',
+        ],
+        'export' => [
+            'export_data',
         ],
         'devideas' => [
             'note_dev_idea', 'list_dev_ideas', 'set_dev_idea_status', 'update_dev_idea', 'remove_dev_idea',
@@ -280,6 +283,11 @@ final class ToolSelector
             // Danish
             'arbejdslog', 'hvad lavede jeg', 'hvad har jeg lavet', 'hvad jeg lavede', 'loggede',
             'log mit arbejde', 'log hvad', 'noter hvad jeg',
+        ],
+        // Files of data the user can send on (the read tools' results as CSV / a printable page).
+        'export' => [
+            'export', 'eksport', 'download', 'csv', 'spreadsheet', 'regneark', 'save as pdf', 'as a pdf', 'som pdf',
+            'timeseddel', 'timesedler', 'timeliste', 'timesheet', 'time sheet', 'send to the customer', 'send to the client', 'til kunden',
         ],
         'devideas' => [
             'for later', 'for the backlog', 'to the backlog', 'add to backlog', 'backlog', 'dev idea',

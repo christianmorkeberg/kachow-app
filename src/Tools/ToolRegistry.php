@@ -175,7 +175,6 @@ final class ToolRegistry
         $registry->register(new GetCurrentWeather($weatherService));
         $registry->register(new GetWeatherForecast($weatherService));
         $registry->register(new GetWorkHours($workEvents));
-        $registry->register(new ExportTimesheet($workEvents, $workLog));
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new ShowChart());
         $registry->register(new LogWorkEvent($workEvents, static fn (int $u): bool => \App\Support\HomeNow::check(new LocationPoints(), new Places(), $u)));
@@ -300,6 +299,9 @@ final class ToolRegistry
         $registry->register(new ResolveFeedback($users, $feedback));
         $registry->register(new SetDiagnostics($users, new AppFlags()));
         $registry->register(new GetVoiceLog(new VoiceLog(), $users));
+        $export = new ExportData();
+        $registry->register($export);
+        $export->setRegistry($registry);
         // Registered last: it reads the registry at call time to describe the full, current tool set.
         $registry->register(new ExplainCapabilities($registry));
 

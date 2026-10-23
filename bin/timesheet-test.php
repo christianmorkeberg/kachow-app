@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-/** The timesheet: hours per day from clock sessions, rounding, formats, CSV, printable page, and the export_timesheet tool. SQLite, no network. */
+/** The timesheet: hours per day from clock sessions, rounding, formats, CSV, printable page, the generic export_data tool. SQLite, no network. */
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Support\Timesheet;
@@ -54,27 +54,47 @@ check('dates, hours, total, rounding note and a print button that is hidden when
 $enHtml = Timesheet::html(Timesheet::build($sessions), 'en', [], false);
 check('English page, no notes column, no rounding note', str_contains($enHtml, '<h1>Timesheet</h1>') && !str_contains($enHtml, 'Description') && !str_contains($enHtml, 'rounded to'));
 
-echo "6) the tool (SQLite)\n";
+echo "6) generic table export\n";
+use App\Support\DataExport;
+$res = ['range' => 'x', 'total' => 3, 'items' => [['date' => '2026-10-01', 'amount' => 12.5, 'paid' => true, 'note' => null, 'nested' => ['a' => 1], '_hidden' => 'x'], ['date' => '2026-10-02', 'amount' => 7, 'paid' => false, 'note' => 'Lunch; "quoted"']], 'tags' => [['k' => 'v']], '_render' => ['kind' => 'card']];
+$t = DataExport::table($res);
+check('picks the longest list of records, scalar columns only, hidden and nested dropped', $t['key'] === 'items' && $t['columns'] === ['date', 'amount', 'paid', 'note'], json_encode($t['columns']));
+check('cells are strings (null empty, bool 1/0)', $t['rows'][0] === ['2026-10-01', '12.5', '1', ''] && $t['rows'][1][3] === 'Lunch; "quoted"');
+check('columns can be chosen and ordered, unknown ones ignored', DataExport::table($res, null, ['amount', 'nope', 'date'])['columns'] === ['amount', 'date']);
+check('an explicit list key wins', DataExport::table($res, 'tags')['columns'] === ['k']);
+check('no list of records → null', DataExport::table(['a' => 1, 'b' => ['x', 'y']]) === null);
+$page = DataExport::html('Expenses <1>', ['columns' => ['date', 'note'], 'rows' => [['2026-10-01', '<script>x</script>']]], ['Date' => '23.10.2026']);
+check('printable page: heading, labelled columns, escaped cells', str_contains($page, '<h1>Expenses &lt;1&gt;</h1>') && str_contains($page, '<th>Date</th>') && str_contains($page, '&lt;script&gt;') && !str_contains($page, '<script>x'));
+
+echo "7) the tool (SQLite, through a registry)\n";
 if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\n"; } else {
     $db = new PDO('sqlite::memory:');
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $db->exec('CREATE TABLE work_events (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, kind TEXT, occurred_at TEXT, location TEXT, source TEXT DEFAULT \'ios_geofence\', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)');
-    $db->exec('CREATE TABLE work_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, log_date TEXT, job TEXT, description TEXT, created_at TEXT)');
-    $ev = new App\Data\WorkEvents($db);
+    $db->exec("CREATE TABLE work_events (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, kind TEXT, occurred_at TEXT, location TEXT, source TEXT DEFAULT 'ios_geofence', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
     $ins = $db->prepare('INSERT INTO work_events (user_id, kind, occurred_at, location) VALUES (1, :t, :at, :loc)');
-    foreach ([['in', '2026-10-13 05:48:00'], ['out', '2026-10-13 15:22:00'], ['in', '2026-10-14 06:20:00'], ['out', '2026-10-14 07:00:00'], ['in', '2026-10-14 07:30:00'], ['out', '2026-10-14 14:29:00']] as [$t, $at]) {
-        $ins->execute([':t' => $t, ':at' => $at, ':loc' => 'Office']);
+    foreach ([['in', '2026-10-13 05:48:00'], ['out', '2026-10-13 15:22:00'], ['in', '2026-10-14 06:20:00'], ['out', '2026-10-14 07:00:00'], ['in', '2026-10-14 07:30:00'], ['out', '2026-10-14 14:29:00']] as [$tt, $at]) {
+        $ins->execute([':t' => $tt, ':at' => $at, ':loc' => 'Office']);
     }
-    $db->exec("INSERT INTO work_log (user_id, log_date, job, description) VALUES (1, '2026-10-13', 'Office', 'Wrote tests'), (1, '2026-10-13', 'Office', 'Reviewed')");
-    $tool = new App\Tools\ExportTimesheet($ev, new App\Data\WorkLog($db));
-    $res = $tool->execute(['from' => '2026-10-01', 'to' => '2026-10-20', 'place' => 'Office', 'customer' => 'Client Z', 'include_notes' => true], 1);
-    check('days, per-day hours and the total', $res['day_count'] === 2 && $res['days'][0]['hours'] === '9:34' && $res['days'][1]['hours'] === '7:39' && $res['total'] === '17:13', json_encode($res));
-    check('links carry the range, place, customer, notes and the format', str_contains($res['csv_url'], 'format=csv') && str_contains($res['print_url'], 'format=html') && str_contains($res['csv_url'], 'place=Office') && str_contains($res['csv_url'], 'customer=Client+Z') && str_contains($res['csv_url'], 'notes=1') && str_contains($res['csv_url'], '/api/timesheet.php?'));
-    $sheet2 = Timesheet::forRange($ev, new App\Data\WorkLog($db), 1, '2026-10-01', '2026-10-20', 'Office', 0, true);
-    check('notes from the work log land on their day, joined oldest first', $sheet2['sheet']['days'][0]['note'] === 'Reviewed; Wrote tests' || $sheet2['sheet']['days'][0]['note'] === 'Wrote tests; Reviewed', (string) $sheet2['sheet']['days'][0]['note']);
-    check('rounded and in English', ($tool->execute(['from' => '2026-10-01', 'to' => '2026-10-20', 'round_minutes' => 30, 'language' => 'en'], 1)['total_decimal'] ?? '') === '17.00');
-    check('the schema description says it is for a customer and points away from the notes export', str_contains($tool->description(), 'timeseddel') && str_contains((new App\Tools\ExportWorkLog(new App\Data\WorkLog($db)))->description(), 'export_timesheet'));
+    $reg = new App\Tools\ToolRegistry();
+    $reg->register(new App\Tools\GetWorkHours(new App\Data\WorkEvents($db)));
+    $tool = new App\Tools\ExportData();
+    $tool->setRegistry($reg);
+    $args = ['from' => '2026-10-01', 'to' => '2026-10-20', 'place' => 'Office'];
+    $r = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'layout' => 'timesheet', 'customer' => 'Client Z'], 1);
+    check('timesheet: days, total and the two links', ($r['summary']['days'] ?? 0) === 2 && ($r['summary']['total'] ?? '') === '17:13' && ($r['summary']['total_decimal'] ?? '') === '17,22', json_encode($r));
+    check('links carry the whole spec (source, args, layout, customer) and the format, on the one endpoint', str_contains($r['csv_url'], '/api/export.php?spec=') && str_contains($r['csv_url'], 'format=csv') && str_contains($r['print_url'], 'format=html')
+        && str_contains(rawurldecode($r['csv_url']), '"layout":"timesheet"') && str_contains(rawurldecode($r['csv_url']), '"customer":"Client Z"') && str_contains(rawurldecode($r['csv_url']), '"place":"Office"'));
+    $spec = json_decode(rawurldecode(explode('&format=', substr($r['csv_url'], strpos($r['csv_url'], 'spec=') + 5))[0]), true);
+    $b = App\Tools\ExportData::build($reg, $spec, 1);
+    check('the endpoint rebuilds the same sheet from the link', $b['sheet']['total_minutes'] === 1033 && count($b['sheet']['days']) === 2);
+    check('rounding in the timesheet layout', App\Tools\ExportData::build($reg, array_merge($spec, ['round' => 30]), 1)['sheet']['total_minutes'] === 1020);
+    $tbl = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'columns' => ['date', 'in', 'out', 'minutes']], 1);
+    check('table layout: one row per clocked session with the chosen columns', ($tbl['summary']['rows'] ?? 0) === 3 && ($tbl['summary']['columns'] ?? []) === ['date', 'in', 'out', 'minutes'], json_encode($tbl));
+    check('nothing in the period → a clear error, not an empty file', isset($tool->execute(['source' => 'get_work_hours', 'args' => ['from' => '2025-01-01', 'to' => '2025-01-02'], 'layout' => 'timesheet'], 1)['error']));
+    check('only whitelisted read tools; timesheet only for work hours', isset($tool->execute(['source' => 'delete_work_event'], 1)['error']) && isset($tool->execute(['source' => 'get_expenses', 'layout' => 'timesheet'], 1)['error']));
+    check('another user sees none of this user\'s hours', isset($tool->execute(['source' => 'get_work_hours', 'args' => $args, 'layout' => 'timesheet'], 2)['error']));
+    check('the description names the sources and the timesheet layout', str_contains($tool->description(), 'get_expenses') && str_contains($tool->description(), 'timeseddel'));
 }
 
 echo "\n$pass passed, $fail failed\n";
