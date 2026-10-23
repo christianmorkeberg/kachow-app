@@ -22,7 +22,7 @@ except ImportError:  # older MicroPython
 
 import config
 from agent_lib import (build_request, parse_response, path_allowed, reset_due, response_complete,
-                       should_feed, split_url)
+                       should_feed, split_url, append_log, tail_lines)
 
 VERSION = "2"
 POLL_WAIT_S = 20          # how long the server may hold a poll open (it answers instantly on a command)
@@ -34,12 +34,48 @@ WDT_MS = 8000             # the hardware watchdog (the longest the RP2040 allows
 
 _beat_ms = time.ticks_ms()   # the main loop reports in here; see _feed()
 _wdt = None
+BLACKBOX = "blackbox.txt"   # the newest ~14 events (why it restarted, the first error of each outage) — survives a restart
+_last_note_ms = -100000
 
 led = machine.Pin("LED", machine.Pin.OUT)
 
 
 def log(*args):
     print("[agent]", *args)
+
+
+def note(msg, force=True):
+    """Write one line to the black box. Only on events, never in a loop, so the flash is not worn out."""
+    global _last_note_ms
+    now = time.ticks_ms()
+    if not force and time.ticks_diff(now, _last_note_ms) < 60000:
+        return
+    _last_note_ms = now
+    try:
+        try:
+            with open(BLACKBOX) as f:
+                old = f.read()
+        except OSError:
+            old = ""
+        line = "up=%ds %s" % (time.ticks_diff(now, BOOT_MS) // 1000, msg)
+        with open(BLACKBOX, "w") as f:
+            f.write(append_log(old, line))
+    except Exception as e:
+        print("[agent] black box failed:", e)
+
+
+def black_box_tail():
+    try:
+        with open(BLACKBOX) as f:
+            return tail_lines(f.read(), 6)
+    except Exception:
+        return []
+
+
+def restart(reason):
+    note("RESTART: " + reason)
+    time.sleep_ms(200)
+    machine.reset()
 
 
 def beat():
@@ -168,6 +204,7 @@ def run_command(cmd, wlan):
                 "ok": True, "version": VERSION, "ip": wlan.ifconfig()[0],
                 "uptime_s": time.ticks_diff(time.ticks_ms(), BOOT_MS) // 1000,
                 "free_mem": gc.mem_free(), "last_restart": reset_cause_name(),
+                "black_box": black_box_tail(),
             }), None
         return None, None, "the pico only supports GET /ping"
 
@@ -250,6 +287,7 @@ def main():
     for _ in range(5):
         blink(1, 500, 500)
     log("last restart:", reset_cause_name())
+    note("boot (%s), v%s" % (reset_cause_name(), VERSION))
     start_watchdog()
     beat()
     fails = 0
@@ -272,14 +310,17 @@ def main():
             fails += 1
             log("problem (%d):" % fails, e)
             blink(3, 600, 300)
+            if fails == 1:        # the first error of an outage says what went wrong; the rest are noise
+                note("first error: %s" % e, force=False)
             if reset_due(time.ticks_diff(time.ticks_ms(), last_ok), NO_SUCCESS_RESET_MS):
                 log("no successful poll for 10 minutes — restarting")
-                machine.reset()
+                restart("no successful poll for 10 min, last error: %s" % e)
             if fails in (4, 8) and wlan is not None:
+                note("%d failures in a row, restarting the Wi-Fi radio" % fails)
                 restart_wifi(wlan)
                 wlan = None
             if fails >= 15:       # something is stuck — a clean restart fixes most things
-                machine.reset()
+                restart("15 failures in a row, last error: %s" % e)
             beat()
             time.sleep(min(30, 2 * fails))
 

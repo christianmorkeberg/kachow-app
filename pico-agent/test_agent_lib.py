@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agent_lib import (build_request, dechunk, parse_response, path_allowed, reset_due, response_complete,
-                       should_feed, split_url)
+                       should_feed, split_url, append_log, tail_lines)
 
 passed = failed = 0
 
@@ -62,6 +62,15 @@ check("stops feeding once the loop has been silent too long (a hang)", not shoul
 check("a negative elapsed (tick wrap-around glitch) never feeds", not should_feed(-5, 150000))
 check("no successful poll for 10 minutes -> restart", reset_due(600000, 600000) and reset_due(900000, 600000))
 check("a recent success -> no restart", not reset_due(30000, 600000))
+
+print("black box")
+t = ""
+for i in range(30):
+    t = append_log(t, "up=%ds event %d" % (i, i))
+check("keeps only the newest lines (never grows without limit)", t.count("\n") == 14 and t.endswith("event 29\n") and "event 15\n" not in t)
+check("a long line is cut and never contains a newline", append_log("", "x" * 500 + "\ny").count("\n") == 1 and len(append_log("", "x" * 500)) <= 201)
+check("the size cap drops the oldest lines first", len(append_log("a" * 190 + "\n" + ("b" * 190 + "\n") * 12, "c" * 190)) <= 1801)
+check("tail_lines returns the last few, ignoring blanks", tail_lines("a\n\nb\nc\n", 2) == ["b", "c"] and tail_lines("") == [] and tail_lines(None) == [])
 
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

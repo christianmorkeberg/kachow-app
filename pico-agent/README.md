@@ -59,6 +59,7 @@ Ask the assistant *"is my home agent online?"* and then *"ping the pico"*. Then 
   press Stop in Thonny in that window — or set `WATCHDOG = False` in `config.py` while you edit files.
 - **Alert:** if the Pico has not checked in for 20 minutes, the server sends one push per outage (daytime only; turn it off under
   Notifications → "Home agent offline"). The assistant's `ping the pico` shows `last_restart` (power-on / watchdog).
+- **Black box:** the Pico keeps the newest ~14 events in `blackbox.txt` on its own flash (every boot and why it last restarted, the first error of each outage, every restart it triggers itself and why). Ask the assistant to *ping the pico* and it shows the last lines as `black_box`, or open the file in Thonny. Written only on events, so it does not wear the flash.
 - If the router is up and the Pico still stays offline, it is almost always power (a loose cable or a charger that sleeps) — try a different USB charger.
 
 ## Safety notes
