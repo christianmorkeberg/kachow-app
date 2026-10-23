@@ -99,3 +99,20 @@ def reset_due(since_ok_ms, limit_ms):
     """True when no poll has succeeded for limit_ms — whatever the cause (Wi-Fi gone, router rebooted, server
     unreachable, a wedged network stack) — so a clean restart is the cheapest fix."""
     return since_ok_ms >= limit_ms
+
+
+def append_log(existing, line, max_lines=14, max_chars=1800):
+    """The black-box file: keep the newest lines only, so it can never grow into the Pico's small flash."""
+    lines = [l for l in (existing or "").split("\n") if l.strip()]
+    lines.append(line.replace("\n", " ")[:200])
+    lines = lines[-max_lines:]
+    text = "\n".join(lines)
+    while len(text) > max_chars and len(lines) > 1:
+        lines = lines[1:]
+        text = "\n".join(lines)
+    return text + "\n"
+
+
+def tail_lines(text, n=6):
+    lines = [l for l in (text or "").split("\n") if l.strip()]
+    return lines[-n:]
