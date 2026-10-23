@@ -80,6 +80,8 @@ final class AssistantLoop
         . 'in_source says whether the automatic location clock, the assistant (chat/voice) or something else made it — and if the data does not '
         . 'say, say you cannot tell and what you would check. Never invent a cause, and never claim you fixed or changed something unless a tool '
         . 'result shows a change (deleting a punch and logging the identical one again changes nothing). '
+        . 'When you list or summarise stored data (the work log, hours, expenses, items …), use ONLY what the latest tool result contains — never add entries '
+        . 'you remember from earlier in the conversation or from your own previous replies; if something the user expects is not in the result, say it is NOT there. '
         . 'CRITICAL: whenever the user asks you to save, note, remember, log, add, or update something '
         . '(in Danish OR English — e.g. "gem", "husk", "noter", "tilføj"), you MUST actually call the '
         . 'matching tool and only confirm once it succeeds. Never tell the user you saved/noted/added '
@@ -434,6 +436,28 @@ final class AssistantLoop
         return preg_match($en, $tail) === 1 || preg_match($da, $tail) === 1;
     }
 
+    /**
+     * Whether a reply says a change WAS made ("Jeg har gemt …", "I've logged …", "er nu gemt", "has been saved"). Used with "no tool was called this
+     * turn" to catch the model claiming a save it never made (report #61: work notes "saved", nothing in the log). Past-tense claims only —
+     * an offer, a question or a future tense does not count.
+     */
+    public static function claimsChange(string $reply): bool
+    {
+        $text = trim((string) preg_replace('/\[\[\s*suggest\s*:.+?\]\]/is', '', $reply));
+        if ($text === '') {
+            return false;
+        }
+        $verbEn = '(saved|noted|logged|recorded|added|stored|updated|deleted|removed|created|scheduled|booked|changed)';
+        $verbDa = '(gemt|noteret|logget|registreret|tilføjet|opdateret|slettet|fjernet|oprettet|booket|ændret|lagt\s+ind)';
+        $en = '/\b(i\'?ve|i\s+have|i\s+just|i\s+also)\s+(now\s+|just\s+|also\s+)?' . $verbEn . '\b'
+            . '|\b(has|have|had)\s+been\s+' . $verbEn . '\b'
+            . '|\b(is|are)\s+(now\s+)?(saved|logged|recorded|noted|added)\b/iu';
+        $da = '/\bjeg\s+har\s+(nu\s+|lige\s+|også\s+)?' . $verbDa . '\b'
+            . '|\b(er|blev)\s+(nu\s+)?' . $verbDa . '\b/iu';
+
+        return preg_match($en, $text) === 1 || preg_match($da, $text) === 1;
+    }
+
     public function lastRender(): ?array
     {
         return $this->lastRender;
@@ -664,6 +688,7 @@ final class AssistantLoop
         $this->progress('thinking');
 
         $announceNudged = false;
+        $claimNudged    = false;
         $webRead        = false;   // set once web_search / fetch_webpage returned content this turn
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
             $g0 = microtime(true);
@@ -769,8 +794,30 @@ final class AssistantLoop
                 continue;
             }
 
+            // A reply that says "I saved / logged / added …" in a turn where NO tool ran claims a change nothing made (report #61: work notes
+            // "saved", log empty — and later answers built on that claim). Once per turn, hand it back: do it for real, or stop claiming it.
+            if ($calls === [] && !$claimNudged && $this->lastCalls === [] && $round < self::MAX_TOOL_ROUNDS - 1
+                && self::claimsChange(GeminiClient::extractText($response))) {
+                $claimNudged = true;
+                $this->lastDiagnostics['claim_nudge'] = true;
+                $contents[] = GeminiClient::firstCandidateContent($response);
+                $contents[] = ['role' => 'user', 'parts' => [['text' =>
+                    '(system) Your reply says something was saved / logged / added / changed, but you called NO tool this turn, so nothing was. '
+                    . 'If the user asked you to save, note, log, add, update or delete something, call the matching tool now '
+                    . '(for what they did at work: log_work_time) and confirm only from its result. '
+                    . 'If they did not ask for a change, write the reply again without claiming one.',
+                ]]];
+                continue;
+            }
+
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);
+                // Sent back once already and it STILL claims a change with no tool run: an honest "not done" beats a confident lie.
+                if ($claimNudged && $this->lastCalls === [] && self::claimsChange($reply)) {
+                    $this->lastDiagnostics['claim_blocked'] = true;
+                    $reply = "Det blev ikke gemt — jeg nåede ikke at køre det rigtige værktøj. Skriv det gerne igen, så prøver jeg igen.\n\n"
+                        . "That was NOT saved — I did not run the save step. Please say it again and I'll retry.";
+                }
                 // Pull out any quick-reply chips the assistant suggested.
                 [$reply, $this->lastSuggestions] = $this->extractSuggestions($reply);
                 $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
