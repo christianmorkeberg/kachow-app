@@ -38,7 +38,7 @@ final class ExportData implements Tool
             . 'then print / save as PDF). Say WHICH read tool (source) and the SAME arguments you would give it to fetch that data (args — dates, '
             . 'place, category …). Use for "export / download / send me / make a file of …" for work hours, the work log, expenses, income, mileage, trips, '
             . 'workouts, calendar, vinyls, books, wishlist, shopping list. For a TIMESHEET ("timeseddel", hours per day for a customer) use source '
-            . 'get_work_hours with layout "timesheet" (and place = the workplace / customer; round_minutes only if asked). Returns the links and what '
+            . 'get_work_hours with layout "timesheet" (place = the workplace / customer; break_minutes when a lunch break was deducted on the invoice; round_minutes only if asked). Returns the links and what '
             . 'is in the file — present both links plus a one-line summary. Sources: ' . implode(', ', self::SOURCES) . '.';
     }
 
@@ -53,7 +53,9 @@ final class ExportData implements Tool
                 'columns'       => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Only these columns, in this order (table layout). Default: all.'],
                 'title'         => ['type' => 'string', 'description' => 'Heading on the printable page.'],
                 'customer'      => ['type' => 'string', 'description' => 'Customer name on the printed timesheet.'],
-                'round_minutes' => ['type' => 'integer', 'enum' => Timesheet::ROUNDINGS, 'description' => 'Timesheet only: round each day to the nearest N minutes (0 = exact).'],
+                'round_minutes' => ['type' => 'integer', 'description' => 'Timesheet only: round each day to the nearest N minutes — 5, 10, 15 or 30 (0 = exact, the default).'],
+                'break_minutes' => ['type' => 'integer', 'description' => 'Timesheet only: lunch break to deduct from each day with more than break_after_hours of work (e.g. 30). Use when the user says a break was deducted on the invoice.'],
+                'break_after_hours' => ['type' => 'number', 'description' => 'Timesheet only: the break is deducted only on days with MORE than this many hours worked. Default 4.'],
                 'language'      => ['type' => 'string', 'enum' => ['da', 'en'], 'description' => 'Language of a timesheet. Default da.'],
             ],
             'required' => ['source'],
@@ -75,6 +77,8 @@ final class ExportData implements Tool
             'title'    => trim((string) ($arguments['title'] ?? '')),
             'customer' => trim((string) ($arguments['customer'] ?? '')),
             'round'    => (int) ($arguments['round_minutes'] ?? 0),
+            'break'    => max(0, (int) ($arguments['break_minutes'] ?? 0)),
+            'break_over' => (int) round(max(0.0, (float) ($arguments['break_after_hours'] ?? 4)) * 60),
             'lang'     => ($arguments['language'] ?? 'da') === 'en' ? 'en' : 'da',
         ];
         if ($spec['layout'] === 'timesheet' && $source !== 'get_work_hours') {
@@ -111,7 +115,7 @@ final class ExportData implements Tool
         }
 
         if (($spec['layout'] ?? 'table') === 'timesheet') {
-            $sheet = Timesheet::build(is_array($result['sessions'] ?? null) ? $result['sessions'] : [], (int) ($spec['round'] ?? 0));
+            $sheet = Timesheet::build(is_array($result['sessions'] ?? null) ? $result['sessions'] : [], (int) ($spec['round'] ?? 0), [], (int) ($spec['break'] ?? 0), (int) ($spec['break_over'] ?? 240));
             if ($sheet['days'] === []) {
                 return ['error' => 'no clocked hours in that period'];
             }
@@ -121,7 +125,7 @@ final class ExportData implements Tool
                 'needs_fix' => $result['needs_fix'] ?? [],
                 'summary'   => [
                     'days' => count($sheet['days']), 'total' => Timesheet::hm($sheet['total_minutes']), 'total_decimal' => Timesheet::decimal($sheet['total_minutes'], (string) ($spec['lang'] ?? 'da')),
-                    'rounded_to' => $sheet['round'], 'needs_fix' => $result['needs_fix'] ?? [],
+                    'rounded_to' => $sheet['round'], 'break_deducted_days' => count(array_filter($sheet['days'], static fn (array $d): bool => $d['break'] > 0)), 'needs_fix' => $result['needs_fix'] ?? [],
                 ],
             ];
         }
