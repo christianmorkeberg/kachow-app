@@ -73,6 +73,19 @@ final class Markdown
         // Escape first — the rest only ever adds our own tags.
         $s = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
 
+        // The URL of a [text](url) link is parked too: an underscore in it (export links carry get_work_hours …)
+        // must not become italics before the link is built.
+        $hrefs = [];
+        $s     = preg_replace_callback(
+            '/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/',
+            static function (array $m) use (&$hrefs): string {
+                $hrefs[] = $m[2];
+
+                return '[' . $m[1] . '](' . "\x1B" . (count($hrefs) - 1) . "\x1B" . ')';
+            },
+            $s
+        ) ?? $s;
+
         // Bare http(s) URLs become links too (not the ones already inside [text](url)). They are
         // parked behind placeholders while the emphasis rules run, so an underscore or asterisk
         // in a URL is never turned into italics, then put back as anchors.
@@ -107,9 +120,9 @@ final class Markdown
 
         // Links: text already escaped; the URL is validated to http(s).
         $s = preg_replace_callback(
-            '/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/',
+            '/\[([^\]]+)\]\(\x1B(\d+)\x1B\)/',
             static fn (array $m): string =>
-                '<a href="' . $m[2] . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>',
+                '<a href="' . ($hrefs[(int) $m[2]] ?? '') . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>',
             $s
         ) ?? $s;
 
