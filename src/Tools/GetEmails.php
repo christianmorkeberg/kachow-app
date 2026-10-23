@@ -47,6 +47,21 @@ final class GetEmails implements Tool
         ];
     }
 
+    /**
+     * The mailboxes for the card's picker ("All" + one chip each). Gmail / Outlook are named by provider, anything else by its address.
+     *
+     * @param array<int, array{id:int, provider:string, email:string, display_name:?string, status:string}> $accounts
+     * @return list<array{id:int, email:string, label:string}>
+     */
+    public static function accountChips(array $accounts): array
+    {
+        return array_map(static fn (array $a): array => [
+            'id'    => $a['id'],
+            'email' => $a['email'],
+            'label' => match ($a['provider']) { 'gmail' => 'Gmail', 'outlook' => 'Outlook', default => $a['email'] },
+        ], array_values($accounts));
+    }
+
     public function execute(array $arguments, int $userId): array
     {
         if (!$this->email->hasAccounts($userId)) {
@@ -91,6 +106,8 @@ final class GetEmails implements Tool
                 'kind'       => 'email_list',
                 'title'      => $query !== null && $query !== '' ? 'Email search' : 'Recent email',
                 'account_id' => $accountId,
+                'query'      => $query !== '' ? $query : null,
+                'accounts'   => self::accountChips($this->email->accountsFor($userId)),
                 'items'      => $items,
             ],
         ];

@@ -36,5 +36,15 @@ check('declared utf-8 but Latin-1 bytes inside (a common mislabel) → valid UTF
 check('declared iso-8859-1 → converted as before', $dec->invoke($prov, $latin, '', 'text/plain; charset=iso-8859-1') === 'Indkøbsordre Leverandør æøå');
 check('quoted-printable Latin-1 with the charset declared', $dec->invoke($prov, 'Indk=F8b', 'quoted-printable', 'text/plain; charset=iso-8859-1') === 'Indkøb');
 
+echo "4) mailbox chips for the inbox card\n";
+$chips = App\Tools\GetEmails::accountChips([
+    ['id' => 1, 'provider' => 'gmail', 'email' => 'me@gmail.test', 'display_name' => null, 'status' => 'active'],
+    ['id' => 2, 'provider' => 'outlook', 'email' => 'me@hotmail.test', 'display_name' => 'Me', 'status' => 'active'],
+    ['id' => 3, 'provider' => 'imap', 'email' => 'speed@kachow.dk', 'display_name' => null, 'status' => 'active'],
+]);
+check('Gmail and Outlook by provider, any other mailbox by its address, each with its id and email', $chips === [
+    ['id' => 1, 'email' => 'me@gmail.test', 'label' => 'Gmail'], ['id' => 2, 'email' => 'me@hotmail.test', 'label' => 'Outlook'], ['id' => 3, 'email' => 'speed@kachow.dk', 'label' => 'speed@kachow.dk'],
+], json_encode($chips));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
