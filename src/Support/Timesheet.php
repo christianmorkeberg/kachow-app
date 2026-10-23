@@ -86,71 +86,125 @@ final class Timesheet
     }
 
     /**
-     * CSV rows (Excel-friendly: the caller writes them with ';' and a BOM; hours with a decimal comma for Danish).
+     * The visible columns after the date: key → [label, cell(day), total]. Which ones show is the caller's choice (`show`); the default is
+     * weekday, times, hours and decimal hours, plus the break when one was deducted and notes when there are any.
      *
      * @param array<string, mixed> $sheet build()
+     * @param array<string, mixed> $o show:list<string>, labels:array<string,string>
+     * @return list<array{key:string, label:string, cell:callable(array):string, total:string, num:bool}>
+     */
+    private static function columns(array $sheet, string $lang, array $o): array
+    {
+        $t      = self::T[$lang];
+        $labels = is_array($o['labels'] ?? null) ? $o['labels'] : [];
+        $hasNote = array_filter(array_column($sheet['days'], 'note')) !== [];
+        $show   = is_array($o['show'] ?? null) && $o['show'] !== []
+            ? $o['show']
+            : array_merge(['weekday', 'times'], ($sheet['break_minutes'] ?? 0) > 0 ? ['break'] : [], ['hours', 'decimal'], $hasNote ? ['notes'] : []);
+        $defs = [
+            'weekday' => [$t['weekday'], static fn (array $d): string => self::WEEKDAYS[$lang][$d['weekday']], '', false],
+            'times'   => [$t['times'], static fn (array $d): string => self::times($d, $lang), '', false],
+            'break'   => [$t['break'], static fn (array $d): string => $d['break'] > 0 ? self::hm($d['break']) : '–', self::hm((int) array_sum(array_column($sheet['days'], 'break'))), true],
+            'hours'   => [$t['hours'], static fn (array $d): string => self::hm($d['counted']), self::hm($sheet['total_minutes']), true],
+            'decimal' => [$t['decimal'], static fn (array $d): string => self::decimal($d['counted'], $lang), self::decimal($sheet['total_minutes'], $lang), true],
+            'notes'   => [$t['notes'], static fn (array $d): string => (string) $d['note'], '', false],
+        ];
+        $out = [];
+        foreach ($defs as $key => [$label, $cell, $total, $num]) {
+            if (in_array($key, $show, true)) {
+                $out[] = ['key' => $key, 'label' => isset($labels[$key]) && $labels[$key] !== '' ? (string) $labels[$key] : $label, 'cell' => $cell, 'total' => $total, 'num' => $num];
+            }
+        }
+
+        return $out;
+    }
+
+    /** The date column's heading and the total row's label, with the caller's wording where given. */
+    private static function word(array $o, string $key, string $default): string
+    {
+        $l = is_array($o['labels'] ?? null) ? $o['labels'] : [];
+
+        return isset($l[$key]) && $l[$key] !== '' ? (string) $l[$key] : $default;
+    }
+
+    /**
+     * CSV rows (Excel-friendly: the caller writes them with ';' and a BOM; hours with a decimal comma for Danish).
+     * Options: show (columns), labels (rename: date, total, weekday, times, break, hours, decimal, notes), total (false = no total row).
+     *
+     * @param array<string, mixed> $sheet build()
+     * @param array<string, mixed> $o
      * @return list<list<string>>
      */
-    public static function csvRows(array $sheet, string $lang = 'da', bool $withNotes = false): array
+    public static function csvRows(array $sheet, string $lang = 'da', array $o = []): array
     {
         $lang = isset(self::T[$lang]) ? $lang : 'da';
         $t    = self::T[$lang];
-        $brk  = ($sheet['break_minutes'] ?? 0) > 0;
-        $head = $brk ? [$t['date'], $t['weekday'], $t['times'], $t['break'], $t['hours'], $t['decimal']] : [$t['date'], $t['weekday'], $t['times'], $t['hours'], $t['decimal']];
-        if ($withNotes) {
-            $head[] = $t['notes'];
-        }
-        $rows = [$head];
+        $cols = self::columns($sheet, $lang, $o);
+        $rows = [array_merge([self::word($o, 'date', $t['date'])], array_column($cols, 'label'))];
         foreach ($sheet['days'] as $d) {
-            $row = $brk
-                ? [$d['date'], self::WEEKDAYS[$lang][$d['weekday']], self::times($d, $lang), self::hm($d['break']), self::hm($d['counted']), self::decimal($d['counted'], $lang)]
-                : [$d['date'], self::WEEKDAYS[$lang][$d['weekday']], self::times($d, $lang), self::hm($d['counted']), self::decimal($d['counted'], $lang)];
-            if ($withNotes) {
-                $row[] = (string) $d['note'];
-            }
-            $rows[] = $row;
+            $rows[] = array_merge([$d['date']], array_map(static fn (array $c): string => ($c['cell'])($d), $cols));
         }
-        $foot = $brk
-            ? [$t['total'], '', '', self::hm(array_sum(array_column($sheet['days'], 'break'))), self::hm($sheet['total_minutes']), self::decimal($sheet['total_minutes'], $lang)]
-            : [$t['total'], '', '', self::hm($sheet['total_minutes']), self::decimal($sheet['total_minutes'], $lang)];
-        if ($withNotes) {
-            $foot[] = '';
+        if (($o['total'] ?? true) !== false) {
+            $rows[] = array_merge([self::word($o, 'total', $t['total'])], array_column($cols, 'total'));
         }
-        $rows[] = $foot;
 
         return $rows;
     }
 
     /**
      * A standalone printable page (A4, black on white) — "Print / save as PDF" in the browser.
+     * $head: title, person, customer, job, period, made + extra (label → value lines); options as csvRows plus signature (bool) and footer (text).
      *
      * @param array<string, mixed> $sheet build()
-     * @param array{person?:string, customer?:string, job?:string, period?:string, made?:string} $head
+     * @param array<string, mixed> $head
+     * @param array<string, mixed> $o
      */
-    public static function html(array $sheet, string $lang, array $head, bool $withNotes = false): string
+    public static function html(array $sheet, string $lang, array $head, array $o = []): string
     {
-        $lang = isset(self::T[$lang]) ? $lang : 'da';
-        $t    = self::T[$lang];
-        $e    = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $meta = '';
+        $lang  = isset(self::T[$lang]) ? $lang : 'da';
+        $t     = self::T[$lang];
+        $e     = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $title = ($head['title'] ?? '') !== '' ? (string) $head['title'] : $t['title'];
+        $meta  = '';
         foreach (['person' => 'person', 'customer' => 'customer', 'job' => 'job', 'period' => 'period'] as $k => $label) {
             if (($head[$k] ?? '') !== '') {
                 $meta .= '<div><span>' . $e($t[$label]) . '</span> ' . $e((string) $head[$k]) . '</div>';
             }
         }
-        $brk  = ($sheet['break_minutes'] ?? 0) > 0;
+        foreach ((array) ($head['extra'] ?? []) as $label => $value) {
+            if ((string) $value !== '') {
+                $meta .= '<div><span>' . $e((string) $label) . '</span> ' . $e((string) $value) . '</div>';
+            }
+        }
+        $cols = self::columns($sheet, $lang, $o);
+        $th   = '<th>' . $e(self::word($o, 'date', $t['date'])) . '</th>';
+        foreach ($cols as $c) {
+            $th .= '<th' . ($c['num'] ? ' class="n"' : '') . '>' . $e($c['label']) . '</th>';
+        }
         $rows = '';
         foreach ($sheet['days'] as $d) {
-            $rows .= '<tr><td>' . $e(date('d.m.Y', (int) strtotime($d['date']))) . '</td><td>' . $e(self::WEEKDAYS[$lang][$d['weekday']]) . '</td><td>' . $e(self::times($d, $lang)) . '</td>'
-                . ($withNotes ? '<td>' . $e((string) $d['note']) . '</td>' : '')
-                . ($brk ? '<td class="n">' . $e($d['break'] > 0 ? self::hm($d['break']) : '–') . '</td>' : '')
-                . '<td class="n">' . $e(self::hm($d['counted'])) . '</td><td class="n">' . $e(self::decimal($d['counted'], $lang)) . '</td></tr>';
+            $rows .= '<tr><td>' . $e(date('d.m.Y', (int) strtotime($d['date']))) . '</td>';
+            foreach ($cols as $c) {
+                $rows .= '<td' . ($c['num'] ? ' class="n"' : '') . '>' . $e(($c['cell'])($d)) . '</td>';
+            }
+            $rows .= '</tr>';
         }
-        $cols = ($withNotes ? 6 : 5) + ($brk ? 1 : 0);
-        $round = ($brk ? '<p class="note">' . $e(sprintf($t['break_note'], $sheet['break_minutes'], rtrim(rtrim(number_format($sheet['break_over'] / 60, 2, $lang === 'da' ? ',' : '.', ''), '0'), ',.'))) . '</p>' : '')
-            . ($sheet['round'] > 0 ? '<p class="note">' . $e(sprintf($t['rounded'], $sheet['round'])) . '</p>' : '');
+        $foot = '';
+        if (($o['total'] ?? true) !== false) {
+            $foot = '<tfoot><tr><td>' . $e(self::word($o, 'total', $t['total'])) . ' (' . count($sheet['days']) . ' ' . $e($t['days']) . ')</td>';
+            foreach ($cols as $c) {
+                $foot .= '<td' . ($c['num'] ? ' class="n"' : '') . '>' . $e($c['total']) . '</td>';
+            }
+            $foot .= '</tr></tfoot>';
+        }
+        $notes = (($sheet['break_minutes'] ?? 0) > 0 ? '<p class="note">' . $e(sprintf($t['break_note'], $sheet['break_minutes'], rtrim(rtrim(number_format($sheet['break_over'] / 60, 2, $lang === 'da' ? ',' : '.', ''), '0'), ',.'))) . '</p>' : '')
+            . ($sheet['round'] > 0 ? '<p class="note">' . $e(sprintf($t['rounded'], $sheet['round'])) . '</p>' : '')
+            . (($o['footer'] ?? '') !== '' ? '<p class="note">' . nl2br($e((string) $o['footer'])) . '</p>' : '');
+        $sign = !empty($o['signature'])
+            ? '<div class="sign"><div>' . $e($t['sign']) . '</div><div>' . $e($t['made']) . ' ' . $e((string) ($head['made'] ?? '')) . '</div></div>'
+            : '';
 
-        return '<!doctype html><html lang="' . $lang . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . $e($t['title']) . '</title><style>'
+        return '<!doctype html><html lang="' . $lang . '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . $e($title) . '</title><style>'
             . 'body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#111;background:#fff;margin:0;padding:28px;max-width:820px}'
             . 'h1{font-size:22px;margin:0 0 10px}.meta{display:grid;gap:2px;margin-bottom:16px}.meta span{color:#666;display:inline-block;min-width:92px}'
             . 'table{border-collapse:collapse;width:100%}th,td{padding:7px 9px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#555;border-bottom:2px solid #111}'
@@ -159,11 +213,7 @@ final class Timesheet
             . '.bar{margin:0 0 18px}.bar button{font:inherit;padding:8px 14px;border:1px solid #111;background:#fff;border-radius:8px;cursor:pointer}'
             . '@media print{.bar{display:none}body{padding:0}}'
             . '</style></head><body><div class="bar"><button onclick="window.print()">' . $e($t['print']) . '</button></div>'
-            . '<h1>' . $e($t['title']) . '</h1><div class="meta">' . $meta . '</div>'
-            . '<table><thead><tr><th>' . $e($t['date']) . '</th><th>' . $e($t['weekday']) . '</th><th>' . $e($t['times']) . '</th>' . ($withNotes ? '<th>' . $e($t['notes']) . '</th>' : '')
-            . ($brk ? '<th class="n">' . $e($t['break']) . '</th>' : '')
-            . '<th class="n">' . $e($t['hours']) . '</th><th class="n">' . $e($t['decimal']) . '</th></tr></thead><tbody>' . $rows . '</tbody>'
-            . '<tfoot><tr><td colspan="' . ($cols - 2 - ($brk ? 1 : 0)) . '">' . $e($t['total']) . ' (' . count($sheet['days']) . ' ' . $e($t['days']) . ')</td>' . ($brk ? '<td class="n">' . $e(self::hm(array_sum(array_column($sheet['days'], 'break')))) . '</td>' : '') . '<td class="n">' . $e(self::hm($sheet['total_minutes'])) . '</td><td class="n">' . $e(self::decimal($sheet['total_minutes'], $lang)) . '</td></tr></tfoot></table>'
-            . $round . '<div class="sign"><div>' . $e($t['sign']) . '</div><div>' . $e($t['made']) . ' ' . $e((string) ($head['made'] ?? '')) . '</div></div></body></html>';
+            . '<h1>' . $e($title) . '</h1><div class="meta">' . $meta . '</div>'
+            . '<table><thead><tr>' . $th . '</tr></thead><tbody>' . $rows . '</tbody>' . $foot . '</table>' . $notes . $sign . '</body></html>';
     }
 }
