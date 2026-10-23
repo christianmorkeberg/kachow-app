@@ -22,7 +22,7 @@ final class ExportData implements Tool
 
     /** Export options the model sometimes puts inside args by mistake. */
     private const OPTIONS = ['break_minutes', 'break_after_hours', 'round_minutes', 'customer', 'from_name', 'signature', 'language', 'layout', 'title', 'labels', 'header',
-        'footer', 'show_total', 'where', 'sort_by', 'sort_desc', 'group_by', 'group_period', 'total_columns', 'calc', 'limit', 'show_columns'];
+        'footer', 'show_total', 'show_heading', 'show_notes', 'where', 'sort_by', 'sort_desc', 'group_by', 'group_period', 'total_columns', 'calc', 'limit', 'show_columns'];
 
     private ?ToolRegistry $registry = null;
 
@@ -45,7 +45,7 @@ final class ExportData implements Tool
             . 'get_work_hours with layout "timesheet" (place = the workplace / customer; break_minutes when a lunch break was deducted on the invoice; round_minutes only if asked). Returns the links and what '
             . 'is in the file — present both links plus a one-line summary. Almost everything is OPTIONAL — build exactly what the user describes: rename headings (labels), '
             . 'pick/reorder columns, filter rows (where), add a calculated column (calc, e.g. minutes → hours × rate), sort, group by a column or by day/week/month '
-            . 'with sums, a total row, extra header lines (customer, sender, period …), a footer note, a signature line. Sources: ' . implode(', ', self::SOURCES) . '.';
+            . 'with sums, a total row, extra header lines (customer, sender, period …), a footer note, a signature line. For a timesheet you can also CHANGE or DELETE the automatic lines (name, customer, workplace, period — via header), rename their labels, and remove the heading and the automatic notes. When the user wants something changed or removed, do it with these options; never say it is not possible. Sources: ' . implode(', ', self::SOURCES) . '.';
     }
 
     public function parameters(): array
@@ -66,7 +66,9 @@ final class ExportData implements Tool
                 'break_after_hours' => ['type' => 'number', 'description' => 'Timesheet only: the break is deducted only on days with MORE than this many hours worked. Default 4.'],
                 'language'      => ['type' => 'string', 'enum' => ['da', 'en'], 'description' => 'Language of the fixed words (Total, Count, timesheet headings) and of decimal commas. Default da.'],
                 'labels'        => ['type' => 'object', 'description' => 'Rename headings: {column: new heading}. Table: the column names. Timesheet: date, weekday, times, break, hours, decimal, notes, total.'],
-                'header'        => ['type' => 'object', 'description' => 'Extra lines printed above the table: {"Customer":"X","Invoice":"12"}.'],
+                'header'        => ['type' => 'object', 'description' => 'The lines above the table: {"Customer":"X","Invoice":"12"} adds lines. Timesheet only: a label equal to an automatic line (Navn/Name, Kunde/Customer, Arbejdssted/Workplace, Periode/Period — or the key person, customer, job, period) REPLACES its value, e.g. {"Periode":"1. – 30. september"}; an EMPTY value DELETES that line, e.g. {"Periode":""}.'],
+                'show_heading'  => ['type' => 'boolean', 'description' => 'Timesheet only: false removes the big heading. Default true.'],
+                'show_notes'    => ['type' => 'boolean', 'description' => 'Timesheet only: false removes the automatic notes under the table (break deducted, rounded to). Default true.'],
                 'footer'        => ['type' => 'string', 'description' => 'A note printed under the table.'],
                 'show_total'    => ['type' => 'boolean', 'description' => 'false = no total row. Default: a timesheet has one; a table only when total_columns is set.'],
                 'where'         => ['type' => 'object', 'description' => 'Table layout: keep only rows where column = value, e.g. {"category":"travel"}.'],
@@ -116,6 +118,8 @@ final class ExportData implements Tool
             'header'   => self::map($arguments['header'] ?? null),
             'footer'   => trim((string) ($arguments['footer'] ?? '')),
             'total'    => array_key_exists('show_total', $arguments) ? (bool) $arguments['show_total'] : null,
+            'heading'  => array_key_exists('show_heading', $arguments) ? (bool) $arguments['show_heading'] : null,
+            'notes'    => array_key_exists('show_notes', $arguments) ? (bool) $arguments['show_notes'] : null,
             'where'    => self::map($arguments['where'] ?? null),
             'sort_by'  => trim((string) ($arguments['sort_by'] ?? '')),
             'sort_desc' => (bool) ($arguments['sort_desc'] ?? false),
@@ -127,7 +131,7 @@ final class ExportData implements Tool
             'show'     => array_values(array_filter(array_map('strval', (array) ($arguments['show_columns'] ?? [])), static fn (string $c): bool => $c !== '')),
         ];
         // Empty options stay out of the link.
-        $spec = array_filter($spec, static fn ($v, $k): bool => $k === 'total' ? $v !== null : ($v !== [] && $v !== '' && $v !== null && $v !== 0 && $v !== false), ARRAY_FILTER_USE_BOTH);
+        $spec = array_filter($spec, static fn ($v, $k): bool => in_array($k, ['total', 'heading', 'notes'], true) ? $v !== null : ($v !== [] && $v !== '' && $v !== null && $v !== 0 && $v !== false), ARRAY_FILTER_USE_BOTH);
         $spec += ['args' => $args];
         if ($spec['layout'] === 'timesheet' && $source !== 'get_work_hours') {
             return ['error' => 'the timesheet layout needs source get_work_hours'];
@@ -183,7 +187,7 @@ final class ExportData implements Tool
 
             return [
                 'sheet'     => $sheet,
-                'options'   => ['show' => $spec['show'] ?? [], 'labels' => $spec['labels'] ?? [], 'total' => $spec['total'] ?? true, 'footer' => (string) ($spec['footer'] ?? ''), 'signature' => !empty($spec['signature'])],
+                'options'   => ['show' => $spec['show'] ?? [], 'labels' => $spec['labels'] ?? [], 'total' => $spec['total'] ?? true, 'heading' => $spec['heading'] ?? true, 'notes' => $spec['notes'] ?? true, 'footer' => (string) ($spec['footer'] ?? ''), 'signature' => !empty($spec['signature'])],
                 'needs_fix' => $result['needs_fix'] ?? [],
                 'summary'   => [
                     'days' => count($sheet['days']), 'total' => Timesheet::hm($sheet['total_minutes']), 'total_decimal' => Timesheet::decimal($sheet['total_minutes'], (string) ($spec['lang'] ?? 'da')),

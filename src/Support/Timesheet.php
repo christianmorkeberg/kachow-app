@@ -119,6 +119,45 @@ final class Timesheet
         return $out;
     }
 
+    /**
+     * The lines above the table: name, customer, workplace, period, then the caller's own `extra` lines. An extra line with the label of an
+     * automatic one (any case, or its key: person / customer / job / period) REPLACES it; with an empty value it DELETES it. `labels` renames the
+     * automatic lines (keys person, customer, job, period).
+     *
+     * @param array<string, mixed> $head
+     * @param array<string, string> $labels
+     * @return array<string, string> label → value
+     */
+    public static function metaLines(array $head, string $lang = 'da', array $labels = []): array
+    {
+        $t     = self::T[isset(self::T[$lang]) ? $lang : 'da'];
+        $lines = [];
+        $keyOf = [];
+        foreach (['person', 'customer', 'job', 'period'] as $k) {
+            if (($head[$k] ?? '') !== '') {
+                $label          = isset($labels[$k]) && $labels[$k] !== '' ? (string) $labels[$k] : $t[$k];
+                $lines[$label]  = (string) $head[$k];
+                $keyOf[$label]  = $k;
+            }
+        }
+        foreach ((array) ($head['extra'] ?? []) as $label => $value) {
+            $label = (string) $label;
+            foreach (array_keys($lines) as $have) {
+                if (mb_strtolower((string) $have) === mb_strtolower($label) || mb_strtolower($keyOf[$have] ?? '') === mb_strtolower($label)) {
+                    $label = (string) $have;
+                    break;
+                }
+            }
+            if ((string) $value === '') {
+                unset($lines[$label]);
+            } else {
+                $lines[$label] = (string) $value;
+            }
+        }
+
+        return $lines;
+    }
+
     /** The date column's heading and the total row's label, with the caller's wording where given. */
     private static function word(array $o, string $key, string $default): string
     {
@@ -166,15 +205,8 @@ final class Timesheet
         $e     = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $title = ($head['title'] ?? '') !== '' ? (string) $head['title'] : $t['title'];
         $meta  = '';
-        foreach (['person' => 'person', 'customer' => 'customer', 'job' => 'job', 'period' => 'period'] as $k => $label) {
-            if (($head[$k] ?? '') !== '') {
-                $meta .= '<div><span>' . $e($t[$label]) . '</span> ' . $e((string) $head[$k]) . '</div>';
-            }
-        }
-        foreach ((array) ($head['extra'] ?? []) as $label => $value) {
-            if ((string) $value !== '') {
-                $meta .= '<div><span>' . $e((string) $label) . '</span> ' . $e((string) $value) . '</div>';
-            }
+        foreach (self::metaLines($head, $lang, is_array($o['labels'] ?? null) ? $o['labels'] : []) as $label => $value) {
+            $meta .= '<div><span>' . $e((string) $label) . '</span> ' . $e($value) . '</div>';
         }
         $cols = self::columns($sheet, $lang, $o);
         $th   = '<th>' . $e(self::word($o, 'date', $t['date'])) . '</th>';
@@ -197,8 +229,8 @@ final class Timesheet
             }
             $foot .= '</tr></tfoot>';
         }
-        $notes = (($sheet['break_minutes'] ?? 0) > 0 ? '<p class="note">' . $e(sprintf($t['break_note'], $sheet['break_minutes'], rtrim(rtrim(number_format($sheet['break_over'] / 60, 2, $lang === 'da' ? ',' : '.', ''), '0'), ',.'))) . '</p>' : '')
-            . ($sheet['round'] > 0 ? '<p class="note">' . $e(sprintf($t['rounded'], $sheet['round'])) . '</p>' : '')
+        $notes = (($o['notes'] ?? true) === false ? '' : (($sheet['break_minutes'] ?? 0) > 0 ? '<p class="note">' . $e(sprintf($t['break_note'], $sheet['break_minutes'], rtrim(rtrim(number_format($sheet['break_over'] / 60, 2, $lang === 'da' ? ',' : '.', ''), '0'), ',.'))) . '</p>' : '')
+            . ($sheet['round'] > 0 ? '<p class="note">' . $e(sprintf($t['rounded'], $sheet['round'])) . '</p>' : ''))
             . (($o['footer'] ?? '') !== '' ? '<p class="note">' . nl2br($e((string) $o['footer'])) . '</p>' : '');
         $sign = !empty($o['signature'])
             ? '<div class="sign"><div>' . $e($t['sign']) . '</div><div>' . $e($t['made']) . ' ' . $e((string) ($head['made'] ?? '')) . '</div></div>'
@@ -213,7 +245,7 @@ final class Timesheet
             . '.bar{margin:0 0 18px}.bar button{font:inherit;padding:8px 14px;border:1px solid #111;background:#fff;border-radius:8px;cursor:pointer}'
             . '@media print{.bar{display:none}body{padding:0}}'
             . '</style></head><body><div class="bar"><button onclick="window.print()">' . $e($t['print']) . '</button></div>'
-            . '<h1>' . $e($title) . '</h1><div class="meta">' . $meta . '</div>'
+            . (($o['heading'] ?? true) === false ? '' : '<h1>' . $e($title) . '</h1>') . '<div class="meta">' . $meta . '</div>'
             . '<table><thead><tr>' . $th . '</tr></thead><tbody>' . $rows . '</tbody>' . $foot . '</table>' . $notes . $sign . '</body></html>';
     }
 }

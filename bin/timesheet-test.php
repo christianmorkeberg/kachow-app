@@ -109,6 +109,18 @@ check('unknown columns in every option are ignored, not fatal', DataExport::shap
 $page = DataExport::html('Statement', ['columns' => $g['columns'], 'labels' => ['Month', 'Items', 'Amount'], 'rows' => $g['rows'], 'total' => $g['total']], ['Customer' => 'Client Z'], "Thanks\nBest", 'en');
 check('printed table: renamed headings, total row in the foot, header lines and a footer note, English button', str_contains($page, '<th>Month</th>') && str_contains($page, '<tfoot><tr><td>Total</td>') && str_contains($page, '<span>Customer</span> Client Z') && str_contains($page, 'Thanks<br />') && str_contains($page, 'Print / save as PDF'));
 
+$ml = Timesheet::metaLines(['person' => 'Studio X', 'period' => '01.09.2026 – 29.09.2026', 'extra' => ['periode' => '1. september – 29. september', 'Faktura' => '12']], 'da');
+check('an extra line with an automatic label replaces it (any case) instead of printing twice; others are appended', $ml === ['Navn' => 'Studio X', 'Periode' => '1. september – 29. september', 'Faktura' => '12'], json_encode($ml));
+check('the printed page shows the period once', substr_count(Timesheet::html($sheet, 'da', ['period' => '01.09.2026 – 29.09.2026', 'extra' => ['Periode' => 'x']]), 'Periode') === 1);
+
+$head = ['person' => 'Studio X', 'customer' => 'Client Z', 'job' => 'Office', 'period' => '01.09.2026 – 29.09.2026'];
+check('an empty extra value deletes an automatic line (by label or key), others stay', Timesheet::metaLines($head + ['extra' => ['Periode' => '', 'customer' => '']], 'da') === ['Navn' => 'Studio X', 'Arbejdssted' => 'Office']);
+check('labels rename the automatic lines', array_keys(Timesheet::metaLines($head, 'da', ['person' => 'Fra', 'period' => 'Gælder'])) === ['Fra', 'Kunde', 'Arbejdssted', 'Gælder']);
+check('a replaced line keeps its place and takes the new value', array_values(Timesheet::metaLines($head + ['extra' => ['period' => '1.–30. september']], 'da')) === ['Studio X', 'Client Z', 'Office', '1.–30. september']);
+$noext = Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', $head, ['heading' => false, 'notes' => false]);
+check('heading and the automatic notes can be switched off', !str_contains($noext, '<h1>') && !str_contains($noext, 'frokostpause') && str_contains($noext, 'Studio X'));
+check('…and are on by default', str_contains(Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', $head), '<h1>Timeseddel</h1>') && str_contains(Timesheet::html(Timesheet::build($sessions, 0, [], 30), 'da', $head), 'frokostpause'));
+
 echo "6c) choosing timesheet columns\n";
 $only = Timesheet::csvRows($sheet, 'da', ['show' => ['hours'], 'labels' => ['date' => 'Dag', 'hours' => 'Tid', 'total' => 'Sum']]);
 check('show only some columns, rename headings and the total label', $only[0] === ['Dag', 'Tid'] && $only[1] === ['2026-10-13', '9:34'] && $only[4][0] === 'Sum', json_encode($only[0]));
@@ -164,6 +176,10 @@ if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\
     check('timesheet options (columns, labels, no total) reach the sheet options', $tb['options']['show'] === ['hours'] && $tb['options']['labels'] === ['hours' => 'Tid'] && $tb['options']['total'] === false);
     $lift = $tool->execute(['source' => 'get_work_hours', 'args' => $args + ['group_by' => 'date', 'footer' => 'Hi']], 1);
     check('table options the model put inside args are lifted out', str_contains(rawurldecode($lift['csv_url']), '"group_by":"date"') && !str_contains(rawurldecode($lift['csv_url']), '"args":{"from":"2026-10-01","to":"2026-10-20","place":"Office","group_by"'));
+    $del = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'layout' => 'timesheet', 'header' => ['Periode' => ''], 'show_heading' => false, 'show_notes' => false], 1);
+    $dspec = json_decode(rawurldecode(explode('&format=', substr($del['csv_url'], strpos($del['csv_url'], 'spec=') + 5))[0]), true);
+    check('an empty header value, show_heading false and show_notes false survive into the link and the sheet options', ($dspec['header'] ?? null) === ['Periode' => ''] && ($dspec['heading'] ?? null) === false && ($dspec['notes'] ?? null) === false
+        && App\Tools\ExportData::build($reg, $dspec, 1)['options']['heading'] === false);
     check('no enum on integers anywhere in the schema (Gemini accepts only string enums)', !preg_match('/"enum":\[\d/', json_encode($tool->parameters())));
     $tbl = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'columns' => ['date', 'in', 'out', 'minutes']], 1);
     check('table layout: one row per clocked session with the chosen columns', ($tbl['summary']['rows'] ?? 0) === 3 && ($tbl['summary']['columns'] ?? []) === ['date', 'in', 'out', 'minutes'], json_encode($tbl));
