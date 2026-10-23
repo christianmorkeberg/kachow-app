@@ -3,8 +3,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from agent_lib import (build_request, dechunk, parse_response, path_allowed, response_complete,
-                       split_url)
+from agent_lib import (build_request, dechunk, parse_response, path_allowed, reset_due, response_complete,
+                       should_feed, split_url)
 
 passed = failed = 0
 
@@ -55,6 +55,13 @@ check("a different resource is refused", not path_allowed(allow, "/clip/v2/resou
 check("'..' traversal is refused", not path_allowed(allow, "/clip/v2/resource/light/../bridge"))
 check("'//' is refused", not path_allowed(allow, "//clip/v2/resource/light"))
 check("empty allow-list refuses everything", not path_allowed([], "/clip/v2/resource/light"))
+
+print("watchdog helpers")
+check("feeds while the loop is making progress", should_feed(0, 150000) and should_feed(149999, 150000))
+check("stops feeding once the loop has been silent too long (a hang)", not should_feed(150000, 150000) and not should_feed(400000, 150000))
+check("a negative elapsed (tick wrap-around glitch) never feeds", not should_feed(-5, 150000))
+check("no successful poll for 10 minutes -> restart", reset_due(600000, 600000) and reset_due(900000, 600000))
+check("a recent success -> no restart", not reset_due(30000, 600000))
 
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

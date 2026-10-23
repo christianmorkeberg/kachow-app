@@ -49,3 +49,8 @@ DEVICES = {
         "methods": ["GET", "POST"],
     },
 }
+
+# The hardware watchdog restarts the Pico by itself if the program ever hangs (no more "off for 12 hours").
+# It cannot be switched off once running, so while you are editing files in Thonny set this to False and restart;
+# the 5-second window right after power-up (before the watchdog starts) is also enough to press Stop.
+WATCHDOG = True

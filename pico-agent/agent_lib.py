@@ -86,3 +86,16 @@ def path_allowed(prefixes, path):
         if bare == p or bare.startswith(p + "/"):
             return True
     return False
+
+
+def should_feed(elapsed_ms, limit_ms):
+    """The hardware watchdog is fed only while the main loop is making progress: elapsed_ms is the time since the
+    loop last reported in. A program stuck in a blocking call (DNS, TLS, a dead socket) stops reporting, the feeding
+    stops, and the Pico restarts itself a few seconds later."""
+    return 0 <= elapsed_ms < limit_ms
+
+
+def reset_due(since_ok_ms, limit_ms):
+    """True when no poll has succeeded for limit_ms — whatever the cause (Wi-Fi gone, router rebooted, server
+    unreachable, a wedged network stack) — so a clean restart is the cheapest fix."""
+    return since_ok_ms >= limit_ms
