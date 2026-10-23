@@ -53,6 +53,6 @@ final class EmailMessage
             }
         }
 
-        return $out;
+        return Utf8::deep($out);
     }
 }
