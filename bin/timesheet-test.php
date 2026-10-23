@@ -105,6 +105,9 @@ if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\
     check('tool: break deducted from both days (17:13 − 1:00)', ($rb['summary']['total'] ?? '') === '16:13' && ($rb['summary']['break_deducted_days'] ?? 0) === 2, json_encode($rb['summary'] ?? $rb));
     $bspec = json_decode(rawurldecode(explode('&format=', substr($rb['csv_url'], strpos($rb['csv_url'], 'spec=') + 5))[0]), true);
     check('the link carries the break', ($bspec['break'] ?? 0) === 30 && ($bspec['break_over'] ?? 0) === 240 && App\Tools\ExportData::build($reg, $bspec, 1)['sheet']['total_minutes'] === 973);
+    $mis = $tool->execute(['source' => 'get_work_hours', 'args' => $args + ['break_minutes' => 30, 'break_after_hours' => 4, 'customer' => 'Client Z'], 'layout' => 'timesheet'], 1);
+    $mspec = json_decode(rawurldecode(explode('&format=', substr($mis['csv_url'], strpos($mis['csv_url'], 'spec=') + 5))[0]), true);
+    check('options the model put inside args still count, and are not passed on to the source tool', ($mis['summary']['total'] ?? '') === '16:13' && ($mspec['break'] ?? 0) === 30 && ($mspec['customer'] ?? '') === 'Client Z' && !isset($mspec['args']['break_minutes']), json_encode($mspec));
     check('no enum on integers anywhere in the schema (Gemini accepts only string enums)', !preg_match('/"enum":\[\d/', json_encode($tool->parameters())));
     $tbl = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'columns' => ['date', 'in', 'out', 'minutes']], 1);
     check('table layout: one row per clocked session with the chosen columns', ($tbl['summary']['rows'] ?? 0) === 3 && ($tbl['summary']['columns'] ?? []) === ['date', 'in', 'out', 'minutes'], json_encode($tbl));

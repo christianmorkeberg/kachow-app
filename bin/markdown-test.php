@@ -47,5 +47,9 @@ check('markup in text or URL is escaped', !str_contains($h, '<script') && !str_c
 $h = Markdown::toHtml('javascript:alert(1) and ftp://example.com/x');
 check('only http(s) is linked', !str_contains($h, '<a '), $h);
 
+$u = 'https://example.com/api/export.php?spec=%7B%22source%22%3A%22get_work_hours%22%2C%22break_after_hours%22%3A4%7D&format=csv';
+$h = Markdown::toHtml('* [Download _it_](' . $u . ') and __bold__');
+check('underscores inside a [text](url) link are never italics (export links carry get_work_hours)', str_contains($h, 'href="' . str_replace('&', '&amp;', $u) . '"') && !str_contains($h, 'get<em>') && str_contains($h, '>Download <em>it</em></a>') && str_contains($h, '<strong>bold</strong>'), $h);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

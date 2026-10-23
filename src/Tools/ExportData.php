@@ -69,6 +69,13 @@ final class ExportData implements Tool
             return ['error' => 'source must be one of: ' . implode(', ', self::SOURCES)];
         }
         $args = is_array($arguments['args'] ?? null) ? $arguments['args'] : [];
+        // The model sometimes puts the export's own options inside args; they are not the source tool's arguments.
+        foreach (['break_minutes', 'break_after_hours', 'round_minutes', 'customer', 'language', 'layout', 'title'] as $own) {
+            if (array_key_exists($own, $args)) {
+                $arguments[$own] ??= $args[$own];
+                unset($args[$own]);
+            }
+        }
         $spec = [
             'source'   => $source,
             'args'     => $args,
