@@ -146,6 +146,7 @@ if (!extension_loaded('pdo_sqlite')) { echo "  (pdo_sqlite missing — skipped)\
     $args = ['from' => '2026-10-01', 'to' => '2026-10-20', 'place' => 'Office'];
     $r = $tool->execute(['source' => 'get_work_hours', 'args' => $args, 'layout' => 'timesheet', 'customer' => 'Client Z'], 1);
     check('timesheet: days, total and the two links', ($r['summary']['days'] ?? 0) === 2 && ($r['summary']['total'] ?? '') === '17:13' && ($r['summary']['total_decimal'] ?? '') === '17,22', json_encode($r));
+    check('the tool also returns a preview card with both links and a one-line summary', ($r['_render']['kind'] ?? '') === 'export_preview' && ($r['_render']['print_url'] ?? '') === $r['print_url'] && ($r['_render']['csv_url'] ?? '') === $r['csv_url'] && ($r['_render']['summary'] ?? '') === '2 dage · 17:13' && ($r['_render']['title'] ?? '') === 'Timeseddel', json_encode($r['_render'] ?? null));
     check('links carry the whole spec (source, args, layout, customer) and the format, on the one endpoint', str_contains($r['csv_url'], '/api/export.php?spec=') && str_contains($r['csv_url'], 'format=csv') && str_contains($r['print_url'], 'format=html')
         && str_contains(rawurldecode($r['csv_url']), '"layout":"timesheet"') && str_contains(rawurldecode($r['csv_url']), '"customer":"Client Z"') && str_contains(rawurldecode($r['csv_url']), '"place":"Office"'));
     $spec = json_decode(rawurldecode(explode('&format=', substr($r['csv_url'], strpos($r['csv_url'], 'spec=') + 5))[0]), true);

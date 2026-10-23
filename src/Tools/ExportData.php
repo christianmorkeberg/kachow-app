@@ -43,7 +43,7 @@ final class ExportData implements Tool
             . 'place, category …). Use for "export / download / send me / make a file of …" for work hours, the work log, expenses, income, mileage, trips, '
             . 'workouts, calendar, vinyls, books, wishlist, shopping list. For a TIMESHEET ("timeseddel", hours per day for a customer) use source '
             . 'get_work_hours with layout "timesheet" (place = the workplace / customer; break_minutes when a lunch break was deducted on the invoice; round_minutes only if asked). Returns the links and what '
-            . 'is in the file — present both links plus a one-line summary. Almost everything is OPTIONAL — build exactly what the user describes: rename headings (labels), '
+            . 'is in the file — a preview card with both links is shown to the user, so just say in one line what it contains (do not paste the links). Almost everything is OPTIONAL — build exactly what the user describes: rename headings (labels), '
             . 'pick/reorder columns, filter rows (where), add a calculated column (calc, e.g. minutes → hours × rate), sort, group by a column or by day/week/month '
             . 'with sums, a total row, extra header lines (customer, sender, period …), a footer note, a signature line. For a timesheet you can also CHANGE or DELETE the automatic lines (name, customer, workplace, period — via header), rename their labels, and remove the heading and the automatic notes. When the user wants something changed or removed, do it with these options; never say it is not possible. Sources: ' . implode(', ', self::SOURCES) . '.';
     }
@@ -147,7 +147,20 @@ final class ExportData implements Tool
         $host = $_SERVER['HTTP_HOST'] ?? 'assistant.kachow.dk';
         $base = 'https://' . $host . '/api/export.php?spec=' . rawurlencode(json_encode($spec, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        return ['source' => $source, 'layout' => $spec['layout'], 'summary' => $built['summary'], 'csv_url' => $base . '&format=csv', 'print_url' => $base . '&format=html'];
+        $csvUrl   = $base . '&format=csv';
+        $printUrl = $base . '&format=html';
+        $lang     = $spec['lang'];
+        $line     = $spec['layout'] === 'timesheet'
+            ? $built['summary']['days'] . ($lang === 'da' ? ' dage · ' : ' days · ') . $built['summary']['total']
+            : $built['summary']['rows'] . ($lang === 'da' ? ' rækker' : ' rows');
+
+        return [
+            'source' => $source, 'layout' => $spec['layout'], 'summary' => $built['summary'], 'csv_url' => $csvUrl, 'print_url' => $printUrl,
+            '_render' => [
+                'kind' => 'export_preview', 'title' => ((string) ($spec['title'] ?? '')) !== '' ? $spec['title'] : ($spec['layout'] === 'timesheet' ? ($lang === 'da' ? 'Timeseddel' : 'Timesheet') : DataExport::label($source)),
+                'summary' => $line, 'print_url' => $printUrl, 'csv_url' => $csvUrl,
+            ],
+        ];
     }
 
     /** @return array<string, string> a string map, scalars only */
