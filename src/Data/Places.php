@@ -19,7 +19,12 @@ use PDOException;
  */
 final class Places
 {
-    public const TYPES = ['work', 'business', 'commute', 'home', 'private', 'other'];
+    /**
+     * `region` is an AREA the user wants to react to ("east of Roskilde", a stretch of motorway) — for routine triggers / conditions and reminders only.
+     * It is never a destination: the timeline, stays, trips, mileage suggestions and the work clock ignore it (see destinations()), so being somewhere
+     * inside a big region never turns into "Home → Region" drives.
+     */
+    public const TYPES = ['work', 'business', 'commute', 'home', 'private', 'other', 'region'];
 
     public const MIN_RADIUS_M = 25;
     public const MAX_RADIUS_M = 30000;   // a big circle (a stretch of motorway) is fine; the app's slider covers the usual 25–1000 m, bigger ones are made by the assistant
@@ -99,6 +104,16 @@ final class Places
     }
 
     /**
+     * The places a person can be AT — everything but regions. This is what stays, trips, the timeline and mileage match positions against.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function destinations(int $userId): array
+    {
+        return array_values(array_filter($this->list($userId), static fn (array $p): bool => (string) $p['type'] !== 'region'));
+    }
+
+    /**
      * Updates a place: any of name, type, radius_m, or a new shape (lat/lon[/radius_m] or polygon).
      *
      * @param array<string, mixed> $data
@@ -166,6 +181,28 @@ final class Places
         }
 
         return LocationPoints::haversineKm($place['lat'], $place['lon'], $lat, $lon) * 1000 <= (float) $place['radius_m'] + $marginM;
+    }
+
+    /** A place's size in square metres (circle: πr²; polygon: its area on a flat local projection) — to tell which of several nested places is the most specific. */
+    public static function areaM2(array $place): float
+    {
+        if ($place['shape'] !== 'polygon') {
+            return M_PI * ((float) $place['radius_m']) ** 2;
+        }
+        $poly = $place['polygon'];
+        $n    = count($poly);
+        if ($n < 3) {
+            return 0.0;
+        }
+        $lat0 = deg2rad((float) $poly[0][0]);
+        $kx   = 111320.0 * cos($lat0);
+        $ky   = 110540.0;
+        $sum  = 0.0;
+        for ($i = 0, $j = $n - 1; $i < $n; $j = $i++) {
+            $sum += ($poly[$j][1] * $kx) * ($poly[$i][0] * $ky) - ($poly[$i][1] * $kx) * ($poly[$j][0] * $ky);
+        }
+
+        return abs($sum) / 2.0;
     }
 
     /** Whether a coordinate lies inside a place (circle: haversine ≤ radius; polygon: ray casting). */

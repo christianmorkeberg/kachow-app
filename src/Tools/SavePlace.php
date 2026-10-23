@@ -29,7 +29,7 @@ final class SavePlace implements Tool
         return 'Saves a named place for location tracking, as a circle at the user\'s CURRENT tracked position '
             . '(default: "mark where I am as Office", "gem stedet her som Arbejde") or at an address. type: work '
             . '(a workplace — will drive the automatic work clock), business (client/business trips), commute, '
-            . 'home, private or other. radius_m defaults to 100 (25–30000; ~150–300 suits a large workplace; for a wide zone such as a stretch of motorway use 5000–10000). '
+            . 'home, private, other (region is made with save_region, not here). radius_m defaults to 100 (25–30000; ~150–300 suits a large workplace; for a wide zone such as a stretch of motorway use 5000–10000). '
             . 'Shows the places map card, where the user can fine-tune the circle or draw a polygon. Ask for the '
             . 'type if it isn\'t clear. Give lat + lon ONLY when the user typed coordinates themselves; for "east of …" areas use save_region. Never invent coordinates.';
     }
