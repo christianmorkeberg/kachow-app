@@ -161,14 +161,20 @@ def _wrap_tls(sock, host):
 
 def http(method, url, headers=None, body=None, timeout=15):
     https, host, port, path = split_url(url)
-    addr = socket.getaddrinfo(host, port)[0][-1]
-    s = socket.socket()
-    s.settimeout(timeout)
+    stage = "dns"
+    s = None
     try:
+        addr = socket.getaddrinfo(host, port)[0][-1]
+        s = socket.socket()
+        s.settimeout(timeout)
+        stage = "connect"
         s.connect(addr)
         if https:
+            stage = "tls"
             s = _wrap_tls(s, host)
+        stage = "send"
         s.write(build_request(method, host, path, headers, body))
+        stage = "read"
         buf = b""
         while len(buf) < MAX_RESPONSE + 4096:
             try:
@@ -183,9 +189,12 @@ def http(method, url, headers=None, body=None, timeout=15):
             if response_complete(buf):
                 break
         return parse_response(buf)
+    except OSError as e:
+        raise OSError("%s (%s:%s at %s)" % (e, host, port, stage))   # which step failed is what the black box needs
     finally:
         try:
-            s.close()
+            if s is not None:
+                s.close()
         except Exception:
             pass
 
@@ -311,7 +320,7 @@ def main():
             log("problem (%d):" % fails, e)
             blink(3, 600, 300)
             if fails == 1:        # the first error of an outage says what went wrong; the rest are noise
-                note("first error: %s" % e, force=False)
+                note("first error: %s" % e)
             if reset_due(time.ticks_diff(time.ticks_ms(), last_ok), NO_SUCCESS_RESET_MS):
                 log("no successful poll for 10 minutes — restarting")
                 restart("no successful poll for 10 min, last error: %s" % e)
