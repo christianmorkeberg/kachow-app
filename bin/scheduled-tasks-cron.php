@@ -277,8 +277,8 @@ foreach ($routines->requested() as $r) {
             }
             if ($r['run_mode'] === 'ask') {
                 $routines->clearRequest($r['id']);
-                $routines->createRequest($r['id'], $r['user_id'], $trigger);
-                $notifier->notify($r['user_id'], NotificationTypes::ROUTINE_ASK, 'Run “' . $r['label'] . '”?', ucfirst($trigger) . ' — tap to run it or skip it.');
+                $askId = $routines->createRequest($r['id'], $r['user_id'], $trigger);
+                $notifier->notify($r['user_id'], NotificationTypes::ROUTINE_ASK, 'Run “' . $r['label'] . '”?', ucfirst($trigger) . ' — tap to run it or skip it.', '/?ask=' . $askId);
                 continue;
             }
         }
@@ -338,8 +338,8 @@ foreach ($due as $task) {
 
         // "Ask first": the slot is used up (it moves on as usual), the question waits on the card and in a push, and only a yes runs it.
         if (($task['run_mode'] ?? 'auto') === 'ask' && $task['frequency'] !== 'once') {
-            $routines->createRequest($task['id'], $task['user_id'], 'scheduled time');
-            $notifier->notify($task['user_id'], NotificationTypes::ROUTINE_ASK, 'Run “' . $task['label'] . '”?', 'It is time — tap to run it or skip it.');
+            $askId = $routines->createRequest($task['id'], $task['user_id'], 'scheduled time');
+            $notifier->notify($task['user_id'], NotificationTypes::ROUTINE_ASK, 'Run “' . $task['label'] . '”?', 'It is time — tap to run it or skip it.', '/?ask=' . $askId);
             continue;
         }
 
