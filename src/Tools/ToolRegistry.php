@@ -132,7 +132,7 @@ final class ToolRegistry
         $registry->register(new RemoveProgramDays($programs));
         $registry->register(new DeleteTrainingProgram($programs));
         $registry->register(new FindProgramInMemory($memories, $instructions, $programs));
-        $registry->register(new CheckOffExercise($workoutPlans));
+        $registry->register(new CheckOffExercise($workoutPlans, $planner));
         $registry->register(new UncheckExercise($workoutPlans));
         $registry->register(new AddPlanExercise($workoutPlans));
         $registry->register(new RemovePlanExercise($workoutPlans));

@@ -11,7 +11,7 @@ use DateTimeZone;
 
 /**
  * Turns what a training programme prescribes for a date into that date's workout plan — the plan card the user ticks off. It happens
- * when the day (or its week) is asked for, only for today and later (history is never invented), never touches a plan that already has
+ * when the day (or its week) is asked for, only for today and later (history is never invented just by looking; the user ticking off a past day, $allowPast, is the exception), never touches a plan that already has
  * exercises, and is harmless to repeat (WorkoutPlans::addOrMergeItem never doubles an exercise).
  */
 final class ProgramPlanner
@@ -23,10 +23,10 @@ final class ProgramPlanner
     /**
      * @return array{label:string, items:int}|null what was put into the plan, or null when nothing was (no programme day, a past date, or the day already has a plan)
      */
-    public function ensureDay(int $userId, string $date, ?string $today = null): ?array
+    public function ensureDay(int $userId, string $date, ?string $today = null, bool $allowPast = false): ?array
     {
         $today = $today ?? (new DateTimeImmutable('now', new DateTimeZone($this->tz)))->format('Y-m-d');
-        if ($date < $today) {
+        if ($date < $today && !$allowPast) {
             return null;
         }
         $day = $this->programs->dayFor($userId, $date);
