@@ -106,7 +106,7 @@ final class NotificationTypes
             'default'     => false,
         ],
         // Sent by the routine runner when a routine set to "ask first" is triggered automatically (leaving a place …):
-        // the question waits on the routines card until answered.
+        // the question waits until answered. The push links to `/?ask=<request id>`, which opens a small Run / Skip sheet (not a card).
         self::ROUTINE_ASK => [
             'label'       => 'Routine asks first',
             'description' => 'When a routine you set to "ask first" is triggered (for example by leaving home): a question to run it or skip it.',
@@ -142,7 +142,7 @@ final class NotificationTypes
         self::MOMS_DEADLINE  => 'moms',       // the quarter awaiting filing
         self::WORK_CLOCK_GAP => 'work_yesterday', // yesterday's hours, to fill in the skipped visit
         self::FEEDBACK_REPORT => 'feedback',  // the open reports (admin)
-        self::ROUTINE_ASK    => 'routines',   // the routines card, with the question
+        self::ROUTINE_ASK    => 'routines',   // fallback only: the push itself links to /?ask=<id> (a Run / Skip sheet)
     ];
 
     public static function exists(string $key): bool
