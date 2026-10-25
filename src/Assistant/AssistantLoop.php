@@ -36,7 +36,7 @@ use Throwable;
 final class AssistantLoop
 {
     /** Guard against a model that keeps calling tools without concluding. */
-    private const MAX_TOOL_ROUNDS = 8;
+    private const MAX_TOOL_ROUNDS = 12;
 
     /** Per-call cap on a Gemini request (s). Normal calls take ~2–5s. Env: GEMINI_TIMEOUT_S. */
     private const CALL_TIMEOUT_S = 20;
@@ -112,6 +112,8 @@ final class AssistantLoop
         . 'Treat "shopping", "groceries", and "the list" as the SHARED shopping list (shared with '
         . 'their connection) — use the shopping-list tools. Only use the personal wishlist when the '
         . 'user explicitly says "wishlist" or "gift"; never use it for groceries or everyday shopping. '
+        . 'BATCHING: when several tool calls do not depend on each other (several days, several exercises, several items to '
+        . 'save), make ALL of them in the same step instead of one per step — each step is slow and the number of steps is limited. '
         . 'Many tools render a visual CARD: a workout plan or week plan, ANY list (shopping, groceries, '
         . 'to-do, tasks, packing — these are ALL the shopping-list tools\' interactive checklist; a '
         . '"to-do list" is just a named list), the calendar agenda, weather, and work hours. When you '
@@ -916,7 +918,7 @@ final class AssistantLoop
         if ($chosenModel !== null && $leftMs >= self::MIN_CALL_MS) {
             $g0 = microtime(true);
             try {
-                // Report #64: after eight rounds of tool results the last turn is a functionResponse and the tools-off call came
+                // Report #64: after a full set of rounds of tool results the last turn is a functionResponse and the tools-off call came
                 // back empty. A closing user turn gives the model something to answer.
                 $closing = $contents;
                 $last = array_key_last($closing);
