@@ -916,8 +916,13 @@ final class AssistantLoop
         if ($chosenModel !== null && $leftMs >= self::MIN_CALL_MS) {
             $g0 = microtime(true);
             try {
+                // Report #64: after eight rounds of tool results the last turn is a functionResponse and the tools-off call came
+                // back empty. A closing user turn gives the model something to answer.
+                $closing = $contents;
+                $last = array_key_last($closing);
+                $closing[$last]['parts'][] = ['text' => 'Now tell me in a few words what you did and what is left.'];
                 $response = $this->gemini->generate(
-                    $contents,
+                    $closing,
                     $declarations,
                     $system . "\n\nSTEP LIMIT REACHED: do not call any more tools. Answer the user now from "
                         . 'the tool results above. If they are not enough for a complete answer, give what you '
@@ -938,7 +943,7 @@ final class AssistantLoop
             }
             $geminiMs += (microtime(true) - $g0) * 1000;
         }
-        $fallback ??= "Sorry — I couldn't complete that in a reasonable number of steps.";
+        $fallback ??= $this->stepLimitSummary();
 
         $this->recordTiming($tStart, $geminiMs, $geminiCalls, $toolMs, $reqKb);
         $this->lastAssistantMessageId = $this->conversations->addMessage(
@@ -951,6 +956,33 @@ final class AssistantLoop
         );
 
         return $fallback;
+    }
+
+    /** What the turn did when the model itself could not say (step limit, empty final answer): the tool calls that went through, and the ones that failed. */
+    private function stepLimitSummary(): string
+    {
+        $ok = [];
+        $failed = [];
+        foreach ($this->lastDiagnostics['calls'] ?? [] as $c) {
+            if (!empty($c['ok'])) {
+                $ok[$c['name']] = ($ok[$c['name']] ?? 0) + 1;
+            } else {
+                $failed[] = $c['name'] . ': ' . (string) ($c['error'] ?? '');
+            }
+        }
+        $text = "Sorry — I couldn't finish that in a reasonable number of steps.";
+        if ($ok !== []) {
+            $parts = [];
+            foreach ($ok as $name => $n) {
+                $parts[] = $name . ($n > 1 ? " ×{$n}" : '');
+            }
+            $text .= ' These steps did go through: ' . implode(', ', $parts) . '.';
+        }
+        if ($failed !== []) {
+            $text .= ' Failed: ' . implode('; ', array_slice($failed, 0, 3)) . '.';
+        }
+
+        return $text . ' Check the result and tell me what is missing.';
     }
 
     /**
