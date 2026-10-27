@@ -73,6 +73,7 @@ final class ThermostatService
             'battery_pct'    => $s['battery'] ?? Thermostats::find($r, 'battery'),
             'signal_dbm'     => $s['rssi'] ?? null,
             'last_heard_minutes_ago' => isset($s['last_updated_ts']) && is_numeric($s['last_updated_ts']) ? max(0, (int) round((time() - (int) $s['last_updated_ts']) / 60)) : null,
+            'updated_ts'     => isset($s['last_updated_ts']) && is_numeric($s['last_updated_ts']) ? (int) $s['last_updated_ts'] : null,   // the gateway's own "heard at" (the probe logs it)
             'paired'    => $s['paired'] ?? null,
             'errors'    => !empty(Thermostats::find($r, 'errors')) ? Thermostats::find($r, 'errors') : null,
         ], static fn ($v): bool => $v !== null);
