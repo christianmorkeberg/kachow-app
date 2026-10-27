@@ -25,7 +25,9 @@ final class SystemTasks
      * key => label, what it does, the script in bin/, and the schedule the cPanel entry has today
      * (which is also the default for the dispatcher).
      *
-     * @var array<string, array{label:string, description:string, script:string, frequency:string, time_of_day:?string, day_of_week:?int, interval_minutes:?int}>
+     * `paused` = the row is created paused (an opt-in job).
+     *
+     * @var array<string, array{label:string, description:string, script:string, frequency:string, time_of_day:?string, day_of_week:?int, interval_minutes:?int, paused?:bool}>
      */
     public const CATALOG = [
         'notifications' => [
@@ -59,6 +61,12 @@ final class SystemTasks
             'description' => 'Freezes each finished day\'s stays and trips so they outlive the 60-day raw-point retention.',
             'script' => 'location-freeze-cron.php', 'frequency' => 'daily', 'time_of_day' => '04:40', 'day_of_week' => null, 'interval_minutes' => null,
         ],
+        'thermostat_probe' => [
+            'label'       => 'Thermostat probe',
+            'description' => 'Experiment: reads every radiator thermostat once a minute through the home agent and logs what it says, to find out how often '
+                . 'the valves really report (can an open window be detected?). Off until switched on; needs a cPanel entry every minute; keeps 14 days.',
+            'script' => 'thermostat-probe-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 1, 'paused' => true,
+        ],
     ];
 
     public const FREQUENCIES = ['minutes', 'daily', 'weekdays', 'weekly'];
@@ -80,9 +88,9 @@ final class SystemTasks
                 continue;
             }
             $this->db->prepare(
-                'INSERT INTO system_tasks (task_key, frequency, time_of_day, day_of_week, interval_minutes)
-                 VALUES (:k, :f, :t, :d, :i)'
-            )->execute([':k' => $key, ':f' => $c['frequency'], ':t' => $c['time_of_day'], ':d' => $c['day_of_week'], ':i' => $c['interval_minutes']]);
+                'INSERT INTO system_tasks (task_key, status, frequency, time_of_day, day_of_week, interval_minutes)
+                 VALUES (:k, :s, :f, :t, :d, :i)'
+            )->execute([':k' => $key, ':s' => !empty($c['paused']) ? 'paused' : 'active', ':f' => $c['frequency'], ':t' => $c['time_of_day'], ':d' => $c['day_of_week'], ':i' => $c['interval_minutes']]);
         }
     }
 
