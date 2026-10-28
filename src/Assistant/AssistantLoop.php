@@ -131,7 +131,7 @@ final class AssistantLoop
         . 'old note may hold the programme — offer to turn it into a real programme (same steps) and only after they confirm '
         . 'it is right offer to forget the old note. LOCATION: you CAN work with the user\'s tracked position and coordinates — where_am_i says where they are, '
         . 'which saved places / regions they are in, and (against a reference) how far and east / west / north / south; save_region makes an area like "east of Roskilde" '
-        . 'and save_place takes a wide radius (up to 30 km) or coordinates they typed. Never say you cannot read their position or coordinates. ROUTINES: a one-off ("only '
+        . 'and save_place takes a wide radius (up to 30 km) or coordinates they typed. Never say you cannot read their position or coordinates. PROMISES: never say you set a reminder, routine or scheduled task unless set_reminder / set_place_reminder / create_routine / schedule_task returned it THIS turn (cancelling a routine creates nothing). When the user asks why something you promised did not happen, or why something is in a state they did not expect (a light still off), CHECK the real state first (list_reminders, list_routines, the device) and say what you find — never invent a reason or a time. If they already made clear they want it ("turn the lights on when I get home, just this once") and the moment has come (where_am_i says they are home), DO it now with the tools instead of asking again. ROUTINES: a one-off ("only '
         . 'this Saturday", "just once") is conditions.once and / or from / until (a date), and a location can be a trigger or a condition (in_places); after create_routine / '
         . 'update_routine tell the user ONLY the conditions the result shows — never claim a condition (a weekday, a place, a date) it does not list. If a tool reports a data source is busy or '
         . 'unavailable even after retrying, say so plainly and offer to try again shortly. '
@@ -458,6 +458,36 @@ final class AssistantLoop
             . '|\b(er|blev)\s+(nu\s+)?' . $verbDa . '\b/iu';
 
         return preg_match($en, $text) === 1 || preg_match($da, $text) === 1;
+    }
+
+    /**
+     * Whether a reply says a reminder / routine / scheduled task WAS set up ("Jeg har sat en engangs-påmindelse …", "I've set a reminder …").
+     * Checked against the tools that ran this turn, not just "any tool": report #65 claimed a reminder right after update_routine
+     * (a cancel), so the any-tool guard in claimsChange() let a promise that nothing backed through.
+     */
+    public static function claimsReminder(string $reply): bool
+    {
+        $text = trim((string) preg_replace('/\[\[\s*suggest\s*:.+?\]\]/is', '', $reply));
+        if ($text === '') {
+            return false;
+        }
+        $noun = '(reminder|routine|alert|notification|påmindelse|rutine|notifikation)';
+        $en   = '/\b(i\'?ve|i\s+have|i\s+just|i\s+also)\s+(now\s+|just\s+|also\s+)?(set|created|scheduled|added|made|put)\b[^.!?\n]{0,60}\b' . $noun . '\b/iu';
+        $da   = '/\b(jeg\s+har|har\s+jeg)\s+(nu\s+|lige\s+|også\s+)?(sat|oprettet|lavet|lagt|tilføjet|planlagt)\b[^.!?\n]{0,60}\b' . $noun . '\b/iu';
+
+        return preg_match($en, $text) === 1 || preg_match($da, $text) === 1;
+    }
+
+    /** Whether any tool that really creates a reminder / routine / scheduled task ran this turn. */
+    private function createdReminderThisTurn(): bool
+    {
+        foreach ($this->lastCalls as $c) {
+            if (in_array($c['name'], ['set_reminder', 'set_place_reminder', 'create_routine', 'update_routine', 'schedule_task'], true) && $c['ok']) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function lastRender(): ?array
@@ -798,8 +828,9 @@ final class AssistantLoop
 
             // A reply that says "I saved / logged / added …" in a turn where NO tool ran claims a change nothing made (report #61: work notes
             // "saved", log empty — and later answers built on that claim). Once per turn, hand it back: do it for real, or stop claiming it.
-            if ($calls === [] && !$claimNudged && $this->lastCalls === [] && $round < self::MAX_TOOL_ROUNDS - 1
-                && self::claimsChange(GeminiClient::extractText($response))) {
+            if ($calls === [] && !$claimNudged && $round < self::MAX_TOOL_ROUNDS - 1
+                && (($this->lastCalls === [] && self::claimsChange(GeminiClient::extractText($response)))
+                    || (!$this->createdReminderThisTurn() && self::claimsReminder(GeminiClient::extractText($response))))) {
                 $claimNudged = true;
                 $this->lastDiagnostics['claim_nudge'] = true;
                 $contents[] = GeminiClient::firstCandidateContent($response);
@@ -815,7 +846,7 @@ final class AssistantLoop
             if ($calls === []) {
                 $reply = GeminiClient::extractText($response);
                 // Sent back once already and it STILL claims a change with no tool run: an honest "not done" beats a confident lie.
-                if ($claimNudged && $this->lastCalls === [] && self::claimsChange($reply)) {
+                if ($claimNudged && (($this->lastCalls === [] && self::claimsChange($reply)) || (!$this->createdReminderThisTurn() && self::claimsReminder($reply)))) {
                     $this->lastDiagnostics['claim_blocked'] = true;
                     $reply = "Det blev ikke gemt — jeg nåede ikke at køre det rigtige værktøj. Skriv det gerne igen, så prøver jeg igen.\n\n"
                         . "That was NOT saved — I did not run the save step. Please say it again and I'll retry.";

@@ -42,5 +42,24 @@ foreach ([
     check('not a claim: ' . $why, !AssistantLoop::claimsChange($msg), $msg);
 }
 
+echo "3) claims of a reminder / routine (report #65)\n";
+foreach ([
+    'Udkastet er slettet. I stedet har jeg sat en engangs-påmindelse til at tænde lyset, næste gang du ankommer hjem.' => 'the exact report #65 message',
+    'Jeg har oprettet en rutine, der slukker lyset når du går.' => 'rutine',
+    "I've set a reminder for when you get home." => 'EN reminder',
+    'I have created a routine for that.' => 'EN routine',
+] as $msg => $why) {
+    check('claims reminder: ' . $why, AssistantLoop::claimsReminder($msg), $msg);
+}
+foreach ([
+    'Skal jeg sætte en påmindelse?' => 'a question',
+    'Jeg kan oprette en rutine, hvis du vil.' => 'an offer',
+    'Du har en påmindelse om batterier.' => 'a plain fact',
+    "I'll set a reminder once you confirm." => 'future',
+    '' => 'empty',
+] as $msg => $why) {
+    check('not a reminder claim: ' . $why, !AssistantLoop::claimsReminder($msg), $msg);
+}
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
