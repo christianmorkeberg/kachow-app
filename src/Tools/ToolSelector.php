@@ -93,6 +93,10 @@ final class ToolSelector
         'power' => [
             'get_power_prices',
         ],
+        // The full-screen wall display: its sign-in link.
+        'kiosk' => [
+            'get_kiosk_setup',
+        ],
         'weather' => [
             'get_current_weather', 'get_weather_forecast',
         ],
@@ -253,6 +257,9 @@ final class ToolSelector
             'a fit for', 'put on next', 'should i buy this record',
             // Danish
             'plade', 'pladesamling', 'lytte', 'kunstner', 'anbefal',
+        ],
+        'kiosk' => [
+            'kiosk', 'wall display', 'wall screen', 'wall tablet', 'vægdisplay', 'væg-display', 'skærm på væggen', 'tablet på væggen',
         ],
         'power' => [
             'electricity', 'power price', 'power cost', 'spot price', 'spotprice', 'kwh', 'tariff', 'cheapest hour',

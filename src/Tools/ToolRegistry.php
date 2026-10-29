@@ -176,6 +176,7 @@ final class ToolRegistry
         $weatherService = new WeatherService($weather, new OpenMeteo());
         $registry->register(new GetCurrentWeather($weatherService));
         $registry->register(new GetWeatherForecast($weatherService));
+        $registry->register(new GetKioskSetup(new ApiTokens()));
         $registry->register(new GetPowerPrices(new PowerPrices(new EnergiDataService())));
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));

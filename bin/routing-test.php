@@ -262,6 +262,11 @@ $cases = [
     ['msg' => 'how much did I work last week?', 'expect' => 'worktime'],
     ['msg' => 'how much have I worked this week', 'expect' => 'worktime'],
 
+    // ---- kiosk ----
+    ['msg' => 'give me the link for the kiosk', 'expect' => 'kiosk'],
+    ['msg' => 'how do I set up the wall display?', 'expect' => 'kiosk'],
+    ['msg' => 'jeg vil have kiosk på tabletten', 'expect' => 'kiosk'],
+    ['msg' => 'hvordan åbner jeg vægdisplayet?', 'expect' => 'kiosk'],
     // ---- power prices ----
     ['msg' => 'what does electricity cost right now?', 'expect' => 'power'],
     ['msg' => 'when is the cheapest time to run the dishwasher?', 'expect' => 'power'],
