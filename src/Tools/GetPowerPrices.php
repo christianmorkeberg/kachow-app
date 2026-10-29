@@ -154,7 +154,7 @@ final class GetPowerPrices implements Tool
             'title'      => $label === 'now' ? 'Electricity price' : 'Electricity price · ' . $label,
             'unit'       => 'kr/kWh',
             'area'       => 'DK2',
-            'hours'      => array_map(static fn (array $h): array => ['s' => $h['start'], 't' => $h['total'], 'sp' => $h['spot']], $hours),
+            'hours'      => array_map(static fn (array $h): array => ['s' => $h['start'], 'ts' => (int) $h['ts'], 't' => $h['total'], 'sp' => $h['spot']], $hours),
             'now_index'  => $nowIdx,
             'avg'        => $avg,
             'window'     => $window === null ? null : [
@@ -163,6 +163,7 @@ final class GetPowerPrices implements Tool
                 'avg'  => $window['avg'],
                 'start' => $window['start'],
                 'end'   => $window['end'],
+                'start_ts' => $window['first_ts'],
             ],
             'incomplete' => $res['incomplete'],
         ];
