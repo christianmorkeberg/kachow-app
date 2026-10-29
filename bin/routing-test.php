@@ -262,6 +262,14 @@ $cases = [
     ['msg' => 'how much did I work last week?', 'expect' => 'worktime'],
     ['msg' => 'how much have I worked this week', 'expect' => 'worktime'],
 
+    // ---- power prices ----
+    ['msg' => 'what does electricity cost right now?', 'expect' => 'power'],
+    ['msg' => 'when is the cheapest time to run the dishwasher?', 'expect' => 'power'],
+    ['msg' => 'what is the spot price tomorrow?', 'expect' => 'power'],
+    ['msg' => 'hvad er elprisen lige nu?', 'expect' => 'power'],
+    ['msg' => 'hvornår er strømmen billigst i nat?', 'expect' => 'power'],
+    ['msg' => 'hvornår skal jeg tænde for opvaskeren?', 'expect' => 'power'],
+    ['msg' => 'er det billigt at køre vaskemaskinen nu', 'expect' => 'power'],
     // ---- weather ----
     ['msg' => "what's the weather tomorrow?", 'expect' => 'weather'],
     ['msg' => 'do I need an umbrella today?', 'expect' => 'weather'],

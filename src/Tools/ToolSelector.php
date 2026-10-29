@@ -89,6 +89,10 @@ final class ToolSelector
             'add_vinyl', 'get_vinyls', 'rate_vinyl', 'update_vinyl', 'remove_vinyl',
             'recommend_vinyl', 'assess_vinyl', 'get_connected_vinyls',
         ],
+        // Electricity price per kWh (spot + tariffs), cheapest hours for the dishwasher / washer.
+        'power' => [
+            'get_power_prices',
+        ],
         'weather' => [
             'get_current_weather', 'get_weather_forecast',
         ],
@@ -249,6 +253,13 @@ final class ToolSelector
             'a fit for', 'put on next', 'should i buy this record',
             // Danish
             'plade', 'pladesamling', 'lytte', 'kunstner', 'anbefal',
+        ],
+        'power' => [
+            'electricity', 'power price', 'power cost', 'spot price', 'spotprice', 'kwh', 'tariff', 'cheapest hour',
+            'cheapest time', 'cheapest when', 'cheap power', 'dishwasher', 'washing machine', 'tumble dryer', 'charge the car',
+            // Danish
+            'elpris', 'strøm', 'spotpris', 'kilowatt', 'tarif', 'billigste time', 'billigste tid', 'billig strøm', 'opvasker',
+            'vaskemaskine', 'tørretumbler', 'oplade bilen',
         ],
         'weather' => [
             'weather', 'forecast', 'temperature', ' rain', 'raining', 'sunny', ' wind ', 'windy',

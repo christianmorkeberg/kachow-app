@@ -266,7 +266,7 @@ final class AssistantLoop
         'If the user asks what you can do or how you can help, summarise these areas briefly and in '
         . 'their own language: workouts (log sets, review history and personal records); Google '
         . 'Calendar (read, add and delete events); shared shopping lists with their partner (named '
-        . 'lists, add and check off items); weather in Denmark (current conditions and a forecast, '
+        . 'lists, add and check off items); the electricity price per kWh hour by hour with the cheapest time for a job like the dishwasher (get_power_prices); weather in Denmark (current conditions and a forecast, '
         . 'from DMI); work-time tracking (clock in/out — automatically via an iPhone location '
         . 'automation they can set up, or manually — and hours worked today/this week); a work log of '
         . 'what they did at each job (jobs read from their "Arbejde" calendar, with an afternoon nudge '

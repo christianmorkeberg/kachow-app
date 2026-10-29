@@ -60,6 +60,8 @@ use App\Maps\MapDistance;
 use App\Maps\PoiNames;
 use App\Music\Discogs;
 use App\Receipts\ReceiptStorage;
+use App\Energy\EnergiDataService;
+use App\Energy\PowerPrices;
 use App\Weather\Dmi;
 use App\Weather\OpenMeteo;
 use App\Weather\WeatherService;
@@ -174,6 +176,7 @@ final class ToolRegistry
         $weatherService = new WeatherService($weather, new OpenMeteo());
         $registry->register(new GetCurrentWeather($weatherService));
         $registry->register(new GetWeatherForecast($weatherService));
+        $registry->register(new GetPowerPrices(new PowerPrices(new EnergiDataService())));
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new ShowChart());
