@@ -61,6 +61,12 @@ final class SystemTasks
             'description' => 'Freezes each finished day\'s stays and trips so they outlive the 60-day raw-point retention.',
             'script' => 'location-freeze-cron.php', 'frequency' => 'daily', 'time_of_day' => '04:40', 'day_of_week' => null, 'interval_minutes' => null,
         ],
+        'home_state' => [
+            'label'       => 'Home state cache',
+            'description' => 'Every 5 minutes reads the lights and all radiator valves through the home agent and keeps the result, so the assistant, the Home card and the kiosk answer instantly '
+                . 'instead of waiting in the Pico\'s one-at-a-time queue. Needs a cPanel entry every 5 minutes, or the dispatcher.',
+            'script' => 'home-state-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 5,
+        ],
         'thermostat_probe' => [
             'label'       => 'Thermostat probe',
             'description' => 'Experiment: reads every radiator thermostat once a minute through the home agent and logs what it says, to find out how often '

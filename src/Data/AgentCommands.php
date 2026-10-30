@@ -36,7 +36,7 @@ final class AgentCommands
      * @param array<string, mixed>|null $body JSON body for POST/PUT
      * @throws InvalidArgumentException on a malformed device, method or path
      */
-    public function enqueue(int $userId, string $device, string $method, string $path, ?array $body = null): int
+    public function enqueue(int $userId, string $device, string $method, string $path, ?array $body = null, ?int $ttlSeconds = null): int
     {
         $device = strtolower(trim($device));
         $method = strtoupper(trim($method));
@@ -60,9 +60,19 @@ final class AgentCommands
             }
         }
 
+        // A command nobody waits for (ttl) must not run late: it carries its own expiry, which claimNext() honours. Without a ttl the old rule holds —
+        // the waiter expires its command when it gives up.
+        // The ordinary insert never touches the expires_at column, so the queue keeps working on a server where the migration has not run yet.
+        if ($ttlSeconds === null) {
+            $this->db->prepare(
+                'INSERT INTO home_agent_commands (user_id, device, method, path, body) VALUES (:u, :d, :m, :p, :b)'
+            )->execute([':u' => $userId, ':d' => $device, ':m' => $method, ':p' => $path, ':b' => $json]);
+
+            return (int) $this->db->lastInsertId();
+        }
         $this->db->prepare(
-            'INSERT INTO home_agent_commands (user_id, device, method, path, body) VALUES (:u, :d, :m, :p, :b)'
-        )->execute([':u' => $userId, ':d' => $device, ':m' => $method, ':p' => $path, ':b' => $json]);
+            'INSERT INTO home_agent_commands (user_id, device, method, path, body, expires_at) VALUES (:u, :d, :m, :p, :b, :x)'
+        )->execute([':u' => $userId, ':d' => $device, ':m' => $method, ':p' => $path, ':b' => $json, ':x' => gmdate('Y-m-d H:i:s', time() + max(1, $ttlSeconds))]);
 
         return (int) $this->db->lastInsertId();
     }
@@ -76,6 +86,13 @@ final class AgentCommands
      */
     public function claimNext(int $userId): ?array
     {
+        // Commands whose own expiry has passed (fired without a waiter, then the Pico was away) are dropped, never run late.
+        try {
+            $this->db->prepare("UPDATE home_agent_commands SET status = 'expired' WHERE user_id = :u AND status = 'pending' AND expires_at IS NOT NULL AND expires_at < :now")
+                ->execute([':u' => $userId, ':now' => gmdate('Y-m-d H:i:s')]);
+        } catch (\PDOException $e) {
+            // the expires_at column does not exist yet (migration 2026-10-30 not run): nothing can carry an expiry, so nothing to drop
+        }
         for ($try = 0; $try < 3; $try++) {
             $stmt = $this->db->prepare(
                 "SELECT id, device, method, path, body FROM home_agent_commands
@@ -149,7 +166,7 @@ final class AgentCommands
      * @return array{state:string, http_status:?int, response:?string, error:?string}
      *         state: done | failed | timeout
      */
-    public function awaitResult(int $userId, int $id, float $timeoutSeconds): array
+    public function awaitResult(int $userId, int $id, float $timeoutSeconds, bool $expireOnTimeout = true): array
     {
         $deadline = microtime(true) + $timeoutSeconds;
         do {
@@ -165,9 +182,12 @@ final class AgentCommands
             usleep(100_000);
         } while (microtime(true) < $deadline);
 
-        $this->db->prepare(
-            "UPDATE home_agent_commands SET status = 'expired' WHERE id = :id AND user_id = :u AND status IN ('pending', 'sent')"
-        )->execute([':id' => $id, ':u' => $userId]);
+        // $expireOnTimeout = false: the command was enqueued with a ttl and stays queued (a soft wait, see HomeDeviceCall::executeSoft).
+        if ($expireOnTimeout) {
+            $this->db->prepare(
+                "UPDATE home_agent_commands SET status = 'expired' WHERE id = :id AND user_id = :u AND status IN ('pending', 'sent')"
+            )->execute([':id' => $id, ':u' => $userId]);
+        }
 
         return ['state' => 'timeout', 'http_status' => null, 'response' => null, 'error' => null];
     }

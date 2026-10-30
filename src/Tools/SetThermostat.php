@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\HomeState;
 use App\Data\UserSettings;
+use App\Home\ThermostatService;
 use App\Support\Thermostats;
 
 /**
@@ -13,7 +15,10 @@ use App\Support\Thermostats;
  */
 final class SetThermostat implements Tool
 {
-    public function __construct(private Tool $home, private UserSettings $settings)
+    /** How long to wait for a valve to confirm before answering "sent" (the command stays queued on the Pico, see HomeDeviceCall::executeSoft). */
+    private const CONFIRM_WAIT_S = 4.0;
+
+    public function __construct(private Tool $home, private UserSettings $settings, private ?HomeState $state = null)
     {
     }
 
@@ -53,10 +58,22 @@ final class SetThermostat implements Tool
         if ($t === null) {
             return ['error' => 'Which thermostat? They are: ' . implode(', ', array_map(static fn (array $x): string => $x['name'], $all)) . '.'];
         }
-        $res = $this->home->execute([
+        $call = [
             'device' => 'shelly', 'method' => 'POST', 'path' => '/rpc/BluTrv.Call',
             'body'   => ['id' => $t['id'], 'method' => 'TRV.SetTarget', 'params' => ['id' => 0, 'target_C' => $target]],
-        ], $userId);
+        ];
+        // The Pico runs ONE command at a time and a sleepy valve takes 10+ s to confirm: wait only briefly, leave the command queued (it keeps for 3 min)
+        // and answer "sent" — "all radiators to 15" then takes seconds, not 45 (report #66). Falls back to the full wait when the home call cannot do it.
+        $res = $this->home instanceof HomeDeviceCall ? $this->home->executeSoft($call, $userId, self::CONFIRM_WAIT_S) : $this->home->execute($call, $userId);
+        if (($res['queued'] ?? false) === true) {
+            (new ThermostatService($this->home, $this->settings, $this->state))->noteTarget($userId, $t['id'], $target);
+
+            return [
+                'set' => 'sent', 'thermostat' => $t['name'], 'target_c' => $target,
+                'note' => 'The command is queued for the valve, which has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
+                    . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.',
+            ];
+        }
         if (isset($res['error'])) {
             // A valve sleeps between its reports, so the gateway often holds the answer longer than the Pico waits. If the gateway
             // itself still answers, the command was delivered: it is sent, not failed.
@@ -76,6 +93,8 @@ final class SetThermostat implements Tool
         if (($res['http_status'] ?? 200) >= 400 || isset($res['response']['error'])) {
             return ['set' => false, 'thermostat' => $t['name'], 'error' => 'The gateway refused it: ' . json_encode($res['response'] ?? $res, JSON_UNESCAPED_UNICODE)];
         }
+
+        (new ThermostatService($this->home, $this->settings, $this->state))->noteTarget($userId, $t['id'], $target);
 
         return ['set' => true, 'thermostat' => $t['name'], 'target_c' => $target, 'note' => 'The valve moves to it within a minute or two. Say it is set in a few words.'];
     }

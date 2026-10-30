@@ -68,6 +68,28 @@ final class HomeDeviceCall implements Tool
 
     public function execute(array $arguments, int $userId): array
     {
+        return $this->run($arguments, $userId, self::WAIT_SECONDS, null);
+    }
+
+    /**
+     * Fires the request and waits only $waitS for the device's answer. If none comes the command STAYS QUEUED — for at most $keepS seconds, then it is
+     * dropped (AgentCommands ttl) — and ['queued' => true] is returned instead of an error: the Pico handles one command at a time, so the reply to the user
+     * need not wait for a sleepy valve (report #66: three valves, 12 s each). Errors that are not a wait timeout come back as in execute().
+     *
+     * @param array<string, mixed> $arguments
+     * @return array<string, mixed>
+     */
+    public function executeSoft(array $arguments, int $userId, float $waitS = 4.0, int $keepS = 180): array
+    {
+        return $this->run($arguments, $userId, $waitS, $keepS);
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     * @return array<string, mixed>
+     */
+    private function run(array $arguments, int $userId, float $waitS, ?int $keepS): array
+    {
         // A person without a Pico of their own uses the one a connected person shares ("home" scope).
         $userId = $this->owner?->resolve($userId)['owner_id'] ?? $userId;
         $ago = $this->tokens->secondsSinceUse($userId, AgentCommands::SCOPE);
@@ -85,14 +107,24 @@ final class HomeDeviceCall implements Tool
                 (string) ($arguments['device'] ?? ''),
                 (string) ($arguments['method'] ?? 'GET'),
                 (string) ($arguments['path'] ?? ''),
-                isset($arguments['body']) && is_array($arguments['body']) ? $arguments['body'] : null
+                isset($arguments['body']) && is_array($arguments['body']) ? $arguments['body'] : null,
+                $keepS
             );
         } catch (InvalidArgumentException $e) {
             return ['error' => $e->getMessage()];
+        } catch (\PDOException $e) {
+            // A ttl needs the expires_at column (migration 2026-10-30). Without it, fall back to the ordinary wait: slower, never wrong.
+            if ($keepS !== null) {
+                return $this->run($arguments, $userId, self::WAIT_SECONDS, null);
+            }
+            throw $e;
         }
 
-        $result = $this->commands->awaitResult($userId, $id, self::WAIT_SECONDS);
+        $result = $this->commands->awaitResult($userId, $id, $waitS, $keepS === null);
 
+        if ($result['state'] === 'timeout' && $keepS !== null) {
+            return ['queued' => true, 'command_id' => $id];
+        }
         if ($result['state'] === 'timeout') {
             return ['error' => 'No answer from the home agent in ' . (int) self::WAIT_SECONDS . ' seconds. It may be '
                 . 'offline or the device is not responding; the change may still have applied.'];

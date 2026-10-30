@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\AgentCommands;
 use App\Data\HomeDevices;
+use App\Data\HomeState;
 use App\Data\ApiTokens;
 use App\Data\BookkeepingAudit;
 use App\Data\Books;
@@ -192,8 +193,9 @@ final class ToolRegistry
         $registry->register($homeCall);
         $registry->register(new HueColorTool());
         $registry->register(new ShowHome());
-        $registry->register(new SetThermostat($homeCall, $userSettings));
-        $registry->register(new GetThermostats($homeCall, $userSettings));
+        $homeState = new HomeState(null, $homeOwner);   // the 5-minute cache of valves and lights (see bin/home-state-cron.php)
+        $registry->register(new SetThermostat($homeCall, $userSettings, $homeState));
+        $registry->register(new GetThermostats($homeCall, $userSettings, $homeState));
         $registry->register(new GetThermostatProbe(new \App\Data\ThermostatSamples()));
         $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner));
         $locationPoints = new LocationPoints();

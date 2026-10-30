@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Home;
 
+use App\Data\HomeState;
 use App\Data\UserSettings;
 use App\Support\RoutineSteps;
 use App\Support\Thermostats;
@@ -15,7 +16,10 @@ use App\Tools\Tool;
  */
 final class ThermostatService
 {
-    public function __construct(private Tool $home, private UserSettings $settings)
+    /** Which valves exist changes only when someone pairs one: rediscover at most weekly (or when asked). */
+    private const VALVES_MAX_AGE_S = 7 * 86400;
+
+    public function __construct(private Tool $home, private UserSettings $settings, private ?HomeState $state = null)
     {
     }
 
@@ -32,6 +36,10 @@ final class ThermostatService
         if ($named !== '') {
             return ['list' => $all, 'error' => null];
         }
+        $known = $this->state?->fresh($userId, 'valves', self::VALVES_MAX_AGE_S);
+        if ($known !== null && is_array($known['data']['list'] ?? null) && $known['data']['list'] !== []) {
+            return ['list' => $known['data']['list'], 'error' => null];
+        }
         $d = Thermostats::discover(fn (int $id): array => $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $id], $userId));
         if ($d['error'] !== null) {
             return ['list' => [], 'error' => $d['error']];
@@ -40,13 +48,74 @@ final class ThermostatService
             return ['list' => $all, 'error' => null];
         }
 
-        return ['list' => array_map(function (int $id) use ($d, $userId): array {
+        $list = array_map(function (int $id) use ($d, $userId): array {
             $cfg  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetConfig?id=' . $id], $userId);
             $c    = is_array($cfg['response'] ?? null) ? $cfg['response'] : [];
             $name = trim((string) ($c['name'] ?? ''));
 
             return ['name' => $name !== '' ? $name : (count($d['found']) === 1 ? 'Thermostat' : 'Thermostat ' . $id), 'id' => $id];
-        }, $d['found']), 'error' => null];
+        }, $d['found']);
+        $this->state?->put($userId, 'valves', ['list' => $list]);
+
+        return ['list' => $list, 'error' => null];
+    }
+
+    /**
+     * Every thermostat's numbers, from the cache when it is fresh (no Pico call at all), else read live one valve after another and cached.
+     * `fresh` forces the live read. Rows from the cache get their "heard N minutes ago" recomputed and carry `cached_minutes_ago`.
+     *
+     * @return array{rows: list<array<string, mixed>>, error: ?string, at: ?int, cached: bool}
+     */
+    public function rows(int $userId, bool $fresh = false): array
+    {
+        if (!$fresh) {
+            $hit = $this->state?->fresh($userId, 'thermostats');
+            if ($hit !== null && is_array($hit['data']['rows'] ?? null)) {
+                $now = time();
+
+                return ['rows' => array_map(static function (array $r) use ($hit, $now): array {
+                    if (isset($r['updated_ts'])) {
+                        $r['last_heard_minutes_ago'] = max(0, (int) round(($now - (int) $r['updated_ts']) / 60));
+                    }
+                    $r['cached_minutes_ago'] = max(0, (int) round(($now - $hit['at']) / 60));
+
+                    return $r;
+                }, $hit['data']['rows']), 'error' => null, 'at' => $hit['at'], 'cached' => true];
+            }
+        }
+        $l = $this->list($userId);
+        if ($l['error'] !== null) {
+            return ['rows' => [], 'error' => $l['error'], 'at' => null, 'cached' => false];
+        }
+        $rows = [];
+        foreach ($l['list'] as $t) {
+            $r      = $this->read($userId, $t);
+            $rows[] = isset($r['error']) ? ['name' => $t['name'], 'id' => $t['id'], 'error' => $r['error']] : $r['row'];
+        }
+        $at = time();
+        // A read that failed for EVERY valve (the gateway is down) is not state worth keeping.
+        if ($rows !== [] && count(array_filter($rows, static fn (array $r): bool => !isset($r['error']))) > 0) {
+            $this->state?->put($userId, 'thermostats', ['rows' => $rows], $at);
+        }
+
+        return ['rows' => $rows, 'error' => null, 'at' => $at, 'cached' => false];
+    }
+
+    /** After a successful (or sent) set: the cached target of that valve now says what was asked, so the next read does not show the old one. */
+    public function noteTarget(int $userId, int $id, float $targetC): void
+    {
+        $e = $this->state?->get($userId, 'thermostats');
+        if ($e === null || !is_array($e['data']['rows'] ?? null)) {
+            return;
+        }
+        $rows = array_map(static function (array $r) use ($id, $targetC): array {
+            if ((int) ($r['id'] ?? -1) === $id) {
+                $r['target_c'] = $targetC;
+            }
+
+            return $r;
+        }, $e['data']['rows']);
+        $this->state?->put($userId, 'thermostats', ['rows' => $rows], $e['at']);   // keeps its age: only the target was patched, not re-read
     }
 
     /**

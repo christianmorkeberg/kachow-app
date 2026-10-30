@@ -8,6 +8,7 @@ use App\Data\AgentCommands;
 use App\Data\ApiTokens;
 use App\Data\Connections;
 use App\Data\HomeDevices;
+use App\Data\HomeState;
 use App\Data\UserSettings;
 use App\Support\HomeCard;
 use App\Support\Thermostats;
@@ -25,6 +26,10 @@ use Throwable;
  *   POST { action:'light', id, on?, brightness?, color? }   → one light
  *   POST { action:'group', id, on?, brightness? }           → a whole room (its grouped_light id)
  *   POST { action:'thermostat', id, target }                → a valve's target in °C (a slow valve answers "sent")
+ *
+ * Reads are served from the home-state cache (App\Data\HomeState, refreshed every 5 minutes by bin/home-state-cron.php) so they do not queue behind the
+ * Pico's one-command-at-a-time line; add fresh=1 for a live read. A response from the cache carries `cached_at` (unix seconds). A light change drops the
+ * cached lights so the next read is live.
  */
 final class HomeEndpoint
 {
@@ -40,6 +45,7 @@ final class HomeEndpoint
         $tokens   = new ApiTokens();
         $home     = new HomeDeviceCall($agent, $tokens, new HueSync(new HomeDevices(), HueSync::viaAgent($agent)), new HomeOwner($tokens, new Connections()));
         $settings = new UserSettings();
+        $state    = new HomeState(null, new HomeOwner($tokens, new Connections()));
 
         try {
             if ($method === 'POST') {
@@ -62,10 +68,12 @@ final class HomeEndpoint
                         return [502, ['error' => 'The bridge refused that: ' . json_encode($res['response']['errors'] ?? $res['response'], JSON_UNESCAPED_UNICODE)]];
                     }
 
+                    $state->forget($userId, 'lights');
+
                     return [200, ['ok' => true]];
                 }
                 if ($action === 'thermostat') {
-                    $res = (new SetThermostat($home, $settings))->execute(['thermostat' => $id, 'temperature_c' => $in['target'] ?? null], $userId);
+                    $res = (new SetThermostat($home, $settings, $state))->execute(['thermostat' => $id, 'temperature_c' => $in['target'] ?? null], $userId);
                     if (isset($res['error']) || ($res['set'] ?? false) === false) {
                         return [502, ['error' => (string) ($res['error'] ?? 'The thermostat did not take that.')]];
                     }
@@ -76,42 +84,30 @@ final class HomeEndpoint
                 return [400, ['error' => 'Unknown action.']];
             }
 
-            $part = (string) ($query['part'] ?? '');
+            $part  = (string) ($query['part'] ?? '');
+            $fresh = !empty($query['fresh']);
             if ($part === 'lights') {
-                $lights = self::hueList($home, $userId, 'light');
-                if (isset($lights['error'])) {
-                    return [502, ['error' => $lights['error']]];
+                $hit = $fresh ? null : $state->fresh($userId, 'lights');
+                if ($hit !== null) {
+                    return [200, $hit['data'] + ['cached_at' => $hit['at']]];
                 }
-                // Rooms and groups are small; if either cannot be read the lights still show, just not grouped.
-                $rooms  = self::hueList($home, $userId, 'room');
-                $groups = self::hueList($home, $userId, 'grouped_light');
-                $card   = HomeCard::lights($lights['data'], $rooms['data'] ?? [], $groups['data'] ?? []);
-                // Which thermostats exist and in which room, from the saved names alone (no valve is asked): the card reserves their tiles at once.
-                $known = null;
-                if (trim((string) $settings->get($userId, 'thermostats')) !== '') {
-                    $svc   = new ThermostatService($home, $settings);
-                    $known = array_map(static fn (array $t): array => ['id' => $t['id'], 'name' => $t['name'], 'room' => $svc->roomFor($userId, $t['name'])], Thermostats::parse($settings->get($userId, 'thermostats')));
+                [$status, $body] = self::liveLights($home, $settings, $userId);
+                if ($status === 200) {
+                    $state->put($userId, 'lights', $body);
+                    $body['cached_at'] = time();
                 }
 
-                return [200, ['ok' => true] + $card + ['thermostats_known' => $known] + (isset($rooms['error']) ? ['note' => $rooms['error']] : [])];
+                return [$status, $body];
             }
             if ($part === 'thermostats') {
-                $svc  = new ThermostatService($home, $settings);
-                $list = $svc->list($userId);
-                if ($list['error'] !== null) {
-                    return [502, ['error' => $list['error']]];
+                $svc  = new ThermostatService($home, $settings, $state);
+                $read = $svc->rows($userId, $fresh);
+                if ($read['error'] !== null) {
+                    return [502, ['error' => $read['error']]];
                 }
-                $rows = [];
-                foreach ($list['list'] as $t) {
-                    $r = $svc->read($userId, $t);
-                    if (isset($r['error'])) {
-                        $rows[] = ['name' => $t['name'], 'id' => $t['id'], 'error' => $r['error'], 'room' => $svc->roomFor($userId, $t['name'])];
-                        continue;
-                    }
-                    $rows[] = $r['row'] + ['room' => $svc->roomFor($userId, $t['name'])];
-                }
+                $rows = array_map(static fn (array $r): array => $r + ['room' => $svc->roomFor($userId, (string) ($r['name'] ?? ''))], $read['rows']);
 
-                return [200, ['ok' => true, 'thermostats' => $rows]];
+                return [200, ['ok' => true, 'thermostats' => $rows, 'cached_at' => $read['at']]];
             }
 
             return [400, ['error' => 'Use ?part=lights or ?part=thermostats.']];
@@ -120,6 +116,60 @@ final class HomeEndpoint
 
             return [500, ['error' => 'Something went wrong.']];
         }
+    }
+
+    /**
+     * The Home card's lights, read live from the bridge (three Pico calls).
+     *
+     * @return array{0:int, 1:array<string, mixed>}
+     */
+    private static function liveLights(HomeDeviceCall $home, UserSettings $settings, int $userId): array
+    {
+        $lights = self::hueList($home, $userId, 'light');
+        if (isset($lights['error'])) {
+            return [502, ['error' => $lights['error']]];
+        }
+        // Rooms and groups are small; if either cannot be read the lights still show, just not grouped.
+        $rooms  = self::hueList($home, $userId, 'room');
+        $groups = self::hueList($home, $userId, 'grouped_light');
+        $card   = HomeCard::lights($lights['data'], $rooms['data'] ?? [], $groups['data'] ?? []);
+        // Which thermostats exist and in which room, from the saved names alone (no valve is asked): the card reserves their tiles at once.
+        $known = null;
+        if (trim((string) $settings->get($userId, 'thermostats')) !== '') {
+            $svc   = new ThermostatService($home, $settings);
+            $known = array_map(static fn (array $t): array => ['id' => $t['id'], 'name' => $t['name'], 'room' => $svc->roomFor($userId, $t['name'])], Thermostats::parse($settings->get($userId, 'thermostats')));
+        }
+
+        return [200, ['ok' => true] + $card + ['thermostats_known' => $known] + (isset($rooms['error']) ? ['note' => $rooms['error']] : [])];
+    }
+
+    /**
+     * Reads the lights and every valve LIVE and stores them in the cache — what bin/home-state-cron.php does for each user every 5 minutes.
+     *
+     * @return array{lights: bool, valves: int, errors: list<string>}
+     */
+    public static function refresh(int $userId): array
+    {
+        $agent    = new AgentCommands();
+        $tokens   = new ApiTokens();
+        $owner    = new HomeOwner($tokens, new Connections());
+        $home     = new HomeDeviceCall($agent, $tokens, new HueSync(new HomeDevices(), HueSync::viaAgent($agent)), $owner);
+        $settings = new UserSettings();
+        $state    = new HomeState(null, $owner);
+        $errors   = [];
+
+        [$status, $body] = self::liveLights($home, $settings, $userId);
+        if ($status === 200) {
+            $state->put($userId, 'lights', $body);
+        } else {
+            $errors[] = 'lights: ' . (string) ($body['error'] ?? $status);
+        }
+        $read = (new ThermostatService($home, $settings, $state))->rows($userId, true);
+        if ($read['error'] !== null) {
+            $errors[] = 'valves: ' . $read['error'];
+        }
+
+        return ['lights' => $status === 200, 'valves' => count(array_filter($read['rows'], static fn (array $r): bool => !isset($r['error']))), 'errors' => $errors];
     }
 
     /** One Hue list through the agent: the "data" array, or an error string. @return array{data?: list<array<string, mixed>>, error?: string} */
