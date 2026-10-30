@@ -49,6 +49,8 @@ final class VoiceSession
         string $language = 'auto',
         array $stopWords = [],
         string $routines = '',
+        ?array $onlyTools = null,
+        ?string $prompt = null,
     ): array {
         $language = self::language($language);
         $speech   = ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice !== '' ? $voice : self::DEFAULT_VOICE]]];
@@ -62,8 +64,8 @@ final class VoiceSession
                 'responseModalities' => ['AUDIO'],
                 'speechConfig'       => $speech,
             ],
-            'systemInstruction'        => ['parts' => [['text' => self::prompt($memories, $instructions, $agenda, $now, $language, $stopWords, $routines)]]],
-            'tools'                    => [['functionDeclarations' => VoiceTools::declarations($registry, $toolMode)]],
+            'systemInstruction'        => ['parts' => [['text' => $prompt ?? self::prompt($memories, $instructions, $agenda, $now, $language, $stopWords, $routines)]]],
+            'tools'                    => [['functionDeclarations' => VoiceTools::declarations($registry, $toolMode, $onlyTools)]],
             'inputAudioTranscription'  => new \stdClass(),
             'outputAudioTranscription' => new \stdClass(),
             'sessionResumption'        => new \stdClass(),

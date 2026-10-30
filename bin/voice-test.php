@@ -17,6 +17,7 @@ use App\Tools\GetVoiceLog;
 use App\Tools\Tool;
 use App\Tools\ToolRegistry;
 use App\Voice\ConfirmGate;
+use App\Voice\KioskVoice;
 use App\Voice\LiveTokens;
 use App\Voice\VoiceAlert;
 use App\Voice\VoiceSession;
@@ -235,6 +236,33 @@ check('stop words: parsed lower-case, unique, capped', VoiceSession::stopWords("
 $pr = VoiceSession::prompt([], [], '', null, 'auto', ['farvel', 'stop tale']);
 check('the prompt names the stop words and the end tool, and says never to end it alone', str_contains($pr, '"farvel", "stop tale"') && str_contains($pr, 'end_conversation') && str_contains($pr, 'never end it on your own'));
 check('the prompt tells the model how deleting works', str_contains(VoiceSession::prompt([], [], ''), 'ONE short question'));
+
+echo "9) the kiosk's voice: the house only\n";
+$kreg = new ToolRegistry();
+foreach (array_merge(KioskVoice::TOOLS, ['get_emails', 'get_calendar_events', 'get_memories']) as $n) {
+    $kreg->register(fakeTool($n, fn ($a, $u) => ['ok' => true, 'name' => $n]));
+}
+$kdecl  = VoiceTools::declarations($kreg, 'auto', KioskVoice::TOOLS);
+$knames = array_column($kdecl, 'name');
+sort($knames);
+$want = array_merge(KioskVoice::TOOLS, [VoiceTools::END]);
+sort($want);
+check('declarations: exactly the kiosk tools + end_conversation; no gateway, no mail, no calendar', $knames === $want, json_encode($knames));
+check('the normal declarations still carry the gateway', in_array(VoiceTools::GATEWAY, array_column(VoiceTools::declarations($registry), 'name'), true));
+$kgate = static fn (string $r): array => ['reply' => 'x', 'card' => null];
+$krun  = new VoiceToolRunner($kreg, $kgate, null, null, KioskVoice::TOOLS);
+check('kiosk runner: a home tool runs', $krun->run('home_device_call', [], 1)['ok'] === true);
+$mail = $krun->run('get_emails', [], 1);
+check('kiosk runner: mail is refused (not on the list, even though it is registered)', $mail['ok'] === false && str_contains((string) $mail['error'], 'not allowed'));
+check('kiosk runner: calendar is refused even though the normal voice allows it', VoiceTools::isAllowed('get_calendar_events') && $krun->run('get_calendar_events', [], 1)['ok'] === false);
+check('kiosk runner: the gateway to the full assistant is refused', $krun->run(VoiceTools::GATEWAY, ['request' => 'my balance'], 1)['ok'] === false);
+check('kiosk tool list: no tool needs a spoken confirmation, and slow ones are all on the list', array_filter(KioskVoice::TOOLS, static fn ($t) => VoiceTools::needsConfirm($t)) === []
+    && array_diff(KioskVoice::SLOW, KioskVoice::TOOLS) === []);
+$ksetup = VoiceSession::setup($kreg, '', '', 'auto', [['content' => 'secret memory']], [['instruction' => 'secret rule']], 'secret agenda', null, 'da', ['farvel'], 'secret routine', KioskVoice::TOOLS, KioskVoice::prompt('da', ['farvel']));
+$ktext = $ksetup['systemInstruction']['parts'][0]['text'];
+check('kiosk prompt: house-only, Danish, stop words; no gateway mention', str_contains($ktext, 'house assistant') && str_contains($ktext, 'always speak Danish') && str_contains($ktext, '"farvel"') && !str_contains($ktext, VoiceTools::GATEWAY)
+    && !str_contains($ktext, 'secret'));   // memories, standing instructions, agenda and routines passed in are ignored
+check('kiosk setup: only the kiosk tools are declared to the model', array_column($ksetup['tools'][0]['functionDeclarations'], 'name') === array_column($kdecl, 'name'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

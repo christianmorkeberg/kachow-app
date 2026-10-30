@@ -20,7 +20,7 @@ final class VoiceToolRunner
     /**
      * @param callable(string): array{reply:string, card:?array} $gateway runs a request through the full assistant
      */
-    public function __construct(private ToolRegistry $registry, private $gateway, private ?ConfirmGate $gate = null, private $homeName = null)
+    public function __construct(private ToolRegistry $registry, private $gateway, private ?ConfirmGate $gate = null, private $homeName = null, private ?array $allowed = null)
     {
     }
 
@@ -34,7 +34,8 @@ final class VoiceToolRunner
         $t0 = microtime(true);
         $ms = static fn (): int => (int) round((microtime(true) - $t0) * 1000);
 
-        if (!VoiceTools::isAllowed($name)) {
+        // $allowed = a restricted session (the kiosk): only these tools, never the gateway to the full assistant
+        if (!($this->allowed === null ? VoiceTools::isAllowed($name) : (in_array($name, $this->allowed, true) && $name !== VoiceTools::GATEWAY))) {
             return ['ok' => false, 'result' => ['error' => 'That is not available by voice.'], 'card' => null, 'ms' => $ms(), 'error' => 'not allowed by voice: ' . $name, 'fault' => false, 'summary' => null];
         }
         if (VoiceTools::needsConfirm($name, $args)) {

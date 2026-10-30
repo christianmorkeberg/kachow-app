@@ -89,18 +89,23 @@ final class VoiceTools
      * Live-API function declarations for the allow-list. $mode: 'auto' (slow = NON_BLOCKING, fast = BLOCKING),
      * 'nonblocking' or 'blocking' (all the same) — for experimenting with how natural it sounds.
      *
+     * @param list<string>|null $only a restricted tool list (the kiosk's): just those, no gateway; null = the normal allow-list
+     *
      * @return list<array<string, mixed>>
      */
-    public static function declarations(ToolRegistry $registry, string $mode = 'auto'): array
+    public static function declarations(ToolRegistry $registry, string $mode = 'auto', ?array $only = null): array
     {
         $out = [];
         foreach ($registry->declarations() as $d) {
-            if (!self::isAllowed((string) $d['name']) || $d['name'] === self::GATEWAY) {
+            $name = (string) $d['name'];
+            if ($name === self::GATEWAY || !($only === null ? self::isAllowed($name) : in_array($name, $only, true))) {
                 continue;
             }
             $out[] = self::withBehavior($d, $mode);
         }
-        $out[] = self::withBehavior(self::gatewayDeclaration(), $mode);
+        if ($only === null) {
+            $out[] = self::withBehavior(self::gatewayDeclaration(), $mode);   // a restricted session (the kiosk) has no way to reach the full assistant
+        }
         $out[] = self::endDeclaration();
 
         return $out;
