@@ -29,9 +29,16 @@ final class NotificationTypes
     public const ROUTINE_ASK = 'routine_ask';
     public const HOME_AGENT_OFFLINE = 'home_agent_offline';
     public const CHAT_REPLY = 'chat_reply';
+    public const FOLLOW_UP = 'follow_up';
 
     /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
+        // Sent from a follow-up that runs after a chat answer (App\Support\AfterReply), e.g. "the radiators are now set to 16°" once the sleepy valves confirmed.
+        self::FOLLOW_UP => [
+            'label'       => 'Follow-ups to your requests',
+            'description' => 'When Kachow said it would let you know — e.g. that the radiators have confirmed their new temperature — and now has news.',
+            'default'     => true,
+        ],
         // Sent by api/chat.php when a slow turn finished (or failed) after the browser had been told "still working" and nobody is watching the chat any more.
         self::CHAT_REPLY => [
             'label'       => 'A slow answer is ready',

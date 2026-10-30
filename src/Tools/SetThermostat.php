@@ -6,7 +6,9 @@ namespace App\Tools;
 
 use App\Data\HomeState;
 use App\Data\UserSettings;
+use App\Home\ThermostatConfirm;
 use App\Home\ThermostatService;
+use App\Support\AfterReply;
 use App\Support\Thermostats;
 
 /**
@@ -67,11 +69,17 @@ final class SetThermostat implements Tool
         $res = $this->home instanceof HomeDeviceCall ? $this->home->executeSoft($call, $userId, self::CONFIRM_WAIT_S) : $this->home->execute($call, $userId);
         if (($res['queued'] ?? false) === true) {
             (new ThermostatService($this->home, $this->settings, $this->state))->noteTarget($userId, $t['id'], $target);
+            $watching = $this->watchConfirmation($userId, $t['id'], $t['name'], $target);
 
             return [
                 'set' => 'sent', 'thermostat' => $t['name'], 'target_c' => $target,
-                'note' => 'The command is queued for the valve, which has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
-                    . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.',
+                'will_notify' => $watching,
+                'note' => $watching
+                    ? 'The command is queued for the valve, which has not confirmed yet — it sleeps between reports and applies it within a few minutes. The user gets a notification '
+                        . 'automatically as soon as the valves have confirmed (or if one does not). Say in one short line that it is sent and that you will let them know when it is done — '
+                        . 'do not offer to check later.'
+                    : 'The command is queued for the valve, which has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
+                        . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.',
             ];
         }
         if (isset($res['error'])) {
@@ -97,6 +105,40 @@ final class SetThermostat implements Tool
         (new ThermostatService($this->home, $this->settings, $this->state))->noteTarget($userId, $t['id'], $target);
 
         return ['set' => true, 'thermostat' => $t['name'], 'target_c' => $target, 'note' => 'The valve moves to it within a minute or two. Say it is set in a few words.'];
+    }
+
+    /**
+     * Queues the follow-up that waits for the valve to report the new target and then tells the user (App\Support\AfterReply — only where the chat can release the
+     * connection early). All valves of one turn share ONE watcher. False when there is no way to follow up, so the model must not promise a notification.
+     */
+    private function watchConfirmation(int $userId, int $id, string $name, float $target): bool
+    {
+        if (!AfterReply::enabled()) {
+            return false;
+        }
+        $home     = $this->home;
+        $settings = $this->settings;
+        $state    = $this->state;
+        AfterReply::collect('thermostat_confirm', ['id' => $id, 'name' => $name, 'target' => $target], static function (array $items, array $ctx) use ($userId, $home, $settings, $state): void {
+            $svc = new ThermostatService($home, $settings, $state);
+            $say = static function (string $text) use ($ctx): void {
+                if (!empty($ctx['conversation_id'])) {
+                    (new \App\Data\Conversations())->addMessage((int) $ctx['conversation_id'], 'assistant', $text);
+                }
+            };
+            $notify = static function (string $title, string $body) use ($userId, $ctx): void {
+                \App\Notify\Notifier::fromEnv()->notify($userId, \App\Notify\NotificationTypes::FOLLOW_UP, $title, $body, !empty($ctx['conversation_id']) ? '/?conv=' . (int) $ctx['conversation_id'] : null);
+            };
+            (new ThermostatConfirm(
+                static fn (int $id): ?float => $svc->targetOf($userId, $id),
+                $notify,
+                $say,
+                static function (int $s): void { sleep($s); },
+                static fn (): int => time()
+            ))->run($items, (bool) ($ctx['danish'] ?? false));
+        }, 480);
+
+        return true;
     }
 
     private static function timedOut(string $error): bool

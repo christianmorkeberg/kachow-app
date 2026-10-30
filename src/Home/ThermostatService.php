@@ -139,6 +139,20 @@ final class ThermostatService
     }
 
     /**
+     * Just the target a valve reports (one call to the home agent instead of the two a full read makes) — what a confirmation watch polls. Null when it cannot be read.
+     */
+    public function targetOf(int $userId, int $id): ?float
+    {
+        $remote = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetRemoteStatus?id=' . $id], $userId);
+        if (isset($remote['error']) || !is_array($remote['response'] ?? null)) {
+            return null;
+        }
+        $t = Thermostats::find($remote['response'], 'target_C');
+
+        return is_numeric($t) ? (float) $t : null;
+    }
+
+    /**
      * One thermostat's numbers: current / target temperature, valve opening, battery, signal, how long ago it was heard.
      *
      * @param array{name:string, id:int} $t
