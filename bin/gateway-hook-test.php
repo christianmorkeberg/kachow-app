@@ -72,8 +72,9 @@ check('text instead of numbers', $rep->accept(1, ['id' => '200', 'target' => 'ab
 
 echo "5) the gateway script\n";
 $code = GatewayScript::code('https://assistant.example.com/', 'tok123');
-check('it carries the hook URL with the token, and the mJS handlers', str_contains($code, 'https://assistant.example.com/api/shelly-hook.php?t=tok123') && str_contains($code, 'Shelly.addStatusHandler') && str_contains($code, 'BluTrv.GetRemoteStatus') && str_contains($code, 'HTTP.GET'));
+check('it carries the hook URL with the token, and the mJS handlers', str_contains($code, 'https://assistant.example.com/api/shelly-hook.php?t=tok123') && str_contains($code, 'Shelly.addStatusHandler') && str_contains($code, 'BluTrv.GetRemoteStatus'));
 check('mJS-safe: no arrow functions or template strings', !str_contains($code, '=>') && !str_contains($code, '`'));
+check('HTTP goes through Shelly.call("HTTP.GET") — there is no global HTTP object on the gateway (the first version crashed on it)', str_contains($code, 'Shelly.call("HTTP.GET"') && preg_match('/(?<![."\w])HTTP\.GET\(/', $code) !== 1);
 check('one call per report (packet_id de-duplication), and a retry when the status is older than the report', str_contains($code, 'packet_id') && str_contains($code, 'tries < 3') && str_contains($code, 'Timer.clear'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);

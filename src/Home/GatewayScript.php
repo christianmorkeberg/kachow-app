@@ -38,8 +38,10 @@ function send(id, rssi, lastTs, tries) {
     let trv = res.status.trv;
     let url = HOOK + "&id=" + id + "&target=" + trv.target_C + "&cur=" + trv.current_C + "&pos=" + trv.pos + "&ts=" + res.ts;
     if (rssi !== undefined) { url = url + "&rssi=" + rssi; }
-    HTTP.GET({ url: url, timeout: 15, ssl_ca: SSL }, function (r, ec, em) {
+    // On Shelly the HTTP calls are RPC methods (there is no global HTTP object in mJS).
+    Shelly.call("HTTP.GET", { url: url, timeout: 15, ssl_ca: SSL }, function (r, ec, em) {
       if (ec !== 0 || !r) { print("kachow: send failed", id, ec, em); }
+      else if (r.code !== 200) { print("kachow: the server answered", r.code); }
     });
   });
 }
