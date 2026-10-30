@@ -86,6 +86,8 @@ check('every field the script reads is one seen in captured gateway output', arr
 
 check('the script only calls the server when the valve status is NEW (valves send packets about once a minute, the full status changes rarely)', str_contains($code, 'sent[id] === stamp'));
 
+check('one https call at a time, with retries (the gateway ran out of memory with several at once: "Connection error: -14")', str_contains($code, 'let busy = false') && str_contains($code, 'job.tries < 3') && substr_count($code, 'Shelly.call("HTTP.GET"') === 1);
+
 echo "6) the script never goes through the chat\n";
 $toolSrc = (string) file_get_contents(__DIR__ . '/../src/Tools/GetGatewayScript.php');
 check('get_gateway_script hands out a link, not the script text (chat formatting ate the underscores of target_C / packet_id and the script silently did nothing)', str_contains($toolSrc, "'script_url'") && !str_contains($toolSrc, 'GatewayScript::code('));

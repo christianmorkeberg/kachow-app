@@ -25,6 +25,37 @@ let SSL = "ca.pem";   // if the console says the TLS check failed, change this t
 let last = {};   // the last packet number seen per valve
 let sent = {};   // what was last sent per valve (report time + readings)
 
+// The gateway has little memory and every https call needs a lot of it, so calls go out ONE AT A TIME (three valves report within seconds of each other), and a call
+// that fails to connect is tried again a little later (up to 3 times). Per valve only the newest report waits in line.
+let pending = {};   // valve id -> { url, tries }
+let busy = false;
+
+function pump() {
+  if (busy) { return; }
+  for (let k in pending) {
+    if (pending[k] !== undefined) {
+      let job = pending[k];
+      pending[k] = undefined;
+      busy = true;
+      // On Shelly the HTTP calls are RPC methods (there is no global HTTP object in mJS).
+      Shelly.call("HTTP.GET", { url: job.url, timeout: 15, ssl_ca: SSL }, function (r, ec, em) {
+        busy = false;
+        if (ec !== 0 || !r) {
+          print("kachow: send failed", k, ec, em);
+          if (job.tries < 3 && pending[k] === undefined) {
+            pending[k] = { url: job.url, tries: job.tries + 1 };
+            Timer.set(5000 * (job.tries + 1), false, function () { pump(); });
+          }
+        } else if (r.code !== 200) {
+          print("kachow: the server answered", r.code);
+        }
+        pump();
+      });
+      return;
+    }
+  }
+}
+
 function send(id, rssi, lastTs, tries) {
   Shelly.call("BluTrv.GetRemoteStatus", { id: id }, function (res, code) {
     // The valve's data sits under the key "trv:0" (bin/fixtures/blutrv-remote-status.json is a real answer).
@@ -44,11 +75,8 @@ function send(id, rssi, lastTs, tries) {
     sent[id] = stamp;
     let url = HOOK + "&id=" + id + "&target=" + trv.target_C + "&cur=" + trv.current_C + "&pos=" + trv.pos + "&ts=" + res.ts;
     if (rssi !== undefined) { url = url + "&rssi=" + rssi; }
-    // On Shelly the HTTP calls are RPC methods (there is no global HTTP object in mJS).
-    Shelly.call("HTTP.GET", { url: url, timeout: 15, ssl_ca: SSL }, function (r, ec, em) {
-      if (ec !== 0 || !r) { print("kachow: send failed", id, ec, em); }
-      else if (r.code !== 200) { print("kachow: the server answered", r.code); }
-    });
+    pending[id] = { url: url, tries: 0 };
+    pump();
   });
 }
 
