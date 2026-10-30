@@ -21,12 +21,22 @@ require __DIR__ . '/../config.php';
 
 use App\Data\AgentCommands;
 use App\Data\ApiTokens;
+use App\Data\Connections;
 use App\Data\HomeDevices;
+use App\Data\HomeState;
+use App\Data\UserSettings;
+use App\Home\HomeOwner;
 use App\Home\HueSync;
+use App\Home\ThermostatService;
 use App\Tools\GetHomeAgentSetup;
+use App\Tools\HomeDeviceCall;
 
 $tokens = new ApiTokens();
-$sync   = new HueSync(new HomeDevices(), HueSync::viaAgent(new AgentCommands()));
+$agent  = new AgentCommands();
+$sync   = new HueSync(new HomeDevices(), HueSync::viaAgent($agent));
+$owner  = new HomeOwner($tokens, new Connections());
+// The radiator valves too (names + ids the assistant keeps; they almost never change, so this nightly check is what keeps the list right).
+$valves = new ThermostatService(new HomeDeviceCall($agent, $tokens, $sync, $owner), new UserSettings(), new HomeState(null, $owner));
 $done   = 0;
 $skip   = 0;
 
@@ -38,6 +48,10 @@ foreach ($tokens->userIdsWithScope(AgentCommands::SCOPE) as $uid) {
     }
     try {
         $r = $sync->refresh($uid);
+        $v = $valves->rediscover($uid);
+        if ($v['error'] !== null) {
+            error_log('home-sync-cron user ' . $uid . ': valves: ' . $v['error']);
+        }
         $done++;
         if ($r['failed'] !== []) {
             error_log('home-sync-cron user ' . $uid . ': could not read ' . implode(', ', $r['failed']));

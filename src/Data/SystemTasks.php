@@ -48,7 +48,7 @@ final class SystemTasks
         ],
         'home_sync' => [
             'label'       => 'Home device list',
-            'description' => 'Refreshes the saved name-to-id list of lights and devices through the home agent.',
+            'description' => 'Refreshes the saved name-to-id list of lights and devices, and which radiator thermostats are paired, through the home agent.',
             'script' => 'home-sync-cron.php', 'frequency' => 'daily', 'time_of_day' => '04:15', 'day_of_week' => null, 'interval_minutes' => null,
         ],
         'memory_cleanup' => [

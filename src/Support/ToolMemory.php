@@ -98,7 +98,7 @@ final class ToolMemory
     public static function homeActive(array $rows): bool
     {
         foreach ($rows as $row) {
-            if (($row['role'] ?? '') === 'tool' && ($row['tool_name'] ?? '') === 'home_device_call') {
+            if (($row['role'] ?? '') === 'tool' && in_array($row['tool_name'] ?? '', ['home_device_call', 'get_thermostats', 'set_thermostat'], true)) {
                 return true;
             }
         }
@@ -180,6 +180,25 @@ final class ToolMemory
             . "home_device_call; do NOT guess an id and do NOT re-list everything first). Only look things up "
             . "again if a call returns 404 or the user says something was added or renamed:\n"
             . rtrim($out, "\n");
+    }
+
+    /**
+     * The radiator valves the assistant ALREADY knows (names + gateway ids, from the user's setting or the last discovery), for the system instruction:
+     * "set all radiators to 20" can then go straight to one set_thermostat per valve, without a get_thermostats round first. Empty when none are known.
+     *
+     * @param list<array{name:string, id:int}> $valves
+     */
+    public static function radiators(array $valves): string
+    {
+        if ($valves === []) {
+            return '';
+        }
+        $lines = array_map(static fn (array $t): string => '- ' . $t['name'] . ' (id ' . $t['id'] . ')', $valves);
+
+        return "Radiator thermostats you ALREADY KNOW (the list is fixed — it changes only when the user says a radiator was added or renamed). For a COMMAND "
+            . "(\"set all to 20\", \"turn the heating down in the bedroom\") call set_thermostat straight away, one call per radiator, all in the same step — do NOT call get_thermostats "
+            . "first just to learn the names. Call get_thermostats only to READ temperatures (it answers from a cache refreshed every 5 minutes). If set_thermostat says it does not "
+            . "know a radiator, or the user says one was added or renamed, call refresh_home_devices:\n" . implode("\n", $lines);
     }
 
     /** One digest line, or null when the row carries nothing identifying. */

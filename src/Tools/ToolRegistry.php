@@ -197,7 +197,7 @@ final class ToolRegistry
         $registry->register(new SetThermostat($homeCall, $userSettings, $homeState));
         $registry->register(new GetThermostats($homeCall, $userSettings, $homeState));
         $registry->register(new GetThermostatProbe(new \App\Data\ThermostatSamples()));
-        $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner));
+        $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner, new \App\Home\ThermostatService($homeCall, $userSettings, $homeState)));
         $locationPoints = new LocationPoints();
         $places         = new Places();
         $timeline       = new Timeline($locationPoints, $places, $userSettings);

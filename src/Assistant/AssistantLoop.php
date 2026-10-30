@@ -10,11 +10,13 @@ use App\Data\HomeDevices;
 use App\Data\Memories;
 use App\Data\Mileage;
 use App\Data\UserInstructions;
+use App\Data\HomeState;
 use App\Data\UserSettings;
 use App\Data\WorkEvents;
 use App\Data\ApiTokens;
 use App\Data\Connections;
 use App\Home\HomeOwner;
+use App\Home\KnownValves;
 use App\Home\HueSync;
 use App\Support\DeviceFix;
 use App\Support\ToolMemory;
@@ -694,6 +696,8 @@ final class AssistantLoop
             . mb_substr($userMessage, 0, 80));
         // Home devices the assistant already knows by name (saved list + this conversation's lookups).
         $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent, ToolMemory::homeActive($history))));
+        // The radiators too (names + ids, fixed list, no call to the home agent): commands like "set all to 20" then skip the lookup round.
+        $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::radiators($this->savedRadiators($userId, $userMessage, $recent, ToolMemory::homeActive($history))));
         $system       = $this->buildSystemInstruction($userId, $userMessage, $location, $hasImage, $groups, $toolMemory, $openView);
         if ($webAllowed) {
             $system .= "\n\nThe user has just asked for, or agreed to, a WEB SEARCH. Call web_search now with a precise "
@@ -1326,6 +1330,24 @@ final class AssistantLoop
      *
      * @return list<array{type:string, name:string, id:string, group:?string}>
      */
+    /**
+     * The radiator valves we already know, but only when this message (or the chat so far) is about the home — same rule as the saved lights. No call to the home agent.
+     *
+     * @return list<array{name:string, id:int}>
+     */
+    private function savedRadiators(int $userId, string $userMessage, string $recent, bool $conversationUsedHome): array
+    {
+        try {
+            if (!$conversationUsedHome && !in_array('home', ToolSelector::matchGroups($userMessage, $recent, []), true)) {
+                return [];
+            }
+            // The setting is the asking user's (as the thermostat tools read it); the discovered list is the home owner's (HomeState keys by the Pico's owner).
+            return KnownValves::get(new UserSettings(), new HomeState(null, new HomeOwner(new ApiTokens(), new Connections())), $userId);
+        } catch (Throwable $e) {
+            return [];   // a convenience for the prompt, never a reason to fail the turn
+        }
+    }
+
     private function savedHomeDevices(int $userId, string $userMessage, string $recent, bool $conversationUsedHome): array
     {
         try {

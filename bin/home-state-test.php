@@ -11,7 +11,9 @@ require __DIR__ . '/../vendor/autoload.php';
 use App\Data\AgentCommands;
 use App\Data\HomeState;
 use App\Data\UserSettings;
+use App\Home\KnownValves;
 use App\Home\ThermostatService;
+use App\Support\ToolMemory;
 use App\Tools\GetThermostats;
 use App\Tools\SetThermostat;
 use App\Tools\Tool;
@@ -122,6 +124,43 @@ check('a command past its expiry is never handed out (an offline Pico does not r
 $c = $q->enqueue(1, 'shelly', 'GET', '/rpc/x');
 $q->awaitResult(1, $c, 0.1);
 check('the ordinary wait still expires its own command when it gives up', $db->query('SELECT status FROM home_agent_commands WHERE id = ' . $c)->fetchColumn() === 'expired');
+
+echo "6) the radiator list is known without asking, and stays until refreshed\n";
+$db->exec('DELETE FROM home_state'); $db->exec('DELETE FROM user_settings');
+$calls = [];
+check('nothing known yet: an empty list, and no call', KnownValves::get($settings, $state, 1) === [] && count($calls) === 0);
+$svc->list(1);
+check('after one discovery the valves are known (200, 201) with no call', array_column(KnownValves::get($settings, $state, 1), 'id') === [200, 201]);
+$state->put(1, 'valves', ['list' => KnownValves::get($settings, $state, 1)], time() - 90 * 86400);
+$calls = [];
+check('the list is not aged out — 90 days old, still used, no call', array_column($svc->list(1)['list'], 'id') === [200, 201] && count($calls) === 0);
+$state->put(1, 'thermostats', ['rows' => [['id' => 200, 'name' => 'Thermostat 200']]]);
+$re = $svc->rediscover(1);
+check('rediscover asks the gateway again; same list -> unchanged, cached readings kept', $re['changed'] === false && $state->get(1, 'thermostats') !== null && count($calls) > 0);
+// a third valve appears on the gateway
+$home3 = new class ($home) implements Tool {
+    public function __construct(private Tool $inner) {}
+    public function name(): string { return 'home_device_call'; }
+    public function description(): string { return 'fake'; }
+    public function parameters(): array { return ['type' => 'object', 'properties' => []]; }
+    public function execute(array $a, int $userId): array
+    {
+        if (str_contains((string) $a['path'], 'GetStatus?id=202')) { return ['http_status' => 200, 'response' => ['paired' => true, 'battery' => 80, 'rssi' => -70, 'last_updated_ts' => time()]]; }
+        return $this->inner->execute($a, $userId);
+    }
+};
+$svc3 = new ThermostatService($home3, $settings, $state);
+$re3 = $svc3->rediscover(1);
+check('a new valve: the list grows to 3, flagged changed, and the cached readings are dropped', $re3['changed'] === true && count($re3['list']) === 3 && $state->get(1, 'thermostats') === null, json_encode($re3));
+$db->exec("INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES (1, 'thermostats', 'Stue=200, Soveværelse=201')");
+$calls = [];
+check('valves named in the setting win and are never rediscovered', array_column(KnownValves::get($settings, $state, 1), 'name') === ['Stue', 'Soveværelse'] && $svc->rediscover(1)['changed'] === false && count($calls) === 0);
+
+echo "7) the model is told the radiators\n";
+$txt = ToolMemory::radiators([['name' => 'Stue', 'id' => 200], ['name' => 'Soveværelse', 'id' => 201]]);
+check('the instruction names every radiator with its id and says no lookup is needed for a command', str_contains($txt, 'Stue (id 200)') && str_contains($txt, 'Soveværelse (id 201)') && str_contains($txt, 'do NOT call get_thermostats'));
+check('no radiators known -> nothing added', ToolMemory::radiators([]) === '');
+check('a chat that used get_thermostats counts as a home conversation', ToolMemory::homeActive([['role' => 'tool', 'tool_name' => 'get_thermostats']]) === true && ToolMemory::homeActive([['role' => 'tool', 'tool_name' => 'get_calendar_events']]) === false);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

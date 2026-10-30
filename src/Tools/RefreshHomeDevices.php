@@ -8,6 +8,7 @@ use App\Data\AgentCommands;
 use App\Data\ApiTokens;
 use App\Home\HomeOwner;
 use App\Home\HueSync;
+use App\Home\ThermostatService;
 
 /**
  * Tool: re-read the Hue lights, rooms, zones and scenes from the bridge and save the name -> id
@@ -16,7 +17,7 @@ use App\Home\HueSync;
  */
 final class RefreshHomeDevices implements Tool
 {
-    public function __construct(private HueSync $sync, private ApiTokens $tokens, private ?HomeOwner $owner = null)
+    public function __construct(private HueSync $sync, private ApiTokens $tokens, private ?HomeOwner $owner = null, private ?ThermostatService $thermostats = null)
     {
     }
 
@@ -30,7 +31,8 @@ final class RefreshHomeDevices implements Tool
         return 'Re-reads the user\'s Hue lights, rooms, zones and scenes from the bridge (through the home '
             . 'agent) and saves their names and ids, so later requests like "turn off the Le Klint" go straight '
             . 'through. The list already refreshes daily — use this when the user says they just added, '
-            . 'removed or renamed a light, or when a light you expected is missing. Takes several seconds.';
+            . 'removed or renamed a light, or when a light you expected is missing. Also re-checks which radiator thermostats are paired '
+            . '(the list the assistant keeps, fixed otherwise) — use it too when the user says a radiator was added, removed or renamed. Takes several seconds.';
     }
 
     public function parameters(): array
@@ -48,10 +50,18 @@ final class RefreshHomeDevices implements Tool
         }
 
         $r = $this->sync->refresh($userId);
+        $radiators = null;
+        if ($this->thermostats !== null) {
+            $v = $this->thermostats->rediscover($userId);
+            $radiators = $v['error'] === null
+                ? ['now' => array_map(static fn (array $t): string => $t['name'] . ' (' . $t['id'] . ')', $v['list']), 'changed' => $v['changed']]
+                : ['error' => $v['error']];
+        }
 
         return [
             'saved'  => $r['saved'],
             'failed' => $r['failed'],
+            'radiators' => $radiators,
             'note'   => $r['failed'] === []
                 ? 'The saved list is up to date.'
                 : 'Could not read: ' . implode(', ', $r['failed']) . ' (a very long list can be cut off on the way back).',

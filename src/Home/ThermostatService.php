@@ -16,9 +16,6 @@ use App\Tools\Tool;
  */
 final class ThermostatService
 {
-    /** Which valves exist changes only when someone pairs one: rediscover at most weekly (or when asked). */
-    private const VALVES_MAX_AGE_S = 7 * 86400;
-
     public function __construct(private Tool $home, private UserSettings $settings, private ?HomeState $state = null)
     {
     }
@@ -31,23 +28,46 @@ final class ThermostatService
      */
     public function list(int $userId): array
     {
-        $named = trim((string) $this->settings->get($userId, 'thermostats'));
-        $all   = Thermostats::parse($named);
-        if ($named !== '') {
-            return ['list' => $all, 'error' => null];
+        // The valves almost never change: what is known (named in the setting, or discovered before) is used as it is, with no call to the home agent.
+        $known = KnownValves::get($this->settings, $this->state, $userId);
+        if ($known !== []) {
+            return ['list' => $known, 'error' => null];
         }
-        $known = $this->state?->fresh($userId, 'valves', self::VALVES_MAX_AGE_S);
-        if ($known !== null && is_array($known['data']['list'] ?? null) && $known['data']['list'] !== []) {
-            return ['list' => $known['data']['list'], 'error' => null];
+
+        return $this->discoverAndKeep($userId);
+    }
+
+    /**
+     * Asks the gateway which valves are paired and keeps the answer — what the nightly home sync and "refresh my home devices" do, so a valve that was
+     * added or renamed shows up. With valves named in the setting nothing is discovered (the user's own list wins). Drops the cached readings when the list changed.
+     *
+     * @return array{list: list<array{name:string, id:int}>, error: ?string, changed: bool}
+     */
+    public function rediscover(int $userId): array
+    {
+        $before = KnownValves::get($this->settings, $this->state, $userId);
+        if (trim((string) $this->settings->get($userId, 'thermostats')) !== '') {
+            return ['list' => $before, 'error' => null, 'changed' => false];
         }
+        $r = $this->discoverAndKeep($userId);
+        $changed = $r['error'] === null && json_encode($r['list']) !== json_encode($before);
+        if ($changed) {
+            $this->state?->forget($userId, 'thermostats');   // the cached readings do not cover the new list
+        }
+
+        return $r + ['changed' => $changed];
+    }
+
+    /** @return array{list: list<array{name:string, id:int}>, error: ?string} */
+    private function discoverAndKeep(int $userId): array
+    {
         $d = Thermostats::discover(fn (int $id): array => $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $id], $userId));
         if ($d['error'] !== null) {
             return ['list' => [], 'error' => $d['error']];
         }
         if ($d['found'] === []) {
-            return ['list' => $all, 'error' => null];
+            return ['list' => Thermostats::parse(''), 'error' => null];
         }
-
         $list = array_map(function (int $id) use ($d, $userId): array {
             $cfg  = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetConfig?id=' . $id], $userId);
             $c    = is_array($cfg['response'] ?? null) ? $cfg['response'] : [];
