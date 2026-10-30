@@ -37,7 +37,7 @@ $slow = new class implements Tool {
 function text(string $t): array { return ['candidates' => [['content' => ['role' => 'model', 'parts' => [['text' => $t]]], 'finishReason' => 'STOP']]]; }
 function call(string $name, array $args): array { return ['candidates' => [['content' => ['role' => 'model', 'parts' => [['functionCall' => ['name' => $name, 'args' => $args]]]], 'finishReason' => 'STOP']]]; }
 
-function run(array $script, Tool $note, string $msg): array
+function run(array $script, Tool $note, string $msg, ?callable $configure = null): array
 {
     global $db;
     $i = 0;
@@ -51,6 +51,9 @@ function run(array $script, Tool $note, string $msg): array
     $registry->register($note);
     $loop = new AssistantLoop($client, $registry, new Conversations($db));
     $conv = (new Conversations($db))->start(1);
+    if ($configure !== null) {
+        $configure($loop);
+    }
     $reply = $loop->handle(1, $conv, $msg);
 
     return ['reply' => $reply, 'calls' => $loop->lastCalls(), 'gemini' => $i, 'seen' => $seen];
@@ -63,6 +66,25 @@ $r  = run([call('note_dev_idea', ['title' => 'a']), call('note_dev_idea', ['titl
 check('the final answer arrives (not the "took too long" apology)', $r['reply'] === 'Begge er sat.', $r['reply']);
 check('both slow tools ran and the model was asked 3 times', count($r['calls']) === 2 && $r['gemini'] === 3, json_encode([count($r['calls']), $r['gemini']]));
 check('the turn really spent time in tools (> 4 s total)', microtime(true) - $t0 > 4.0, (string) round(microtime(true) - $t0, 2));
+
+echo "2) a turn that gets slow tells the page once (onSlow) and carries on\n";
+$fired = 0;
+$r = run([call('note_dev_idea', ['title' => 'a']), call('note_dev_idea', ['title' => 'b']), text('Begge er sat.')], $slow, 'dev idea: a og b', function (AssistantLoop $loop) use (&$fired): void {
+    $loop->onSlow(function () use (&$fired): void { $fired++; }, 1.0);
+});
+check('onSlow fired exactly once, between steps', $fired === 1, (string) $fired);
+check('the turn still finished normally afterwards', $r['reply'] === 'Begge er sat.' && count($r['calls']) === 2, $r['reply']);
+
+$fired = 0;
+$r = run([text('Hej!')], $slow, 'hej', function (AssistantLoop $loop) use (&$fired): void {
+    $loop->onSlow(function () use (&$fired): void { $fired++; }, 1.0);
+});
+check('a quick turn never fires it', $fired === 0 && $r['reply'] === 'Hej!', (string) $fired);
+
+$r = run([call('note_dev_idea', ['title' => 'a']), text('Færdig.')], $slow, 'dev idea: a', function (AssistantLoop $loop): void {
+    $loop->onSlow(function (): void { throw new RuntimeException('the browser went away'); }, 0.5);
+});
+check('a failing onSlow callback never breaks the turn', $r['reply'] === 'Færdig.', $r['reply']);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

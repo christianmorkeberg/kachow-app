@@ -28,9 +28,16 @@ final class NotificationTypes
     public const IMPORTANT_EMAIL = 'important_email';
     public const ROUTINE_ASK = 'routine_ask';
     public const HOME_AGENT_OFFLINE = 'home_agent_offline';
+    public const CHAT_REPLY = 'chat_reply';
 
     /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
+        // Sent by api/chat.php when a slow turn finished (or failed) after the browser had been told "still working" and nobody is watching the chat any more.
+        self::CHAT_REPLY => [
+            'label'       => 'A slow answer is ready',
+            'description' => 'When Kachow said it was still working on something and the answer arrives (or it did not work) while you are away from the chat.',
+            'default'     => true,
+        ],
         self::CHECKOUT_NUDGE => [
             'label'       => 'Forgot to clock out',
             'description' => 'A reminder if you are still clocked in late in the evening or after a long shift.',

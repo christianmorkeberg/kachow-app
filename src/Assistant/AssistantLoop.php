@@ -311,6 +311,13 @@ final class AssistantLoop
     /** microtime() by which this turn's Gemini calls must be done (see TURN_BUDGET_S). */
     private float $turnDeadline = PHP_FLOAT_MAX;
 
+    /** @var (callable(): void)|null Called once when the turn gets slow (see onSlow). */
+    private $slowCb = null;
+
+    private float $slowAfter = 25.0;
+
+    private bool $slowFired = false;
+
     /** microtime() the deadline may never be pushed beyond (see TURN_HARD_CAP_S). */
     private float $turnHardCap = PHP_FLOAT_MAX;
 
@@ -329,6 +336,18 @@ final class AssistantLoop
     public function onProgress(callable $sink): void
     {
         $this->progressSink = $sink;
+    }
+
+    /**
+     * Calls $cb ONCE, between steps, when the turn has been running for $afterSeconds without an answer (slow tools, slow model) — api/chat.php uses it to tell
+     * the browser "still working" and let the turn finish in the background. The turn itself carries on unchanged afterwards.
+     *
+     * @param callable(): void $cb
+     */
+    public function onSlow(callable $cb, float $afterSeconds = 25.0): void
+    {
+        $this->slowCb    = $cb;
+        $this->slowAfter = $afterSeconds;
     }
 
     private function progress(?string $phase = null, ?string $tool = null, ?string $status = null): void
@@ -732,7 +751,16 @@ final class AssistantLoop
         $announceNudged = false;
         $claimNudged    = false;
         $webRead        = false;   // set once web_search / fetch_webpage returned content this turn
+        $this->slowFired = false;
         for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
+            if ($this->slowCb !== null && !$this->slowFired && microtime(true) - $tStart >= $this->slowAfter) {
+                $this->slowFired = true;
+                try {
+                    ($this->slowCb)();
+                } catch (Throwable $e) {
+                    error_log('onSlow: ' . $e->getMessage());   // telling the browser must never break the turn
+                }
+            }
             $g0 = microtime(true);
             try {
                 try {
