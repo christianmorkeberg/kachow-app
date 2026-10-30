@@ -79,9 +79,15 @@ final class ReadEmail implements Tool
             $render['body_html'] = mb_substr($msg->bodyHtml, 0, 400000);
         }
 
-        return [
+        $out = [
             'email'   => $data,
             '_render' => $render,
         ];
+        if ($msg->attachments !== []) {
+            $out['note'] = 'The email card lists the attached files with a download button each — tell the user they can download them there (do not paste links). '
+                . 'To put one on an expense or invoice use attach_email_file.';
+        }
+
+        return $out;
     }
 }

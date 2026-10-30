@@ -50,7 +50,8 @@ final class GetThermostatProbe implements Tool
             return ['samples' => 0, 'note' => 'No samples in the last ' . $hours . ' hours — the "Thermostat probe" system task is paused (or has not run). Resume it, and add the cPanel cron entry that runs bin/thermostat-probe-cron.php every minute.'];
         }
         $out = ['hours' => $hours, 'samples' => count($rows), 'valves' => ThermostatProbe::summary($rows)];
-        $n = max(0, min(60, (int) ($arguments['rows'] ?? 0)));
+        // The model sees at most 60 raw rows; an export (export_data sets _export) gets the newest 5000 — a full day of three valves is about 4,300.
+        $n = !empty($arguments['_export']) ? 5000 : max(0, min(60, (int) ($arguments['rows'] ?? 0)));
         if ($n > 0) {
             $out['newest'] = array_map(static fn (array $r): array => array_filter($r, static fn ($v): bool => $v !== null), array_slice($rows, -$n));
         }

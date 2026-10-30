@@ -377,6 +377,9 @@ final class ImapProvider implements EmailProvider
             return $htmlFallback;
         }
 
+        if (!str_starts_with($ctype, 'text/')) {
+            return '';   // a PDF / image / office file (a whole message can be just a PDF): an attachment, not text — never show its bytes as the body
+        }
         $decoded = $this->decodeBody($body, strtolower($headers['content-transfer-encoding'] ?? ''), $ctype);
         if (str_starts_with($ctype, 'text/html')) {
             return trim(html_entity_decode(strip_tags($decoded), ENT_QUOTES | ENT_HTML5, 'UTF-8'));

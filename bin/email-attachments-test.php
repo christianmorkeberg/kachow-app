@@ -57,6 +57,19 @@ $single = "Content-Type: text/plain\r\n\r\nno attachments here";
 [$h2, $b2] = $split->invoke($imap, $single);
 check('a plain message has none', $leaves->invoke($imap, $h2, $b2) === []);
 
+// A whole message that is just a PDF (no multipart): the file is the attachment and the body is empty — never the PDF's bytes.
+$extract = $ref->getMethod('extractText'); $extract->setAccessible(true);
+$pdfOnly = "Content-Type: application/pdf; name=\"DSB Order 1.pdf\"\r\nContent-Disposition: attachment; filename=\"DSB Order 1.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($pdf));
+[$hp, $bp] = $split->invoke($imap, $pdfOnly);
+$lp = $leaves->invoke($imap, $hp, $bp);
+check('a PDF-only message: the PDF is the one attachment (id 1)', count($lp) === 1 && $lp[0]['id'] === '1' && $lp[0]['filename'] === 'DSB Order 1.pdf' && $dec->invoke($imap, $lp[0]['body'], $lp[0]['encoding']) === $pdf);
+check('a PDF-only message has an EMPTY body (not the PDF text)', $extract->invoke($imap, $hp, $bp) === '', substr((string) $extract->invoke($imap, $hp, $bp), 0, 30));
+$pdfFirst = "Content-Type: multipart/mixed; boundary=\"b\"\r\n\r\n--b\r\nContent-Type: application/pdf; name=\"x.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($pdf)) . "\r\n--b--\r\n";
+[$hq, $bq] = $split->invoke($imap, $pdfFirst);
+check('a multipart message with only a PDF part has no text either', $extract->invoke($imap, $hq, $bq) === '');
+[$hm, $bm] = $split->invoke($imap, $mime);
+check('the normal receipt mail still gives its text', trim((string) $extract->invoke($imap, $hm, $bm)) === 'Your receipt');
+
 echo "2) the message shape\n";
 $m = new EmailMessage('1', 't', 'a', 'b', 'Receipt', 's', '2026-10-19', false, 'body', '', [['id' => '3', 'filename' => 'Invoice 42.pdf', 'mime' => 'application/pdf', 'size' => 10]]);
 check('a full read lists the attachments; a summary does not', $m->toArray(true)['attachments'][0]['filename'] === 'Invoice 42.pdf' && !isset($m->toArray(false)['attachments']));

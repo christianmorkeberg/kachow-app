@@ -20,6 +20,7 @@ final class ExportData implements Tool
     public const SOURCES = [
         'get_work_hours', 'get_work_log', 'get_expenses', 'get_income', 'get_mileage', 'get_trips', 'get_stays', 'get_workout_history',
         'get_calendar_events', 'get_vinyls', 'get_books', 'get_wishlist', 'get_shopping_list', 'get_owner_draws', 'get_moms', 'get_cash',
+        'get_thermostat_probe',
     ];
 
     /** Export options the model sometimes puts inside args by mistake. */
@@ -47,7 +48,7 @@ final class ExportData implements Tool
         return 'Exports the data one of the read tools returns as a download the user can send on: a CSV (spreadsheet) and a printable page (open it, '
             . 'then print / save as PDF). Say WHICH read tool (source) and the SAME arguments you would give it to fetch that data (args — dates, '
             . 'place, category …). Use for "export / download / send me / make a file of …" for work hours, the work log, expenses, income, mileage, trips, '
-            . 'workouts, calendar, vinyls, books, wishlist, shopping list. For a TIMESHEET ("timeseddel", hours per day for a customer) use source '
+            . 'workouts, calendar, vinyls, books, wishlist, shopping list, and the thermostat probe raw samples (source get_thermostat_probe, args {hours} — every sample as a row). For a TIMESHEET ("timeseddel", hours per day for a customer) use source '
             . 'get_work_hours with layout "timesheet" (place = the workplace / customer; break_minutes when a lunch break was deducted on the invoice; round_minutes only if asked). Returns the links and what '
             . 'is in the file — a preview card with PDF / CSV buttons is shown to the user, so just say in one line what it contains (do not paste the links). To EMAIL it, call draft_email / send_email with attach_export_url = the pdf_url from this result (or csv_url). Almost everything is OPTIONAL — build exactly what the user describes: rename headings (labels), '
             . 'pick/reorder columns, filter rows (where), add a calculated column (calc, e.g. minutes → hours × rate), sort, group by a column or by day/week/month '
@@ -233,7 +234,11 @@ final class ExportData implements Tool
         if (!in_array($spec['source'] ?? '', self::SOURCES, true)) {
             return ['error' => 'unknown source'];
         }
-        $result = $registry->dispatch((string) $spec['source'], is_array($spec['args'] ?? null) ? $spec['args'] : [], $userId);
+        $args = is_array($spec['args'] ?? null) ? $spec['args'] : [];
+        if ($spec['source'] === 'get_thermostat_probe') {
+            $args['_export'] = true;   // the whole log as rows, not just the 60 the model is shown
+        }
+        $result = $registry->dispatch((string) $spec['source'], $args, $userId);
         if (isset($result['error'])) {
             return ['error' => (string) $result['error']];
         }
