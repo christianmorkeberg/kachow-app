@@ -26,7 +26,8 @@ let last = {};
 
 function send(id, rssi, lastTs, tries) {
   Shelly.call("BluTrv.GetRemoteStatus", { id: id }, function (res, code) {
-    if (code !== 0 || !res || !res.status || !res.status.trv) {
+    // The valve's data sits under the key "trv:0" (bin/fixtures/blutrv-remote-status.json is a real answer).
+    if (code !== 0 || !res || !res.status || !res.status["trv:0"]) {
       print("kachow: no remote status for", id, code);
       return;
     }
@@ -35,7 +36,7 @@ function send(id, rssi, lastTs, tries) {
       Timer.set(3000, false, function () { send(id, rssi, lastTs, tries + 1); });
       return;
     }
-    let trv = res.status.trv;
+    let trv = res.status["trv:0"];
     let url = HOOK + "&id=" + id + "&target=" + trv.target_C + "&cur=" + trv.current_C + "&pos=" + trv.pos + "&ts=" + res.ts;
     if (rssi !== undefined) { url = url + "&rssi=" + rssi; }
     // On Shelly the HTTP calls are RPC methods (there is no global HTTP object in mJS).

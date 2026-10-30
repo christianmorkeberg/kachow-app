@@ -77,6 +77,13 @@ check('mJS-safe: no arrow functions or template strings', !str_contains($code, '
 check('HTTP goes through Shelly.call("HTTP.GET") — there is no global HTTP object on the gateway (the first version crashed on it)', str_contains($code, 'Shelly.call("HTTP.GET"') && preg_match('/(?<![."\w])HTTP\.GET\(/', $code) !== 1);
 check('one call per report (packet_id de-duplication), and a retry when the status is older than the report', str_contains($code, 'packet_id') && str_contains($code, 'tries < 3') && str_contains($code, 'Timer.clear'));
 
+echo "5b) the script reads the shapes the gateway REALLY returns (captured answers, not invented ones)\n";
+$real = json_decode((string) file_get_contents(__DIR__ . '/fixtures/blutrv-remote-status.json'), true);
+check('the real remote status has the valve under "trv:0" with target_C, current_C, pos — and the script reads exactly that', isset($real['status']['trv:0']['target_C'], $real['status']['trv:0']['current_C'], $real['status']['trv:0']['pos']) && isset($real['ts']) && str_contains($code, 'res.status["trv:0"]') && !str_contains($code, 'res.status.trv'));
+$names = []; preg_match_all('/\b(?:trv|res|e\.delta)\.([A-Za-z_]+)/', $code, $m); $names = array_unique($m[1]);
+$known = ['target_C', 'current_C', 'pos', 'status', 'ts', 'id', 'packet_id', 'rssi', 'last_updated_ts'];
+check('every field the script reads is one seen in captured gateway output', array_diff($names, $known) === [], json_encode(array_values(array_diff($names, $known))));
+
 echo "6) the script never goes through the chat\n";
 $toolSrc = (string) file_get_contents(__DIR__ . '/../src/Tools/GetGatewayScript.php');
 check('get_gateway_script hands out a link, not the script text (chat formatting ate the underscores of target_C / packet_id and the script silently did nothing)', str_contains($toolSrc, "'script_url'") && !str_contains($toolSrc, 'GatewayScript::code('));
