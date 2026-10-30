@@ -6,6 +6,8 @@ namespace App\Tools;
 
 use App\Data\HomeState;
 use App\Data\UserSettings;
+use App\Home\ConfirmDelivery;
+use App\Home\PendingSets;
 use App\Home\ThermostatConfirm;
 use App\Home\ThermostatService;
 use App\Support\AfterReply;
@@ -108,35 +110,35 @@ final class SetThermostat implements Tool
     }
 
     /**
-     * Queues the follow-up that waits for the valve to report the new target and then tells the user (App\Support\AfterReply — only where the chat can release the
-     * connection early). All valves of one turn share ONE watcher. False when there is no way to follow up, so the model must not promise a notification.
+     * Remembers the sent target (PendingSets) so the user gets told when the valve has confirmed it, and — where the chat can release the connection early —
+     * queues the watcher that polls for it (App\\Support\\AfterReply; all valves of one turn share ONE watcher). The gateway's script, when it is installed, settles
+     * the same batch by itself, whichever is first. False when nothing can follow up, so the model must not promise a notification.
      */
     private function watchConfirmation(int $userId, int $id, string $name, float $target): bool
     {
-        if (!AfterReply::enabled()) {
+        $service = new ThermostatService($this->home, $this->settings, $this->state);
+        $hook    = $service->hookActive($userId);
+        if ((!$hook && !AfterReply::enabled()) || $this->state === null) {
             return false;
         }
-        $home     = $this->home;
-        $settings = $this->settings;
-        $state    = $this->state;
-        AfterReply::collect('thermostat_confirm', ['id' => $id, 'name' => $name, 'target' => $target], static function (array $items, array $ctx) use ($userId, $home, $settings, $state): void {
-            $svc = new ThermostatService($home, $settings, $state);
-            $say = static function (string $text) use ($ctx): void {
-                if (!empty($ctx['conversation_id'])) {
-                    (new \App\Data\Conversations())->addMessage((int) $ctx['conversation_id'], 'assistant', $text);
-                }
-            };
-            $notify = static function (string $title, string $body) use ($userId, $ctx): void {
-                \App\Notify\Notifier::fromEnv()->notify($userId, \App\Notify\NotificationTypes::FOLLOW_UP, $title, $body, !empty($ctx['conversation_id']) ? '/?conv=' . (int) $ctx['conversation_id'] : null);
-            };
-            (new ThermostatConfirm(
-                static fn (int $id): ?float => $svc->targetOf($userId, $id),
-                $notify,
-                $say,
-                static function (int $s): void { sleep($s); },
-                static fn (): int => time()
-            ))->run($items, (bool) ($ctx['danish'] ?? false));
-        }, 480);
+        $ctx = AfterReply::context();
+        (new PendingSets($this->state))->add($userId, ['id' => $id, 'name' => $name, 'target' => $target], isset($ctx['conversation_id']) ? (int) $ctx['conversation_id'] : null, (bool) ($ctx['danish'] ?? false));
+        if (AfterReply::enabled()) {
+            $home  = $this->home;
+            $set   = $this->settings;
+            $state = $this->state;
+            AfterReply::collect('thermostat_confirm', ['id' => $id], static function (array $items, array $c) use ($userId, $home, $set, $state): void {
+                $svc = new ThermostatService($home, $set, $state);
+                (new ThermostatConfirm(
+                    new PendingSets($state),
+                    $userId,
+                    static fn (int $valve): ?float => $svc->targetOf($userId, $valve),
+                    new ConfirmDelivery($userId),
+                    static function (int $s): void { sleep($s); },
+                    static fn (): int => time()
+                ))->run(480);
+            }, 480);
+        }
 
         return true;
     }

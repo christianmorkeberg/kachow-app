@@ -196,6 +196,7 @@ final class ToolRegistry
         $homeState = new HomeState(null, $homeOwner);   // the 5-minute cache of valves and lights (see bin/home-state-cron.php)
         $registry->register(new SetThermostat($homeCall, $userSettings, $homeState));
         $registry->register(new GetThermostats($homeCall, $userSettings, $homeState));
+        $registry->register(new GetGatewayScript($apiTokens));
         $registry->register(new GetThermostatProbe(new \App\Data\ThermostatSamples()));
         $registry->register(new RefreshHomeDevices($hueSync, $apiTokens, $homeOwner, new \App\Home\ThermostatService($homeCall, $userSettings, $homeState)));
         $locationPoints = new LocationPoints();

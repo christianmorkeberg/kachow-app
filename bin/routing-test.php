@@ -262,6 +262,7 @@ $cases = [
     ['msg' => 'how much did I work last week?', 'expect' => 'worktime'],
     ['msg' => 'how much have I worked this week', 'expect' => 'worktime'],
 
+    ['msg' => 'give me the script for the shelly gateway', 'expect' => 'home'],
     // ---- kiosk ----
     ['msg' => 'give me the link for the kiosk', 'expect' => 'kiosk'],
     ['msg' => 'how do I set up the wall display?', 'expect' => 'kiosk'],

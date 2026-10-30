@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Home;
 
 /**
- * After "set the radiators to 16" ended as "sent" (the valves are asleep and apply it at their next wake-up), this waits for each valve to REPORT the new target
- * and then tells the user once: "Radiators are now set to 16° …", or which valve has not confirmed after a while. It runs after the reply (App\Support\AfterReply),
- * so nobody waits for it. Only the valves still pending are read, a few seconds apart at first and then a minute apart — the home agent handles one command
- * at a time, so constant polling would block the user's lights.
+ * After "set the radiators to 16" ended as "sent" (the valves are asleep and apply it at their next wake-up), someone has to tell the user when the valves
+ * have REPORTED the new target. The sent targets wait in PendingSets. Two things can settle them, and whichever comes first wins (the batch is handed to exactly
+ * one of them): the gateway's own call when a valve reports (api/shelly-hook.php → GatewayReport), and THIS watcher, which runs after the reply
+ * (App\Support\AfterReply) and polls only the valves still pending — a few seconds apart at first, then a minute apart — because the home agent handles one command at a time.
  *
  * Time, reading and delivery are injected: the unit test runs it with a fake clock and no sleeping.
  */
@@ -17,38 +17,26 @@ final class ThermostatConfirm
     /** Seconds to wait before each check; the last value repeats until the time is up. */
     private const DELAYS = [20, 30, 40, 60];
 
-    /** A valve counts as confirmed when its reported target is within this of what was asked (the valves work in half degrees). */
-    private const TOLERANCE_C = 0.3;
-
     /**
-     * @param callable(int):?float                 $targetOf  the valve's reported target in °C, null when it could not be read
-     * @param callable(string,string):void         $notify    (title, body) — the push
-     * @param callable(string):void                $say       the same text as an assistant message in the conversation
-     * @param callable(int):void                   $sleep     seconds
-     * @param callable():int                       $now       unix seconds
+     * @param callable(int):?float            $targetOf the valve's reported target in °C, null when it could not be read
+     * @param callable(string, ?int):void     $deliver  (text, conversation id): the push and the message in the chat
+     * @param callable(int):void              $sleep    seconds
+     * @param callable():int                  $now      unix seconds
      */
-    public function __construct(private $targetOf, private $notify, private $say, private $sleep, private $now)
+    public function __construct(private PendingSets $pending, private int $userId, private $targetOf, private $deliver, private $sleep, private $now)
     {
     }
 
-    /**
-     * @param list<array{id:int, name:string, target:float}> $items
-     *
-     * @return array{confirmed: list<string>, pending: list<string>, checks: int}
-     */
-    public function run(array $items, bool $danish, int $maxSeconds = 480): array
+    /** @return array{outcome: string, checks: int} outcome: confirmed | deadline | settled elsewhere */
+    public function run(int $maxSeconds = 480): array
     {
-        $pending = [];
-        foreach ($items as $it) {
-            $pending[$it['id']] = $it;          // the same valve set twice: the last ask counts
-        }
-        $all       = array_values($pending);    // the asks that count, in order
-        $confirmed = [];
-        $start     = ($this->now)();
-        $checks    = 0;
-        $step      = 0;
-
-        while ($pending !== []) {
+        $start  = ($this->now)();
+        $checks = 0;
+        $step   = 0;
+        while (true) {
+            if ($this->pending->get($this->userId) === null) {
+                return ['outcome' => 'settled elsewhere', 'checks' => $checks];     // the gateway told us first
+            }
             $delay = self::DELAYS[min($step, count(self::DELAYS) - 1)];
             if (($this->now)() - $start + $delay > $maxSeconds) {
                 break;
@@ -56,52 +44,70 @@ final class ThermostatConfirm
             ($this->sleep)($delay);
             $step++;
             $checks++;
-            foreach ($pending as $id => $it) {
-                $t = ($this->targetOf)($id);
-                if ($t !== null && abs($t - $it['target']) <= self::TOLERANCE_C) {
-                    $confirmed[] = $it;
-                    unset($pending[$id]);
+            $b = $this->pending->get($this->userId);
+            if ($b === null) {
+                return ['outcome' => 'settled elsewhere', 'checks' => $checks];
+            }
+            foreach ($b['items'] as $it) {
+                if ($it['confirmed']) {
+                    continue;
+                }
+                $t = ($this->targetOf)((int) $it['id']);
+                if ($t === null || abs($t - (float) $it['target']) > PendingSets::TOLERANCE_C) {
+                    continue;
+                }
+                $done = $this->pending->confirm($this->userId, (int) $it['id'], $t);
+                if ($done !== null) {
+                    $this->announce($done);
+
+                    return ['outcome' => 'confirmed', 'checks' => $checks];
                 }
             }
         }
-
-        $left = array_values($pending);
-        if ($all !== []) {
-            $this->tell($confirmed, $left, $danish);
+        $left = $this->pending->take($this->userId);
+        if ($left === null) {
+            return ['outcome' => 'settled elsewhere', 'checks' => $checks];
         }
+        $this->announce($left);
 
-        return [
-            'confirmed' => array_map(static fn (array $it): string => $it['name'], $confirmed),
-            'pending'   => array_map(static fn (array $it): string => $it['name'], $left),
-            'checks'    => $checks,
-        ];
+        return ['outcome' => 'deadline', 'checks' => $checks];
+    }
+
+    /** @param array<string, mixed> $batch */
+    public function announce(array $batch): void
+    {
+        ($this->deliver)(self::text($batch), isset($batch['conversation_id']) ? (int) $batch['conversation_id'] : null);
     }
 
     /**
-     * @param list<array{id:int, name:string, target:float}> $ok
-     * @param list<array{id:int, name:string, target:float}> $left
+     * What the user is told: all confirmed / some did not / none did — in the language of the request, with one temperature when they all share it
+     * ("…are now set to 16°: Stue, Badeværelse") or per valve when they differ ("Stue 16°, Badeværelse 20°").
+     *
+     * @param array<string, mixed> $batch a PendingSets batch
      */
-    private function tell(array $ok, array $left, bool $danish): void
+    public static function text(array $batch): string
     {
-        $deg = static fn (float $c): string => rtrim(rtrim(number_format($c, 1, $danish ? ',' : '.', ''), '0'), $danish ? ',' : '.') . '°';
-        // One temperature for all of them: "Stue, Bad" + "16°". Different ones in one request: "Stue 16°, Bad 20°".
-        $same  = count(array_unique(array_map(static fn (array $it): string => (string) $it['target'], array_merge($ok, $left)))) === 1;
-        $names = static fn (array $its): string => implode(', ', array_map(static fn (array $it): string => $it['name'] . ($same ? '' : ' ' . $deg($it['target'])), $its));
-        $t     = $same ? ' ' . $deg(array_merge($ok, $left)[0]['target']) : '';
+        $danish = !empty($batch['danish']);
+        $items  = array_values($batch['items'] ?? []);
+        $ok     = array_values(array_filter($items, static fn (array $i): bool => !empty($i['confirmed'])));
+        $left   = array_values(array_filter($items, static fn (array $i): bool => empty($i['confirmed'])));
+        $deg    = static fn (float $c): string => rtrim(rtrim(number_format($c, 1, $danish ? ',' : '.', ''), '0'), $danish ? ',' : '.') . '°';
+        $same   = count(array_unique(array_map(static fn (array $i): string => (string) (float) $i['target'], $items))) === 1;
+        $names  = static fn (array $its): string => implode(', ', array_map(static fn (array $i): string => $i['name'] . ($same ? '' : ' ' . $deg((float) $i['target'])), $its));
+        $t      = $same && $items !== [] ? ' ' . $deg((float) $items[0]['target']) : '';
         if ($left === []) {
-            $body = $danish
+            return $danish
                 ? 'Radiatorerne er nu sat' . ($same ? ' til' . $t . ': ' : ': ') . $names($ok) . '.'
                 : 'The radiators are now set' . ($same ? ' to' . $t . ': ' : ': ') . $names($ok) . '.';
-        } elseif ($ok === []) {
-            $body = $danish
+        }
+        if ($ok === []) {
+            return $danish
                 ? 'Ingen af radiatorerne har bekræftet' . $t . ' endnu (' . $names($left) . '). De kan være uden for rækkevidde — tjek dem om lidt.'
                 : 'None of the radiators has confirmed' . $t . ' yet (' . $names($left) . '). They may be out of reach — check them in a bit.';
-        } else {
-            $body = $danish
-                ? $names($ok) . ' er nu sat' . ($same ? ' til' . $t : '') . ', men ' . $names($left) . ' har ikke bekræftet endnu.'
-                : $names($ok) . ' now set' . ($same ? ' to' . $t : '') . ', but ' . $names($left) . ' has not confirmed yet.';
         }
-        ($this->say)($body);
-        ($this->notify)('Kachow', $body);
+
+        return $danish
+            ? $names($ok) . ' er nu sat' . ($same ? ' til' . $t : '') . ', men ' . $names($left) . ' har ikke bekræftet endnu.'
+            : $names($ok) . ' now set' . ($same ? ' to' . $t : '') . ', but ' . $names($left) . ' has not confirmed yet.';
     }
 }

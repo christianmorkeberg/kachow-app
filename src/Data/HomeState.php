@@ -70,6 +70,28 @@ final class HomeState
         }
     }
 
+    /**
+     * Removes the entry and returns it — to exactly ONE caller: the delete decides, so two processes racing for the same entry (a poll that saw the valve
+     * confirm and the gateway's call that says the same) cannot both get it. Null when it is gone or never was.
+     *
+     * @return array{data: array<string, mixed>, at: int}|null
+     */
+    public function take(int $userId, string $kind): ?array
+    {
+        $e = $this->get($userId, $kind);
+        if ($e === null) {
+            return null;
+        }
+        try {
+            $stmt = $this->db->prepare('DELETE FROM home_state WHERE user_id = :u AND kind = :k');
+            $stmt->execute([':u' => $this->key($userId), ':k' => $kind]);
+
+            return $stmt->rowCount() > 0 ? $e : null;
+        } catch (Throwable $x) {
+            return null;
+        }
+    }
+
     public function forget(int $userId, string $kind): void
     {
         try {

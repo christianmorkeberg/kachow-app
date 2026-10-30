@@ -115,7 +115,8 @@ final class ThermostatService
         $at = time();
         // A read that failed for EVERY valve (the gateway is down) is not state worth keeping.
         if ($rows !== [] && count(array_filter($rows, static fn (array $r): bool => !isset($r['error']))) > 0) {
-            $this->state?->put($userId, 'thermostats', ['rows' => $rows], $at);
+            $prev = $this->state?->get($userId, 'thermostats');
+            $this->state?->put($userId, 'thermostats', ['rows' => $rows] + (isset($prev['data']['hook_at']) ? ['hook_at' => $prev['data']['hook_at']] : []), $at);
         }
 
         return ['rows' => $rows, 'error' => null, 'at' => $at, 'cached' => false];
@@ -135,7 +136,59 @@ final class ThermostatService
 
             return $r;
         }, $e['data']['rows']);
-        $this->state?->put($userId, 'thermostats', ['rows' => $rows], $e['at']);   // keeps its age: only the target was patched, not re-read
+        $this->state?->put($userId, 'thermostats', ['rows' => $rows] + array_diff_key($e['data'], ['rows' => 1]), $e['at']);   // keeps its age and its other keys (hook_at): only the target was patched
+    }
+
+    /** How long after the gateway's last call we still count it as "installed and working" (the valves report every 5 minutes). */
+    private const HOOK_ALIVE_S = 900;
+
+    /**
+     * A valve reported through the gateway's script (api/shelly-hook.php): its row in the cached readings is replaced by what it said, and the cache is
+     * marked as fed by the gateway. A valve not in the cache yet is added. Keeps the other valves' rows untouched.
+     *
+     * @param array{id:int, target_c:?float, current_c:?float, valve_open_pct:?int, battery_pct:?int, signal_dbm:?int, updated_ts:?int} $r
+     */
+    public function acceptReport(int $userId, array $r): void
+    {
+        if ($this->state === null) {
+            return;
+        }
+        $e    = $this->state->get($userId, 'thermostats');
+        $rows = is_array($e['data']['rows'] ?? null) ? $e['data']['rows'] : [];
+        $name = null;
+        foreach ($rows as $row) {
+            if ((int) ($row['id'] ?? -1) === $r['id']) {
+                $name = $row['name'] ?? null;
+            }
+        }
+        foreach (KnownValves::get($this->settings, $this->state, $userId) as $v) {
+            if ($name === null && $v['id'] === $r['id']) {
+                $name = $v['name'];
+            }
+        }
+        $new = array_filter([
+            'name'           => $name ?? 'Thermostat ' . $r['id'],
+            'id'             => $r['id'],
+            'current_c'      => $r['current_c'],
+            'target_c'       => $r['target_c'],
+            'valve_open_pct' => $r['valve_open_pct'],
+            'battery_pct'    => $r['battery_pct'],
+            'signal_dbm'     => $r['signal_dbm'],
+            'updated_ts'     => $r['updated_ts'],
+            'paired'         => true,
+        ], static fn ($v): bool => $v !== null);
+        $rows = array_values(array_filter($rows, static fn (array $row): bool => (int) ($row['id'] ?? -1) !== $r['id']));
+        $rows[] = $new;
+        usort($rows, static fn (array $a, array $b): int => ($a['id'] ?? 0) <=> ($b['id'] ?? 0));
+        $this->state->put($userId, 'thermostats', ['rows' => $rows, 'hook_at' => time()]);
+    }
+
+    /** Whether the gateway's script has called in recently — then the valves' confirmations arrive by themselves, with no polling. */
+    public function hookActive(int $userId): bool
+    {
+        $e = $this->state?->get($userId, 'thermostats');
+
+        return $e !== null && time() - (int) ($e['data']['hook_at'] ?? 0) <= self::HOOK_ALIVE_S;
     }
 
     /**
