@@ -74,7 +74,7 @@ echo "5) the gateway script\n";
 $code = GatewayScript::code('https://assistant.example.com/', 'tok123');
 check('it carries the hook URL with the token, and the mJS handlers', str_contains($code, 'https://assistant.example.com/api/shelly-hook.php?t=tok123') && str_contains($code, 'Shelly.addStatusHandler') && str_contains($code, 'BluTrv.GetRemoteStatus') && str_contains($code, 'HTTP.GET'));
 check('mJS-safe: no arrow functions or template strings', !str_contains($code, '=>') && !str_contains($code, '`'));
-check('one call per report (packet_id de-duplication), and a retry when the status is older than the report', str_contains($code, 'packet_id') && str_contains($code, 'tries < 3'));
+check('one call per report (packet_id de-duplication), and a retry when the status is older than the report', str_contains($code, 'packet_id') && str_contains($code, 'tries < 3') && str_contains($code, 'Timer.clear'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

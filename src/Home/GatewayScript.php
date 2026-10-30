@@ -44,14 +44,18 @@ function send(id, rssi, lastTs, tries) {
   });
 }
 
+// A valve's report can arrive as a short BURST of packets (seen: packet 101 then 102 eight seconds apart) with different readings in each, so the call is made
+// once the burst is over: every new packet restarts a short timer, and only the last one fires it.
+let timers = {};
 Shelly.addStatusHandler(function (e) {
   if (!e || !e.component || e.component.indexOf("blutrv:") !== 0 || !e.delta) { return; }
   let id = e.delta.id !== undefined ? e.delta.id : e.id;
-  if (id === undefined || e.delta.packet_id === undefined || last[id] === e.delta.packet_id) { return; }   // one call per report
+  if (id === undefined || e.delta.packet_id === undefined || last[id] === e.delta.packet_id) { return; }   // the same packet again
   last[id] = e.delta.packet_id;
   let rssi = e.delta.rssi;
   let lastTs = e.delta.last_updated_ts;
-  Timer.set(1500, false, function () { send(id, rssi, lastTs, 0); });   // a moment for the gateway to store the new status
+  if (timers[id] !== undefined) { Timer.clear(timers[id]); }
+  timers[id] = Timer.set(10000, false, function () { timers[id] = undefined; send(id, rssi, lastTs, 0); });
 });
 print("kachow: gateway script running");
 JS;
