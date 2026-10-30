@@ -75,5 +75,21 @@ check('GEMINI_THINKING_LEVEL honored via fromEnv', ($payload['generationConfig']
 if ($prevKey === null) { unset($_ENV['GEMINI_API_KEY']); } else { $_ENV['GEMINI_API_KEY'] = $prevKey; }
 if ($prevLevel === null) { unset($_ENV['GEMINI_THINKING_LEVEL']); } else { $_ENV['GEMINI_THINKING_LEVEL'] = $prevLevel; }
 
+echo "9) out of credits -> its own exception (not a rate limit), other errors unchanged\n";
+$errTransport = static fn (int $status, string $msg): callable => static fn (string $u, array $p, array $h, ?int $t = null): array => [$status, json_encode(['error' => ['message' => $msg]])];
+$msgCredits = 'Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.';
+foreach ([[400, $msgCredits], [429, $msgCredits], [403, 'Billing account is not enabled']] as [$st, $m]) {
+    $thrown = null;
+    try { (new GeminiClient('k', ['m'], $errTransport($st, $m)))->generate([['role' => 'user', 'parts' => [['text' => 'hi']]]]); } catch (\Throwable $e) { $thrown = $e; }
+    check("HTTP {$st} '" . substr($m, 0, 22) . "…' -> AiCreditsException", $thrown instanceof \App\Assistant\AiCreditsException, $thrown ? get_class($thrown) : 'none');
+}
+$thrown = null;
+try { (new GeminiClient('k', ['m'], $errTransport(429, 'Resource has been exhausted (e.g. check quota).')))->generate([['role' => 'user', 'parts' => [['text' => 'hi']]]]); } catch (\Throwable $e) { $thrown = $e; }
+check('a plain rate limit is still a RateLimitException', $thrown instanceof \App\Assistant\RateLimitException, $thrown ? get_class($thrown) : 'none');
+$thrown = null;
+try { (new GeminiClient('k', ['m'], $errTransport(400, 'API key not valid.')))->generate([['role' => 'user', 'parts' => [['text' => 'hi']]]]); } catch (\Throwable $e) { $thrown = $e; }
+check('another 400 stays a plain RuntimeException', $thrown instanceof \RuntimeException && !($thrown instanceof \App\Assistant\AiCreditsException) && !($thrown instanceof \App\Assistant\RateLimitException), $thrown ? get_class($thrown) : 'none');
+check('user text names the fix, English and Danish', str_contains(\App\Assistant\AiCreditsException::userText(false), 'Top up') && str_contains(\App\Assistant\AiCreditsException::userText(true), 'Fyld'));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

@@ -152,6 +152,10 @@ final class GeminiClient
         [$status, $body] = ($this->transport)($url, $payload, $headers, $timeoutMs);
 
         $decoded = json_decode($body, true);
+        $apiMessage = is_array($decoded) ? ($decoded['error']['message'] ?? null) : null;
+        if (($status < 200 || $status >= 300) && AiCreditsException::matches(is_string($apiMessage) ? $apiMessage : null)) {
+            throw new AiCreditsException('Gemini API error: ' . $apiMessage);   // out of credits: no other model will do better
+        }
         if ($status === 429 || $status === 503) {
             $message = is_array($decoded) ? ($decoded['error']['message'] ?? null) : null;
             throw new RateLimitException(
