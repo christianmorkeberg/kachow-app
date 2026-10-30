@@ -105,7 +105,8 @@ if (!WebPush::isConfigured()) {
 const UNATTENDED_PREAMBLE = "[Scheduled task — this is an unattended run, nobody is "
     . "watching live. Do ONLY what the instruction below specifically asks. If it's a "
     . "check/notify instruction, don't also send messages, delete anything, or take any "
-    . "other action on your own initiative. ";
+    . "other action on your own initiative. If the instruction says to ASK the user whether to do something (\"…if so, ask if they want me to turn them off\"), "
+    . "call notify_me with the question as the body AND `offer` holding the exact tool calls to make on a yes — a plain question in a notification cannot be answered. ";
 
 /** Appended per task: how the run should report back. */
 const REPORT_QUIET = "Call notify_me only if there's something worth telling the user; "
