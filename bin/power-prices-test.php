@@ -61,6 +61,9 @@ check('card kind + now marker', ($out['_render']['kind'] ?? '') === 'power_price
 check('card window points at the right hour', ($out['_render']['window']['from'] ?? -1) === 6, json_encode($out['_render']['window'] ?? null));
 $tight = $tool->execute(['window_hours' => 2, 'finish_by' => '19:00'], 1);
 check('no 2h window before 19:00 (only 18:20 left -> hour 18 and 19 do not both end by 19:00)', is_string($tight['cheapest_window'] ?? null), json_encode($tight['cheapest_window'] ?? null));
+$tail = $tool->execute(['last_hours' => 5], 1);
+check('last_hours keeps the newest N hours of data', count($tail['_render']['hours'] ?? []) === 5 && end($tail['_render']['hours'])['s'] === '2026-10-30T06:00', json_encode(array_column($tail['_render']['hours'] ?? [], 's')));
+check('last_hours without the current hour in it: no now index, no crash', array_key_exists('now_index', $tail['_render']) && $tail['_render']['now_index'] === null);
 check('bad day rejected', isset($tool->execute(['day' => 'someday'], 1)['error']));
 
 echo "4) failure paths\n";

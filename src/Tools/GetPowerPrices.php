@@ -62,6 +62,11 @@ final class GetPowerPrices implements Tool
             $from  = $now->setTime((int) $now->format('G'), 0);
             $to    = $now->setTime(0, 0)->add(new DateInterval('P2D'));
             $label = 'now';
+            // Not in the model's schema — the kiosk's chart: the NEWEST N hours of published prices, so it also shows today's hours already gone.
+            $last = max(0, min(72, (int) ($arguments['last_hours'] ?? 0)));
+            if ($last > 0) {
+                $from = $now->setTime(0, 0)->sub(new DateInterval('P1D'));
+            }
         } else {
             $date = match ($day) {
                 'today'    => $now->setTime(0, 0),
@@ -82,6 +87,9 @@ final class GetPowerPrices implements Tool
             return ['error' => 'I couldn\'t get the electricity prices right now (Energi Data Service did not answer). Try again shortly.'];
         }
         $hours = $res['hours'];
+        if (($last ?? 0) > 0) {
+            $hours = array_slice($hours, -$last);
+        }
         if ($hours === []) {
             return ['error' => 'No prices are published for that period yet (tomorrow\'s appear around 13:00).'];
         }
