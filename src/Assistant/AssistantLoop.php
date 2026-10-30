@@ -44,6 +44,12 @@ final class AssistantLoop
     /** Whole-turn budget for all Gemini calls incl. retries (s). Env: GEMINI_TURN_BUDGET_S. */
     private const TURN_BUDGET_S = 45;
 
+    /**
+     * Absolute ceiling for a whole turn incl. slow tools (s). The turn budget above covers Gemini only — time spent in tools is added back to it (report #66:
+     * three slow thermostat valves used 44 of the 45 s, so the final answer was never asked for) — but never past this.
+     */
+    private const TURN_HARD_CAP_S = 110;
+
     /** Don't start a call with less than this left in the turn budget (ms). */
     private const MIN_CALL_MS = 3000;
 
@@ -304,6 +310,9 @@ final class AssistantLoop
 
     /** microtime() by which this turn's Gemini calls must be done (see TURN_BUDGET_S). */
     private float $turnDeadline = PHP_FLOAT_MAX;
+
+    /** microtime() the deadline may never be pushed beyond (see TURN_HARD_CAP_S). */
+    private float $turnHardCap = PHP_FLOAT_MAX;
 
     /** @var (callable(array<string, mixed>): void)|null Live progress sink (see onProgress). */
     private $progressSink = null;
@@ -715,6 +724,7 @@ final class AssistantLoop
         // Each call gets a per-call cap; a stalled call is retried once (usually answers in
         // ~3s); and the whole turn has a budget so a user never waits indefinitely.
         $this->turnDeadline = $tStart + self::envSeconds('GEMINI_TURN_BUDGET_S', self::TURN_BUDGET_S);
+        $this->turnHardCap  = $tStart + max(self::TURN_HARD_CAP_S, self::envSeconds('GEMINI_TURN_BUDGET_S', self::TURN_BUDGET_S));
 
         $this->progress = ['phase' => 'thinking', 'steps' => []];
         $this->progress('thinking');
@@ -892,6 +902,8 @@ final class AssistantLoop
                 $this->progress(null, (string) $call['name'], is_array($result) && isset($result['error']) ? 'error' : 'done');
                 $callMs  = (microtime(true) - $td0) * 1000;
                 $toolMs += $callMs;
+                // Slow devices are not a stalled model: give the Gemini budget back what the tool used (bounded by the hard cap).
+                $this->turnDeadline = min($this->turnDeadline + $callMs / 1000, $this->turnHardCap);
 
                 // A tool can attach a renderable card for the UI (last one wins). Strip it
                 // from the result so the model doesn't re-list the plan as text — the widget
