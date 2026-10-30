@@ -22,7 +22,8 @@ final class GatewayScript
 // Kachow: tells the server when a radiator valve has reported. Private: it contains your token — do not share or paste it anywhere public.
 let HOOK = "{$hook}";
 let SSL = "ca.pem";   // if the console says the TLS check failed, change this to "*" (no certificate check)
-let last = {};
+let last = {};   // the last packet number seen per valve
+let sent = {};   // what was last sent per valve (report time + readings)
 
 function send(id, rssi, lastTs, tries) {
   Shelly.call("BluTrv.GetRemoteStatus", { id: id }, function (res, code) {
@@ -37,6 +38,10 @@ function send(id, rssi, lastTs, tries) {
       return;
     }
     let trv = res.status["trv:0"];
+    // Valves send small packets about once a minute (seen in the gateway log), but the full status only changes now and then: call the server only when it is NEW.
+    let stamp = res.ts + "|" + trv.target_C + "|" + trv.current_C + "|" + trv.pos;
+    if (sent[id] === stamp) { return; }
+    sent[id] = stamp;
     let url = HOOK + "&id=" + id + "&target=" + trv.target_C + "&cur=" + trv.current_C + "&pos=" + trv.pos + "&ts=" + res.ts;
     if (rssi !== undefined) { url = url + "&rssi=" + rssi; }
     // On Shelly the HTTP calls are RPC methods (there is no global HTTP object in mJS).

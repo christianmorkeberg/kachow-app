@@ -84,6 +84,8 @@ $names = []; preg_match_all('/\b(?:trv|res|e\.delta)\.([A-Za-z_]+)/', $code, $m)
 $known = ['target_C', 'current_C', 'pos', 'status', 'ts', 'id', 'packet_id', 'rssi', 'last_updated_ts'];
 check('every field the script reads is one seen in captured gateway output', array_diff($names, $known) === [], json_encode(array_values(array_diff($names, $known))));
 
+check('the script only calls the server when the valve status is NEW (valves send packets about once a minute, the full status changes rarely)', str_contains($code, 'sent[id] === stamp'));
+
 echo "6) the script never goes through the chat\n";
 $toolSrc = (string) file_get_contents(__DIR__ . '/../src/Tools/GetGatewayScript.php');
 check('get_gateway_script hands out a link, not the script text (chat formatting ate the underscores of target_C / packet_id and the script silently did nothing)', str_contains($toolSrc, "'script_url'") && !str_contains($toolSrc, 'GatewayScript::code('));
