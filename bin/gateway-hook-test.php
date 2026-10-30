@@ -77,5 +77,10 @@ check('mJS-safe: no arrow functions or template strings', !str_contains($code, '
 check('HTTP goes through Shelly.call("HTTP.GET") — there is no global HTTP object on the gateway (the first version crashed on it)', str_contains($code, 'Shelly.call("HTTP.GET"') && preg_match('/(?<![."\w])HTTP\.GET\(/', $code) !== 1);
 check('one call per report (packet_id de-duplication), and a retry when the status is older than the report', str_contains($code, 'packet_id') && str_contains($code, 'tries < 3') && str_contains($code, 'Timer.clear'));
 
+echo "6) the script never goes through the chat\n";
+$toolSrc = (string) file_get_contents(__DIR__ . '/../src/Tools/GetGatewayScript.php');
+check('get_gateway_script hands out a link, not the script text (chat formatting ate the underscores of target_C / packet_id and the script silently did nothing)', str_contains($toolSrc, "'script_url'") && !str_contains($toolSrc, 'GatewayScript::code('));
+check('the script text keeps the underscored device names the handlers depend on', str_contains($code, 'target_C') && str_contains($code, 'current_C') && str_contains($code, 'packet_id') && str_contains($code, 'last_updated_ts'));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

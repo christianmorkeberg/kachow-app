@@ -24,10 +24,11 @@ final class GetGatewayScript implements Tool
 
     public function description(): string
     {
-        return 'Gives the user the script to install on their Shelly BLU gateway (its web page → Scripts) so the gateway tells the server whenever a radiator valve reports — '
+        return 'Gives the user a LINK to the script to install on their Shelly BLU gateway (its web page → Scripts) so the gateway tells the server whenever a radiator valve reports — '
             . 'the radiator readings and "set to 16 — confirmed" notifications then arrive instantly. Use when they ask how to set up / install / reinstall the gateway script or '
-            . 'the Shelly webhook / push for the radiators. Give the script in a code block and the steps; it contains a private token, so never repeat it elsewhere. '
-            . 'rotate=true issues a new token (the old script stops working).';
+            . 'the Shelly webhook / push for the radiators. Give them the link (script_url) and the steps. NEVER paste or retype the script itself in the chat: chat formatting removes the '
+            . 'underscores from names like target_C and packet_id and the script then silently does nothing — the link serves it as plain text. The link contains a private token, so do not repeat it elsewhere. '
+            . 'rotate=true issues a new token (the old script and link stop working).';
     }
 
     public function parameters(): array
@@ -47,10 +48,10 @@ final class GetGatewayScript implements Tool
 
         return [
             'rotated'   => $rotate,
-            'script'    => GatewayScript::code('https://' . $host, $token),
+            'script_url' => 'https://' . $host . '/api/gateway-script.php?t=' . $token,
             'last_call' => $ago === null ? 'never (the script is not installed or has not reported yet)' : $ago . ' seconds ago',
-            'steps'     => 'Open the gateway\'s web page in a browser on the home network → Scripts → create a new script → paste the code → Save → Start (and switch on "Run on startup"). '
-                . 'Within about 5 minutes the console should show the gateway working and the server should see the first valve report.',
+            'steps'     => 'Open script_url in a browser (it shows the script as plain text) and copy ALL of it (select all, copy). Then open the gateway\'s web page on the home network → Scripts → create a new script → '
+                . 'paste → Save → Start (and switch on "Run on startup"); stop any older Kachow or logging script. Within about 10 minutes the server should see the first valve report.',
             'note'      => 'The token inside only lets the holder post valve readings, but keep it private; ask me to rotate it if it leaks.',
         ];
     }
