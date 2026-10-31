@@ -46,7 +46,7 @@ final class RoutineSpec
                     'once'     => ['type' => 'boolean'],
                 ],
             ],
-            'mode'        => ['type' => 'string', 'enum' => ['auto', 'ask'], 'description' => '"auto" (default): runs by itself when triggered by a place or the clock. "ask": sends a question first and runs only after the user says yes. Saying the phrase always runs it at once.'],
+            'mode'        => ['type' => 'string', 'enum' => ['auto', 'ask'], 'description' => '"auto" (default): runs by itself when triggered by a place or the clock. "ask": sends a question first and runs only after the user says yes. Saying the phrase always runs it at once. Use "ask" ONLY when the user asked to be asked BEFORE it runs. If the instruction itself asks the user something after a check ("check the lights; if some are on, ask if I want them off"), keep "auto": that run only asks when there is something to ask (notify_me with an offer), and "ask" would add a pointless first question.'],
         ];
     }
 

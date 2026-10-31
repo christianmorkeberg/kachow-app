@@ -101,7 +101,8 @@ final class ScheduleTask implements Tool
                 'mode' => [
                     'type'        => 'string', 'enum' => ['auto', 'ask'],
                     'description' => '"ask" = when it is time, send a question first and run only after the user says yes (for a recurring task that '
-                        . 'acts on something and the user wants a say). Default "auto".',
+                        . 'acts on something and the user wants a say). Default "auto". Only when the user asked to be asked BEFORE it runs: if the task itself '
+                        . 'asks after a check ("…if so, ask if I want them off"), keep "auto" — that run asks only when needed, via notify_me with an offer.',
                 ],
                 'label' => [
                     'type'        => 'string',
