@@ -45,7 +45,9 @@ check('a job that never reported is not judged', SystemTasks::overdueMinutes($ta
 
 echo "\n3) wording and the card\n";
 check('ago()', SystemTasks::ago(20) === '20 min' && SystemTasks::ago(300) === '5 h' && SystemTasks::ago(4320) === '3 days');
-$rows = SystemTasks::cardRows([$task('minutes', 5, $ago('-3 days')), $task('minutes', 5, $ago('-1 minute'))]);
+// cardRows judges against the real clock, so these two are relative to it (not to the fixed $now above).
+$real = static fn (string $mod): string => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->modify($mod)->format('Y-m-d H:i:s');
+$rows = SystemTasks::cardRows([$task('minutes', 5, $real('-3 days')), $task('minutes', 5, $real('-1 minute'))]);
 check('the card row carries the overdue text for a stopped job only', $rows[0]['overdue'] === '3 days' && $rows[1]['overdue'] === null);
 
 echo "\n" . ($fail === 0 ? "OK — {$pass} checks passed.\n" : "FAILED — {$fail} of " . ($pass + $fail) . ".\n");
