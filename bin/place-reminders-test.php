@@ -66,7 +66,7 @@ $db->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => gmdate('Y-m-d
 $db->sqliteCreateFunction('UNIX_TIMESTAMP', static fn (string $s): int => (int) strtotime($s . ' UTC'), 1);
 $db->exec("CREATE TABLE reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, remind_at TEXT NULL, place_id INT NULL,
     place_type TEXT NULL, place_label TEXT NULL, place_armed INT NOT NULL DEFAULT 1, text TEXT, status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP, sent_at TEXT)");
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, sent_at TEXT, approved_at TEXT NULL)");
 $db->exec('CREATE TABLE places (id INTEGER PRIMARY KEY, user_id INT, name TEXT, type TEXT, shape TEXT, lat REAL, lon REAL, radius_m INT, polygon TEXT)');
 $db->exec('CREATE TABLE location_points (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, device TEXT, recorded_at TEXT, lat REAL, lon REAL, acc INT, alt INT, vel INT, cog INT, batt INT, conn TEXT, trig TEXT)');
 $db->exec('CREATE TABLE push_subscriptions (id INTEGER PRIMARY KEY, user_id INT, endpoint TEXT, p256dh TEXT, auth TEXT, created_at TEXT)');
@@ -97,7 +97,7 @@ check('set while at work: stays quiet, arms on leaving, fires on the next arriva
 echo "\n3) listing\n";
 $c = $reminders->createAtPlace(1, 2, null, 'Office', 'Bring the key');
 $list = (new ListReminders($reminders))->execute([], 1);
-$whens = array_column($list['reminders'], 'when', 'id');
+$whens = array_column($list['upcoming'], 'when', 'id');
 check('a place reminder lists as "next time at …"', ($whens[$c] ?? '') === 'next time at Office', json_encode($whens));
 check('timed ones are still listed with their time', isset($whens[$timed]) && !str_starts_with($whens[$timed], 'next time'));
 check('cancel works the same', $reminders->cancel(1, $c) && ($reminders->get(1, $c)['status'] ?? '') === 'cancelled');

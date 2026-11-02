@@ -22,7 +22,7 @@ final class CancelReminder implements Tool
 
     public function description(): string
     {
-        return 'Cancels an upcoming reminder. Use for "cancel that reminder", "delete my reminder to …", '
+        return 'Cancels a reminder that has not fired yet, or one that fired and is still open (dropping it without approving). Use for "cancel that reminder", "delete my reminder to …", '
             . 'Danish "annuller påmindelsen". Give the reminder id (use list_reminders first if unsure).';
     }
 
@@ -46,6 +46,6 @@ final class CancelReminder implements Tool
 
         return $this->reminders->cancel($userId, $id)
             ? ['cancelled' => true, 'id' => $id]
-            : ['error' => 'No pending reminder with id ' . $id . '.'];
+            : ['error' => 'No pending or open reminder with id ' . $id . '.'];
     }
 }

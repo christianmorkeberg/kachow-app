@@ -6,8 +6,6 @@ namespace App\Tools;
 
 use App\Data\PushSubscriptions;
 use App\Data\Reminders;
-use DateTimeImmutable;
-use DateTimeZone;
 
 /**
  * Tool: set a one-off reminder that is delivered as a push notification at the given
@@ -17,8 +15,6 @@ use DateTimeZone;
  */
 final class SetReminder implements Tool
 {
-    private const LOCAL_TZ = 'Europe/Copenhagen';
-
     public function __construct(
         private Reminders $reminders,
         private PushSubscriptions $subscriptions,
@@ -69,40 +65,23 @@ final class SetReminder implements Tool
             return ['error' => 'Give both what to remind about and when (a future local date/time).'];
         }
 
-        $local = $this->parseLocal($at);
-        if ($local === null) {
-            return ['error' => 'I could not read that time. Give it like "2026-07-22 09:00".'];
+        $utc = Reminders::futureUtc($at);
+        if ($utc === null) {
+            return ['error' => 'I could not read that time, or it is already in the past. Give a future local time like "2026-07-22 09:00".'];
         }
 
-        $utc    = $local->setTimezone(new DateTimeZone('UTC'));
-        $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        if ($utc->getTimestamp() <= $nowUtc->getTimestamp()) {
-            return ['error' => 'That time is already in the past — give a future time.'];
-        }
-
-        $id = $this->reminders->create($userId, $utc->format('Y-m-d H:i:s'), $text);
+        $id = $this->reminders->create($userId, $utc, $text);
 
         return [
             'scheduled'  => true,
             'id'         => $id,
             'text'       => $text,
-            'when_local' => $local->format('D j M, H:i'),
+            'when_local' => Reminders::localLabel($utc),
             'has_device' => $this->subscriptions->hasAny($userId),
             'note'       => $this->subscriptions->hasAny($userId)
                 ? 'Confirm briefly. It fires within ~5 minutes of the time.'
                 : 'The reminder is saved, but the user has NO notification device enabled — tell them to '
                     . 'turn on notifications (topbar menu) or they will not receive the push.',
         ];
-    }
-
-    /** Interprets a local wall-clock time, tolerating a stray "Z"/offset the model added. */
-    private function parseLocal(string $at): ?DateTimeImmutable
-    {
-        $s = preg_replace('/\s*(Z|[+-]\d{2}:?\d{2})\s*$/i', '', trim($at)) ?? trim($at);
-        try {
-            return new DateTimeImmutable($s, new DateTimeZone(self::LOCAL_TZ));
-        } catch (\Exception $e) {
-            return null;
-        }
     }
 }

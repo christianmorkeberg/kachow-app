@@ -134,7 +134,7 @@ final class ToolSelector
             'list_feedback', 'resolve_feedback', 'set_diagnostics', 'get_voice_log',
         ],
         'reminders' => [
-            'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder',
+            'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder', 'resolve_reminder',
             'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
             'create_routine', 'update_routine', 'run_routine', 'undo_routine', 'get_sensor_setup', 'save_region', 'where_am_i', 'save_place', 'list_places',
         ],
@@ -458,6 +458,9 @@ final class ToolSelector
         'reminders' => [
             'remind me', 'reminder', 'remind', 'set a reminder', 'don\'t let me forget', 'dont let me forget',
             'ping me', 'nudge me', 'wake me',
+            // Answering a reminder that fired (resolve_reminder)
+            'mark the reminder', 'tick off the reminder', 'approve the reminder', 'open reminders', 'nudge me again', 'remind me again',
+            'afslut påmindelsen', 'åbne påmindelser',
             // Location-triggered reminders (set_place_reminder)
             'next time i\'m at', 'next time im at', 'next time i am at', 'next time i get to', 'when i arrive at',
             'when i get to', 'næste gang jeg er', 'næste gang jeg kommer', 'når jeg kommer til', 'når jeg ankommer',

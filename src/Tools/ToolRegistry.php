@@ -287,6 +287,7 @@ final class ToolRegistry
         $registry->register(new FetchWebpage(new PageFetcher(), new WebSnapshots()));
         $registry->register(new ListReminders($reminders));
         $registry->register(new CancelReminder($reminders));
+        $registry->register(new ResolveReminder($reminders));
         $scheduledTasks = new ScheduledTasks();
         $registry->register(new ScheduleTask($scheduledTasks, new Conversations(), new PushSubscriptions(), new Routines()));
         $systemTasks = new SystemTasks();

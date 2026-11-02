@@ -7,6 +7,7 @@ namespace App\Notify;
 use App\Data\NotificationHistory;
 use App\Data\NotificationPrefs;
 use App\Data\PushSubscriptions;
+use App\Data\Reminders;
 
 /**
  * High-level push: respects the user's per-type preference, fans a notification
@@ -21,12 +22,13 @@ final class Notifier
         private NotificationPrefs $prefs,
         private Sender $sender,
         private ?NotificationHistory $history = null,
+        private ?Reminders $reminders = null,
     ) {
     }
 
     public static function fromEnv(): self
     {
-        return new self(new PushSubscriptions(), new NotificationPrefs(), WebPush::fromEnv(), new NotificationHistory());
+        return new self(new PushSubscriptions(), new NotificationPrefs(), WebPush::fromEnv(), new NotificationHistory(), new Reminders());
     }
 
     /**
@@ -84,10 +86,12 @@ final class Notifier
         // chat showing the relevant card. An explicit $url still wins.
         $url ??= NotificationTypes::deepLink($type);
 
-        $payload = json_encode(
-            ['title' => $title, 'body' => $body, 'url' => $url ?? '/', 'type' => $type],
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        );
+        $data = ['title' => $title, 'body' => $body, 'url' => $url ?? '/', 'type' => $type];
+        $badge = $this->badge($userId);
+        if ($badge !== null) {
+            $data['badge'] = $badge;   // the number on the app icon (the service worker sets it): reminders awaiting approval
+        }
+        $payload = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $sent = 0;
         foreach ($subs as $s) {
@@ -102,5 +106,15 @@ final class Notifier
         }
 
         return $sent;
+    }
+
+    /** The app-icon badge count, or null when it can't be read (e.g. the approval migration has not run yet) — a push never fails over it. */
+    private function badge(int $userId): ?int
+    {
+        try {
+            return $this->reminders?->openCount($userId);
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Database;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 
 /**
@@ -13,9 +15,15 @@ use PDO;
  *    exactly once) and pushes them;
  *  - place: remind_at NULL, place_id or place_type set; fired when location tracking sees the
  *    user arrive there (Notify\PlaceReminderRunner, from api/owntracks.php).
+ *
+ * A reminder that has fired stays OPEN (shown on the Reminders card, counted by the app badge) until the user approves it.
+ * The user can ask for a nudge: it is then scheduled again (status back to 'pending') but is still open. One place
+ * (this class) owns those rules; the card, the endpoint, the push badge and the assistant tools all call it.
  */
 final class Reminders
 {
+    private const LOCAL_TZ = 'Europe/Copenhagen';
+
     private PDO $db;
 
     public function __construct(?PDO $db = null)
@@ -149,7 +157,7 @@ final class Reminders
         $limit = max(1, min(100, $limit));
         $stmt  = $this->db->prepare(
             "SELECT id, text, remind_at, place_label FROM reminders
-             WHERE user_id = :u AND status = 'pending'
+             WHERE user_id = :u AND status = 'pending' AND sent_at IS NULL
              ORDER BY remind_at IS NULL, remind_at ASC, id ASC
              LIMIT " . $limit
         );
@@ -168,16 +176,146 @@ final class Reminders
         return $out;
     }
 
-    /** Cancels a user's pending reminder. Returns true if one was cancelled. */
+    /** Cancels a user's pending or still-open reminder. Returns true if one was cancelled. */
     public function cancel(int $userId, int $id): bool
     {
         $stmt = $this->db->prepare(
             "UPDATE reminders SET status = 'cancelled'
-             WHERE id = :id AND user_id = :u AND status = 'pending'"
+             WHERE id = :id AND user_id = :u AND status IN ('pending', 'sent') AND approved_at IS NULL"
         );
         $stmt->execute([':id' => $id, ':u' => $userId]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Interprets a local (Europe/Copenhagen) wall-clock time like "2026-07-22 09:00", tolerating a stray "Z"/offset the
+     * model added. Null if it can't be read. Shared by set_reminder and resolve_reminder.
+     */
+    public static function parseLocal(string $at): ?DateTimeImmutable
+    {
+        $s = preg_replace('/\s*(Z|[+-]\d{2}:?\d{2})\s*$/i', '', trim($at)) ?? trim($at);
+        try {
+            return new DateTimeImmutable($s, new DateTimeZone(self::LOCAL_TZ));
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /** Fired and not yet approved or cancelled — a nudge that is scheduled counts, it is still unticked. */
+    private const OPEN = "approved_at IS NULL AND sent_at IS NOT NULL AND status IN ('sent', 'pending')";
+
+    /**
+     * The reminders waiting for the user's approval, oldest first. `nudge` is when the next nudge fires (UTC) when the
+     * user asked for one, else null.
+     *
+     * @return list<array{id:int, text:string, fired:string, nudge:?string, place:?string}>
+     */
+    public function openFor(int $userId, int $limit = 100): array
+    {
+        $limit = max(1, min(200, $limit));
+        $stmt  = $this->db->prepare(
+            'SELECT id, text, status, remind_at, sent_at, place_label FROM reminders
+             WHERE user_id = :u AND ' . self::OPEN . '
+             ORDER BY sent_at ASC, id ASC
+             LIMIT ' . $limit
+        );
+        $stmt->execute([':u' => $userId]);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = [
+                'id'    => (int) $r['id'],
+                'text'  => (string) $r['text'],
+                'fired' => (string) $r['sent_at'],
+                'nudge' => $r['status'] === 'pending' && $r['remind_at'] !== null ? (string) $r['remind_at'] : null,
+                'place' => ($r['place_label'] ?? '') !== '' ? (string) $r['place_label'] : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** How many reminders await approval — the number on the app icon. */
+    public function openCount(int $userId): int
+    {
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM reminders WHERE user_id = :u AND ' . self::OPEN);
+        $stmt->execute([':u' => $userId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /** The user approves (ticks) an open reminder. A scheduled nudge is dropped with it. True if one was approved. */
+    public function approve(int $userId, int $id): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE reminders SET approved_at = UTC_TIMESTAMP(), status = 'sent'
+             WHERE id = :id AND user_id = :u AND " . self::OPEN
+        );
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /** The user asks to be nudged again at $atUtc ('Y-m-d H:i:s'). The reminder stays open. True if it was open. */
+    public function nudge(int $userId, int $id, string $atUtc): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE reminders SET status = 'pending', remind_at = :at
+             WHERE id = :id AND user_id = :u AND " . self::OPEN
+        );
+        $stmt->execute([':at' => $atUtc, ':id' => $id, ':u' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /** UTC 'Y-m-d H:i:s' from a local time or, when $at is empty, from now + $minutes. Null if unreadable or not in the future. */
+    public static function futureUtc(string $at, int $minutes = 0): ?string
+    {
+        $utc = new DateTimeZone('UTC');
+        if (trim($at) !== '') {
+            $local = self::parseLocal($at);
+            $when  = $local?->setTimezone($utc);
+        } else {
+            $when = $minutes > 0 ? (new DateTimeImmutable('now', $utc))->modify('+' . $minutes . ' minutes') : null;
+        }
+        if ($when === null || $when->getTimestamp() <= time()) {
+            return null;
+        }
+
+        return $when->format('Y-m-d H:i:s');
+    }
+
+    /** "Mon 2 Nov, 08:00" in the user's local time, from a UTC 'Y-m-d H:i:s'. */
+    public static function localLabel(string $utc): string
+    {
+        return (new DateTimeImmutable($utc, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone(self::LOCAL_TZ))->format('D j M, H:i');
+    }
+
+    /**
+     * The Reminders card: what awaits approval (emphasized, with a tick) and what is still to come. `focus` is the
+     * reminder a tapped push was about. Used by the tool, the push deep link and api/reminders.php.
+     *
+     * @return array<string, mixed>
+     */
+    public function card(int $userId, ?int $focus = null): array
+    {
+        $open = array_map(fn (array $r): array => [
+            'id'    => $r['id'],
+            'text'  => $r['text'],
+            'fired' => self::localLabel($r['fired']),
+            'nudge' => $r['nudge'] !== null ? self::localLabel($r['nudge']) : null,
+            'place' => $r['place'],
+        ], $this->openFor($userId));
+
+        $upcoming = array_map(fn (array $r): array => [
+            'id'    => $r['id'],
+            'text'  => $r['text'],
+            'when'  => $r['remind_at'] !== null ? self::localLabel($r['remind_at']) : null,
+            'place' => $r['place'],
+        ], $this->upcoming($userId));
+
+        return ['kind' => 'reminders', 'title' => 'Reminders', 'focus' => $focus, 'open' => $open, 'upcoming' => $upcoming, 'badge' => count($open)];
     }
 
     /** @return array{id:int, text:string, remind_at:?string, place:?string, status:string}|null */
