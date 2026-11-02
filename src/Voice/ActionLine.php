@@ -61,7 +61,7 @@ final class ActionLine
             case 'cancel_reminder':
                 return 'Cancelled a reminder';
             case 'resolve_reminder':
-                return $s('action') === 'nudge' ? 'Nudged a reminder' : 'Approved a reminder';
+                return $s('action') === 'nudge' ? 'Nudged a reminder' : ($s('action') === 'reopen' ? 'Restored a reminder' : 'Approved a reminder');
             case 'add_to_shopping_list':
                 return 'Added ' . $q($s('item')) . ($s('list') !== '' ? ' to ' . $s('list') : ' to the shopping list');
             case 'check_off_item':

@@ -460,7 +460,8 @@ final class ToolSelector
             'ping me', 'nudge me', 'wake me',
             // Answering a reminder that fired (resolve_reminder)
             'mark the reminder', 'tick off the reminder', 'approve the reminder', 'open reminders', 'nudge me again', 'remind me again',
-            'afslut påmindelsen', 'åbne påmindelser',
+            'afslut påmindelsen', 'åbne påmindelser', 'ticked the reminder', 'ticked it by mistake', 'untick the reminder', 'restore the reminder',
+            'put the reminder back', 'reopen the reminder', 'fortryd påmindelsen',
             // Location-triggered reminders (set_place_reminder)
             'next time i\'m at', 'next time im at', 'next time i am at', 'next time i get to', 'when i arrive at',
             'when i get to', 'næste gang jeg er', 'næste gang jeg kommer', 'når jeg kommer til', 'når jeg ankommer',

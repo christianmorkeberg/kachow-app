@@ -115,6 +115,24 @@ $s = (new SetReminder($rem, $subs))->execute(['text' => 'Later', 'at' => date('Y
 check('set_reminder still works through the shared parser', ($s['scheduled'] ?? false) === true && preg_match('/^\w{3} \d+ \w{3}, \d\d:\d\d$/', $s['when_local']) === 1);
 check('set_reminder rejects the past', isset((new SetReminder($rem, $subs))->execute(['text' => 'Old', 'at' => '2020-01-01 09:00'], 1)['error']));
 
+echo "\n6b) a mistaken tick can be restored\n";
+$m = $rem->create(1, $past, 'vps'); $rem->claim($m);
+$before = $rem->openCount(1);
+check('approve, then it is in the recently-approved list', $rem->approve(1, $m) && ($rem->recentlyApproved(1)[0]['id'] ?? 0) === $m && $rem->openCount(1) === $before - 1);
+check('the card carries it as done (newest first, local label)', ($cd = $rem->card(1)['done'])[0]['id'] === $m && preg_match('/^\w{3} \d+ \w{3}, \d\d:\d\d$/', $cd[0]['approved']) === 1);
+check('list_reminders offers it for restoring', ($list->execute([], 1)['recently_approved'][0]['id'] ?? 0) === $m);
+check('reopen puts it back as an open reminder', $rem->reopen(1, $m) && $rem->openCount(1) === $before && !in_array($m, array_column($rem->recentlyApproved(1), 'id'), true));
+check('it is the same reminder (not a new one) and not nudged', array_values(array_filter($rem->openFor(1), static fn (array $r): bool => $r['id'] === $m))[0]['nudge'] === null);
+check('reopening an open one fails', !$rem->reopen(1, $m));
+check("another user cannot reopen it", $rem->approve(1, $m) && !$rem->reopen(2, $m));
+check('resolve_reminder reopen works and counts', ($resolve->execute(['id' => $m, 'action' => 'reopen'], 1)['reopened'] ?? false) === true);
+check('resolve_reminder reopen on an open one errors', isset($resolve->execute(['id' => $m, 'action' => 'reopen'], 1)['error']));
+$cx = $rem->create(1, $past, 'to cancel'); $rem->claim($cx); $rem->cancel(1, $cx);
+check('a cancelled reminder cannot be reopened', !$rem->reopen(1, $cx) && !in_array($cx, array_column($rem->recentlyApproved(1), 'id'), true));
+$db->exec("UPDATE reminders SET approved_at = '" . gmdate('Y-m-d H:i:s', time() - 5 * 86400) . "' WHERE id = " . $a);
+check('an old tick (5 days) is not offered any more', !in_array($a, array_column($rem->recentlyApproved(1), 'id'), true));
+$rem->approve(1, $m);
+
 echo "\n7) the push carries the badge\n";
 $h = $rem->create(1, $past, 'Badge me'); $rem->claim($h);
 $sender = new class implements Sender {

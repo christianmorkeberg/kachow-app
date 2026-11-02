@@ -25,7 +25,8 @@ final class ListReminders implements Tool
         return 'Shows the user\'s reminders: the OPEN ones (fired and still waiting for the user to approve them) and the '
             . 'upcoming ones (timed, or place ones "next time at <place>"). Use for "what reminders do I have?", '
             . '"my reminders", "what have I not done yet?", Danish "hvilke påmindelser har jeg?". Shows a card the user can '
-            . 'tick; give the id when the user might want to approve, nudge or cancel one.';
+            . 'tick; it also lists the ones approved in the last 48 h (recently_approved) so a mistaken tick can be restored. Give the id when the '
+            . 'user might want to approve, nudge, restore or cancel one.';
     }
 
     public function parameters(): array
@@ -48,6 +49,8 @@ final class ListReminders implements Tool
                 'id' => $r['id'], 'text' => $r['text'],
                 'when' => $r['when'] ?? ($r['place'] !== null ? 'next time at ' . $r['place'] : null),
             ], $card['upcoming']),
+            // Ticked lately: restorable with resolve_reminder action "reopen" (a reminder ticked by mistake).
+            'recently_approved' => array_map(static fn (array $r): array => ['id' => $r['id'], 'text' => $r['text'], 'approved' => $r['approved']], $card['done']),
             '_render'    => $card,
         ];
     }

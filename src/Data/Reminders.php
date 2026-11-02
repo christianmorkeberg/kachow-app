@@ -257,6 +257,41 @@ final class Reminders
         return $stmt->rowCount() > 0;
     }
 
+    /** The user ticked one by mistake: it is open (unticked) again. Works on any approved reminder. True if one was reopened. */
+    public function reopen(int $userId, int $id): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE reminders SET approved_at = NULL
+             WHERE id = :id AND user_id = :u AND status = 'sent' AND approved_at IS NOT NULL AND sent_at IS NOT NULL"
+        );
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Reminders the user approved lately, newest first — what the card offers to restore (like a ticked shopping item).
+     *
+     * @return list<array{id:int, text:string, approved:string}>
+     */
+    public function recentlyApproved(int $userId, int $hours = 48, int $limit = 20): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, text, approved_at FROM reminders
+             WHERE user_id = :u AND status = 'sent' AND approved_at IS NOT NULL AND approved_at >= :since
+             ORDER BY approved_at DESC, id DESC
+             LIMIT " . max(1, min(50, $limit))
+        );
+        $stmt->execute([':u' => $userId, ':since' => gmdate('Y-m-d H:i:s', time() - max(1, $hours) * 3600)]);
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $out[] = ['id' => (int) $r['id'], 'text' => (string) $r['text'], 'approved' => (string) $r['approved_at']];
+        }
+
+        return $out;
+    }
+
     /** The user asks to be nudged again at $atUtc ('Y-m-d H:i:s'). The reminder stays open. True if it was open. */
     public function nudge(int $userId, int $id, string $atUtc): bool
     {
@@ -296,7 +331,7 @@ final class Reminders
      * The Reminders card: what awaits approval (emphasized, with a tick) and what is still to come. `focus` is the
      * reminder a tapped push was about. Used by the tool, the push deep link and api/reminders.php.
      *
-     * @return array<string, mixed>
+     * @return array<string, mixed>  open, upcoming and `done` (approved in the last 48 h, restorable)
      */
     public function card(int $userId, ?int $focus = null): array
     {
@@ -315,7 +350,11 @@ final class Reminders
             'place' => $r['place'],
         ], $this->upcoming($userId));
 
-        return ['kind' => 'reminders', 'title' => 'Reminders', 'focus' => $focus, 'open' => $open, 'upcoming' => $upcoming, 'badge' => count($open)];
+        $done = array_map(static fn (array $r): array => [
+            'id' => $r['id'], 'text' => $r['text'], 'approved' => self::localLabel($r['approved']),
+        ], $this->recentlyApproved($userId));
+
+        return ['kind' => 'reminders', 'title' => 'Reminders', 'focus' => $focus, 'open' => $open, 'upcoming' => $upcoming, 'done' => $done, 'badge' => count($open)];
     }
 
     /** @return array{id:int, text:string, remind_at:?string, place:?string, status:string}|null */

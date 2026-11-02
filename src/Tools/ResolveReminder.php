@@ -7,8 +7,8 @@ namespace App\Tools;
 use App\Data\Reminders;
 
 /**
- * Tool: answer a reminder that has fired and is waiting for the user — approve it (done) or nudge it (remind again
- * later). The same two actions the Reminders card has; the rules live in Data\Reminders.
+ * Tool: answer a reminder that has fired — approve it (done), nudge it (remind again later) or restore one that was ticked by
+ * mistake (reopen). The same actions the Reminders card has; the rules live in Data\Reminders.
  */
 final class ResolveReminder implements Tool
 {
@@ -23,10 +23,12 @@ final class ResolveReminder implements Tool
 
     public function description(): string
     {
-        return 'Answers a reminder that has already fired and is still open (waiting for the user). action "done" approves it '
-            . '(the user did it — "I took the pills", "done", "klaret"); action "nudge" asks Kachow to push it again later '
-            . '(give "at" as a LOCAL "YYYY-MM-DD HH:MM", or "minutes" from now). A nudged reminder stays open until approved. '
-            . 'Only nudge when the user asks for it. Use list_reminders first if you do not know the id.';
+        return 'Answers a reminder that has already fired. action "done" approves an OPEN one (the user did it — "I took the pills", '
+            . '"done", "klaret"); action "nudge" pushes an open one again later (give "at" as a LOCAL "YYYY-MM-DD HH:MM", or '
+            . '"minutes" from now; it stays open until approved); action "reopen" restores one the user ticked (approved) — "I ticked it '
+            . 'by mistake", "put it back", "restore the vps reminder" (find it in list_reminders → recently_approved). Use list_reminders '
+            . 'first if you do not know the id. ONLY act on the reminder the user clearly named or described: never nudge, approve or '
+            . 'reopen another one as a guess — if you cannot tell which, ask.';
     }
 
     public function parameters(): array
@@ -35,7 +37,7 @@ final class ResolveReminder implements Tool
             'type'       => 'object',
             'properties' => [
                 'id'      => ['type' => 'integer', 'description' => 'The open reminder\'s id (from list_reminders).'],
-                'action'  => ['type' => 'string', 'enum' => ['done', 'nudge'], 'description' => 'done = approve it; nudge = push it again later.'],
+                'action'  => ['type' => 'string', 'enum' => ['done', 'nudge', 'reopen'], 'description' => 'done = approve an open one; nudge = push it again later; reopen = restore one that was ticked.'],
                 'at'      => ['type' => 'string', 'description' => 'For nudge: local wall-clock time "YYYY-MM-DD HH:MM" (24h), in the future. Do NOT convert to UTC.'],
                 'minutes' => ['type' => 'integer', 'description' => 'For nudge: minutes from now, instead of "at".'],
             ],
@@ -47,8 +49,14 @@ final class ResolveReminder implements Tool
     {
         $id     = (int) ($arguments['id'] ?? 0);
         $action = (string) ($arguments['action'] ?? '');
-        if ($id <= 0 || !in_array($action, ['done', 'nudge'], true)) {
-            return ['error' => 'Give the reminder id and an action: done or nudge.'];
+        if ($id <= 0 || !in_array($action, ['done', 'nudge', 'reopen'], true)) {
+            return ['error' => 'Give the reminder id and an action: done, nudge or reopen.'];
+        }
+
+        if ($action === 'reopen') {
+            return $this->reminders->reopen($userId, $id)
+                ? ['reopened' => true, 'id' => $id, 'still_open' => $this->reminders->openCount($userId)]
+                : ['error' => 'No approved reminder with id ' . $id . ' to restore (it may be open already, or cancelled).'];
         }
 
         if ($action === 'done') {
