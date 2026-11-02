@@ -6,6 +6,16 @@ Four containers: **caddy** (web server, automatic HTTPS) → **php** (PHP 8.4 FP
 
 ## 1. Server (once)
 - Ubuntu/Debian VPS in Europe, 2 GB RAM is plenty. SSH keys only, no password login, firewall allowing 22 (or your SSH port), 80, 443 (tcp) and 443 (udp). Install Docker Engine + the compose plugin from Docker's own apt repository.
+- Check it is a KVM machine (`systemd-detect-virt` prints `kvm`), then add **swap** so a memory spike slows things down instead of killing the database or a container. `free -h` first: skip this if the image already has swap. If `fallocate` fails on your filesystem, make the file with `sudo dd if=/dev/zero of=/swapfile bs=1M count=2048` instead.
+  ```bash
+  sudo fallocate -l 2G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  free -h    # should now show 2 GB of swap
+  ```
+  Swap is a safety net, not extra memory: if `free -h` shows it in constant use, move to a bigger plan. Without swap (some providers refuse it) give the containers memory limits instead.
 - Put both repos side by side:
   ```bash
   sudo mkdir -p /srv/kachow && cd /srv/kachow
