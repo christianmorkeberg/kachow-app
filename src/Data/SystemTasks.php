@@ -303,6 +303,64 @@ final class SystemTasks
     }
 
     /**
+     * How long a job may go without reporting before it counts as stopped: twice its interval (at least 15 minutes) for an
+     * every-N-minutes job, 30 hours for a daily one, 80 hours for a weekday one (over a weekend), 8 days for a weekly one.
+     */
+    public static function staleAfterMinutes(string $frequency, ?int $intervalMinutes): int
+    {
+        return match ($frequency) {
+            'minutes'  => max(15, 2 * max(1, (int) $intervalMinutes)),
+            'daily'    => 30 * 60,
+            'weekdays' => 80 * 60,
+            default    => 8 * 24 * 60,
+        };
+    }
+
+    /**
+     * Minutes since a job's last run when that is longer than it may go (it has stopped), else null. Paused jobs, and jobs
+     * that never reported, are not judged.
+     *
+     * @param array<string, mixed> $task a listAll() row
+     */
+    public static function overdueMinutes(array $task, ?DateTimeImmutable $now = null): ?int
+    {
+        if ($task['status'] === 'paused' || $task['last_run_at'] === null) {
+            return null;
+        }
+        $now  ??= new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $since  = intdiv($now->getTimestamp() - (new DateTimeImmutable((string) $task['last_run_at'], new DateTimeZone('UTC')))->getTimestamp(), 60);
+
+        return $since > self::staleAfterMinutes((string) $task['frequency'], $task['interval_minutes']) ? $since : null;
+    }
+
+    /** "20 min", "5 h", "3 days" */
+    public static function ago(int $minutes): string
+    {
+        return $minutes < 90 ? $minutes . ' min' : ($minutes < 48 * 60 ? (int) round($minutes / 60) . ' h' : (int) round($minutes / 1440) . ' days');
+    }
+
+    /**
+     * The jobs that have stopped (see overdueMinutes) — what the warning banner and the card show.
+     *
+     * @return list<array{key:string, label:string, minutes:int, since:string, schedule:string}>
+     */
+    public function stale(?DateTimeImmutable $now = null): array
+    {
+        $out = [];
+        foreach ($this->listAll() as $t) {
+            $m = self::overdueMinutes($t, $now);
+            if ($m !== null) {
+                $out[] = [
+                    'key' => $t['key'], 'label' => $t['label'], 'minutes' => $m, 'since' => self::ago($m),
+                    'schedule' => ScheduledTasks::describeSchedule($t['frequency'], $t['time_of_day'], $t['day_of_week'], $t['interval_minutes']),
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * The system section of the scheduled-tasks card.
      *
      * @param list<array<string, mixed>> $tasks from listAll()
@@ -327,6 +385,8 @@ final class SystemTasks
                 'last_status' => $t['last_status'],
                 'last_ms'     => $t['last_duration_ms'],
                 'last_output' => $t['last_output'],
+                // Set when the job has stopped: "3 days" since it last reported (the card shows a warning).
+                'overdue'     => ($m = self::overdueMinutes($t)) !== null ? self::ago($m) : null,
             ];
         }
 

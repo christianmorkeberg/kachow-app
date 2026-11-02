@@ -1,3 +1,6 @@
+# THE cron list for every Kachow job (installed by the Docker cron container, or on a normal server with:
+#   sed 's#/var/www/app#/path/to/kachow-app#' docker/crontab | crontab -
+# Keep this file complete: installing it replaces the whole crontab.
 # Same schedule as the old host. Output is discarded like before; read the app's own logs for problems.
 *     * * * *  php /var/www/app/bin/scheduled-tasks-cron.php  >/dev/null 2>&1
 *     * * * *  php /var/www/app/bin/thermostat-probe-cron.php >/dev/null 2>&1

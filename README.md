@@ -131,13 +131,18 @@ php bin/routing-test.php      # sanity-check tool routing (no DB/API needed)
 ```
 
 Serve the [`kachow-web`](https://github.com/christianmorkeberg/kachow-web) front-end
-(its `bootstrap.php` autoloads this repo). Schedule the crons:
+(its `bootstrap.php` autoloads this repo). Schedule the crons — ONE list, [`docker/crontab`](docker/crontab), covers every job
+(scheduled tasks and the system jobs: reminders, notifications, home state, nightly sync …). On a normal server install it with its
+path swapped for yours; this REPLACES the whole crontab, which is what you want (a hand-edit that replaced the list once silenced
+every job for days):
 
-```cron
-0,30 * * * *  php /path/to/kachow-app/bin/notify-cron.php        >/dev/null 2>&1   # every 30 min
-*/5  * * * *  php /path/to/kachow-app/bin/reminders-cron.php     >/dev/null 2>&1   # one-off reminders
-30 4 * * *    php /path/to/kachow-app/bin/quick-actions-cron.php >/dev/null 2>&1   # daily starters
+```bash
+sed 's#/var/www/app#/path/to/kachow-app#' docker/crontab | crontab -
+crontab -l    # check
 ```
+
+The developer is warned (a banner at the top of the app, and a line on the system-tasks card) when a job has not reported for
+longer than it should, so a lost entry shows up the same day. In Docker the same file is loaded by the `cron` container.
 
 ## Tests
 
