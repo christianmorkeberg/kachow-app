@@ -1,0 +1,10 @@
+# Same schedule as the old host. Output is discarded like before; read the app's own logs for problems.
+*     * * * *  php /var/www/app/bin/scheduled-tasks-cron.php  >/dev/null 2>&1
+*     * * * *  php /var/www/app/bin/thermostat-probe-cron.php >/dev/null 2>&1
+*/5   * * * *  php /var/www/app/bin/reminders-cron.php        >/dev/null 2>&1
+*/5   * * * *  php /var/www/app/bin/home-state-cron.php       >/dev/null 2>&1
+0,30  * * * *  php /var/www/app/bin/notify-cron.php           >/dev/null 2>&1
+10    4 * * 0  php /var/www/app/bin/memory-cleanup-cron.php   >/dev/null 2>&1
+15    4 * * *  php /var/www/app/bin/home-sync-cron.php        >/dev/null 2>&1
+30    4 * * *  php /var/www/app/bin/quick-actions-cron.php    >/dev/null 2>&1
+40    4 * * *  php /var/www/app/bin/location-freeze-cron.php  >/dev/null 2>&1

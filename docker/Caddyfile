@@ -1,0 +1,19 @@
+# Caddy gets and renews the HTTPS certificate by itself once SITE_ADDRESS is a real hostname that points at this server.
+{$SITE_ADDRESS:localhost} {
+	root * /var/www/web
+	encode zstd gzip
+
+	# Never serve dotfiles (.git, .github, .env …) or the repo's docs.
+	@hidden path_regexp hidden (^|/)\.
+	respond @hidden 404
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+	}
+
+	php_fastcgi php:9000
+	file_server
+}

@@ -1,0 +1,65 @@
+# Kachow on a VPS: Caddy (HTTPS) → PHP-FPM → MariaDB, plus a cron container.
+# Expected layout on the server (the two repos side by side):
+#   /srv/kachow/kachow-app   (this repo; holds .env and vendor/)
+#   /srv/kachow/kachow-web   (the webroot)
+# Run every command from kachow-app/docker.  See README.md in this folder.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../kachow-web:/var/www/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [php]
+
+  php:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    image: kachow-php:latest
+    restart: unless-stopped
+    environment:
+      ASSISTANT_APP_PATH: /var/www/app
+    volumes:
+      - ..:/var/www/app
+      - ../../kachow-web:/var/www/web
+    depends_on:
+      db: { condition: service_healthy }
+
+  cron:
+    image: kachow-php:latest
+    restart: unless-stopped
+    command: ["crond", "-f", "-l", "8", "-L", "/dev/stdout"]
+    environment:
+      ASSISTANT_APP_PATH: /var/www/app
+    volumes:
+      - ..:/var/www/app
+      - ../../kachow-web:/var/www/web
+    depends_on:
+      db: { condition: service_healthy }
+
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--innodb-buffer-pool-size=256M"]
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set it in docker/.env}
+      MARIADB_DATABASE: ${DB_NAME:?set it in docker/.env}
+      MARIADB_USER: ${DB_USER:?set it in docker/.env}
+      MARIADB_PASSWORD: ${DB_PASS:?set it in docker/.env}
+      TZ: UTC
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
