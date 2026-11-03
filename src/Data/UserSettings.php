@@ -430,7 +430,7 @@ final class UserSettings
 
     /** The cards the start screen / rail can show (see the home_cards setting). */
     public const HOME_CARD_KEYS = [
-        'work_hours', 'work_week', 'work_log', 'location', 'calendar', 'cycle', 'books', 'moms', 'cash', 'pl', 'mileage', 'scheduled_tasks', 'feedback', 'dev_ideas', 'home', 'timer',
+        'work_hours', 'work_week', 'work_log', 'location', 'calendar', 'cycle', 'books', 'moms', 'cash', 'pl', 'mileage', 'scheduled_tasks', 'feedback', 'dev_ideas', 'home', 'timer', 'loan_pack', 'udlaeg',
     ];
 
     /** The start-cards card: which cards are chosen (in order); the card lets the user pick and order them. @return array<string, mixed> */
