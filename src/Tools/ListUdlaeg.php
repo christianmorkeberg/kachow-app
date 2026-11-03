@@ -22,7 +22,7 @@ final class ListUdlaeg implements Tool
     {
         return 'Opens the UDLÆG card: every expense the user paid with PRIVATE money, which are still owed to them and which have been paid back (with the date), with totals per '
             . 'currency. Use for "vis mine udlæg", "hvad skylder firmaet mig", "what does the company owe me", "which expenses did I pay privately", "list my udlæg". '
-            . 'The card is interactive (filter, mark paid back), so say in one line what is owed — do not read the list out. To mark ONE as paid back from chat use mark_expense_reimbursed.';
+            . 'The card is interactive (filter, mark paid back), so say in one line what is owed — do not read the list out. To mark ONE as paid back from chat use mark_expense_reimbursed. When replying in English say "paid privately" / "out-of-pocket", never the Danish word "udlæg".';
     }
 
     public function parameters(): array

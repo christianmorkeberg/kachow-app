@@ -31,7 +31,7 @@ final class MarkExpenseReimbursed implements Tool
             . 'for an outlay they covered from private money ("I paid myself back for the parking receipt", '
             . '"udlægget er refunderet"). Also flags it as privately paid if it wasn\'t already. Needs the '
             . 'receipt id: if you don\'t have it from a recent card or get_expenses, look it up first — do not '
-            . 'guess. The expense stays a deductible business cost; this only records the reimbursement.';
+            . 'guess. The expense stays a deductible business cost; this only records the reimbursement. When replying in English say "paid privately" / "out-of-pocket", never the Danish word "udlæg".';
     }
 
     public function parameters(): array

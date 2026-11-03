@@ -36,7 +36,7 @@ final class AddExpense implements Tool
             . 'money (an udlæg, "jeg lagde ud for …") — it stays a normal deductible expense but is tracked '
             . 'as owed back to them until reimbursed. It becomes a draft shown as a card for the user to '
             . 'confirm — so you do not need every field. When the expense comes from an EMAIL (a receipt or invoice mail) with a PDF or photo '
-            . 'attached (read_email lists "attachments"), call attach_email_file afterwards with the new id so the document is saved with it. Categories: ' . implode(', ', Receipts::CATEGORIES) . '.';
+            . 'attached (read_email lists "attachments"), call attach_email_file afterwards with the new id so the document is saved with it. Categories: ' . implode(', ', Receipts::CATEGORIES) . '. When replying in English say "paid privately" / "out-of-pocket", never the Danish word "udlæg".';
     }
 
     public function parameters(): array
