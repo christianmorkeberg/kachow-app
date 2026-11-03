@@ -13,6 +13,7 @@ use App\Data\BalanceItems;
 use App\Data\BalanceSheet;
 use App\Data\Ledger;
 use App\Data\LoanPack;
+use App\Data\Receipts;
 use App\Data\LoanReports;
 use App\Data\UserSettings;
 
@@ -157,6 +158,23 @@ check('key figures', $card['key']['omsaetning'] === '18000,00' && $card['key']['
 check('download links carry the year', str_contains($card['pdf_url'], 'format=pdf') && str_contains($card['zip_url'], 'year=2025') && str_contains(urldecode($card['csv_url']), '"year":2025'));
 check('balance items in force are listed', count($card['items']) >= 1);
 check('export build (no budget) has seven sections', count($lp->build(1, 2025)['sections']) === 7);
+
+echo "11) udlæg list: owed first, then repaid; per currency; tags on expense rows\n";
+$db->exec("INSERT INTO receipts (user_id,status,vendor,purchased_at,total,vat,currency,paid_privately,reimbursed_at) VALUES
+    (1,'confirmed','Amazon','2025-03-03',50,0,'EUR',1,NULL),
+    (1,'confirmed','Elgiganten','2025-04-04',700,140,'DKK',1,'2025-05-05'),
+    (1,'draft','Kladde udlæg','2025-04-05',9,1,'DKK',1,NULL)");
+$rc = new Receipts($db);
+$ul = $rc->udlaegList(1);
+check('udlæg rows: the earlier private Taxa + Amazon (owed) + Elgiganten (repaid); drafts excluded', count($ul['items']) === 3, json_encode(array_column($ul['items'], 'vendor')));
+check('owed first', $ul['items'][0]['status'] === 'owed' && $ul['items'][2]['status'] === 'reimbursed', json_encode(array_column($ul['items'], 'status')));
+$owed = array_column($ul['owed'], 'total', 'currency');
+check('owed per currency, never blended: DKK 500 (Taxa), EUR 50', $owed === ['DKK' => 500.0, 'EUR' => 50.0] || $owed === ['EUR' => 50.0, 'DKK' => 500.0], json_encode($ul['owed']));
+check('repaid DKK 700', array_column($ul['repaid'], 'total', 'currency') === ['DKK' => 700.0], json_encode($ul['repaid']));
+$tags = array_column($rc->summary(1, '2025-01-01', '2025-12-31')['items'], 'udlaeg', 'vendor');
+check('expense rows carry the tag', $tags['Taxa'] === 'owed' && $tags['Elgiganten'] === 'reimbursed' && $tags['Staples'] === '', json_encode($tags));
+$rc->unreimburse(1, (int) $db->query("SELECT id FROM receipts WHERE vendor='Elgiganten'")->fetchColumn());
+check('undo makes it owed again', count($rc->udlaegList(1)['owed']) === 2 && array_column($rc->udlaegList(1)['owed'], 'total', 'currency')['DKK'] === 1200.0);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

@@ -21,7 +21,7 @@ final class ExportData implements Tool
         'get_work_hours', 'get_work_log', 'get_expenses', 'get_income', 'get_mileage', 'get_trips', 'get_stays', 'get_workout_history',
         'get_calendar_events', 'get_vinyls', 'get_books', 'get_wishlist', 'get_shopping_list', 'get_owner_draws', 'get_moms', 'get_cash',
         'get_thermostat_probe', 'get_ledger', 'get_trial_balance', 'get_balance_sheet',
-        'get_invoice_overview', 'get_moms_by_quarter', 'get_budget', 'get_loan_pack',
+        'get_invoice_overview', 'get_moms_by_quarter', 'get_budget', 'get_loan_pack', 'list_udlaeg',
     ];
 
     /** Export options the model sometimes puts inside args by mistake. */

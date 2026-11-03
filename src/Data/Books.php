@@ -157,6 +157,7 @@ final class Books
                     'total'    => $i['total'],
                     'currency' => $i['currency'],
                     'category' => $i['category'],
+                    'udlaeg'   => $i['udlaeg'],
                 ], array_slice($expSummary['items'], 0, 20)),
             ],
             'draws'    => [

@@ -76,6 +76,7 @@ final class GetExpenses implements Tool
                 'currency' => $i['currency'],
                 'category' => $i['category'],
                 'note'     => $i['note'],
+                'udlaeg'   => $i['udlaeg'],
             ], $s['items']),
         ];
 

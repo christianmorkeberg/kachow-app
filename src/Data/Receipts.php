@@ -183,6 +183,56 @@ final class Receipts
         ];
     }
 
+    /** Undo a reimbursement (marked by mistake): the expense is owed to the owner again. */
+    public function unreimburse(int $userId, int $id): bool
+    {
+        $stmt = $this->db->prepare('UPDATE receipts SET reimbursed_at = NULL WHERE id = :id AND user_id = :u AND paid_privately = 1');
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+
+        return $this->get($userId, $id) !== null;
+    }
+
+    /**
+     * Every confirmed expense paid with private money (udlæg), owed ones first, then reimbursed (newest first); totals per currency (never blended)
+     * of what is still owed and what has been paid back. Any currency.
+     *
+     * @return array{items:list<array<string,mixed>>, owed:list<array{currency:string,total:float,count:int}>, repaid:list<array{currency:string,total:float,count:int}>}
+     */
+    public function udlaegList(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT id, vendor, purchased_at, total, currency, category, reimbursed_at FROM receipts
+             WHERE user_id = :u AND status = 'confirmed' AND paid_privately = 1
+             ORDER BY (reimbursed_at IS NULL) DESC, purchased_at DESC, id DESC LIMIT 500"
+        );
+        $stmt->execute([':u' => $userId]);
+        $items = [];
+        $sum   = ['owed' => [], 'repaid' => []];
+        foreach ($stmt->fetchAll() as $r) {
+            $cur  = (string) ($r['currency'] ?? 'DKK') ?: 'DKK';
+            $done = ($r['reimbursed_at'] ?? null) !== null && $r['reimbursed_at'] !== '';
+            $k    = $done ? 'repaid' : 'owed';
+            $sum[$k][$cur] ??= ['currency' => $cur, 'total' => 0.0, 'count' => 0];
+            $sum[$k][$cur]['total'] += (float) $r['total'];
+            $sum[$k][$cur]['count']++;
+            $items[] = [
+                'id' => (int) $r['id'], 'vendor' => (string) ($r['vendor'] ?? ''), 'date' => (string) ($r['purchased_at'] ?? ''), 'total' => round((float) $r['total'], 2),
+                'currency' => $cur, 'category' => (string) ($r['category'] ?? ''), 'status' => $done ? 'reimbursed' : 'owed', 'reimbursed_at' => $done ? (string) $r['reimbursed_at'] : '',
+            ];
+        }
+        $fmt = static fn (array $m): array => array_values(array_map(static fn (array $x): array => ['currency' => $x['currency'], 'total' => round($x['total'], 2), 'count' => $x['count']], $m));
+
+        return ['items' => $items, 'owed' => $fmt($sum['owed']), 'repaid' => $fmt($sum['repaid'])];
+    }
+
+    /** The Udlæg card (kind: udlaeg): the full list, owed and repaid. @return array<string, mixed> */
+    public function udlaegCard(int $userId): array
+    {
+        $l = $this->udlaegList($userId);
+
+        return ['kind' => 'udlaeg', 'title' => 'Udlæg'] + $l;
+    }
+
     /** Marks a privately-paid expense (udlæg) reimbursed on a date (defaults today). */
     public function markReimbursed(int $userId, int $id, ?string $date = null): bool
     {
@@ -341,7 +391,7 @@ final class Receipts
         }
 
         $stmt = $this->db->prepare(
-            'SELECT id, vendor, purchased_at, total, vat, currency, category, note, status
+            'SELECT id, vendor, purchased_at, total, vat, currency, category, note, status, paid_privately, reimbursed_at
              FROM receipts WHERE ' . implode(' AND ', $where) . '
              ORDER BY purchased_at DESC, id DESC LIMIT 300'
         );
@@ -374,6 +424,7 @@ final class Receipts
                 'currency' => $cur,
                 'category' => $cat,
                 'note'     => $r['note'] !== null ? (string) $r['note'] : '',
+                'udlaeg'   => (int) ($r['paid_privately'] ?? 0) !== 1 ? '' : (($r['reimbursed_at'] ?? null) !== null && $r['reimbursed_at'] !== '' ? 'reimbursed' : 'owed'),
             ];
         }
 
