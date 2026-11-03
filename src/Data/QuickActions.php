@@ -58,7 +58,8 @@ class QuickActions
             }
         };
 
-        foreach ($this->frequent($userId, $max) as $f) {
+        // Real repeats lead but never fill every slot — leave room for the AI-personalised set.
+        foreach ($this->frequent($userId, max(1, intdiv($max, 2))) as $f) {
             $take($f);
         }
         foreach ($this->cached($userId) as $c) {
@@ -109,7 +110,7 @@ class QuickActions
                 continue;
             }
             $key = self::normalize($text);
-            if ($key === '') {
+            if ($key === '' || self::isFiller($key)) {
                 continue;
             }
             $counts[$key] = ($counts[$key] ?? 0) + 1;
@@ -215,6 +216,15 @@ class QuickActions
         }
 
         return $out;
+    }
+
+    /** Retry/confirmation replies ("try again", "prøv igen", "yes") are not useful as starters. */
+    private static function isFiller(string $key): bool
+    {
+        return (bool) preg_match(
+            '/^(try again|retry|again|yes|no|ok|okay|thanks|thank you|go ahead|do it|prøv igen|igen|ja|nej|tak|det er fint|gør det)$/u',
+            $key
+        );
     }
 
     private static function normalize(string $text): string
