@@ -21,7 +21,11 @@ final class QuickActionGenerator
         . 'user writes in; action-oriented and specific; varied (do not repeat a topic); natural with no '
         . 'ending punctuation, EXCEPT a chip that needs the user to add detail, which must end with "…" '
         . '(e.g. "Tilføj til indkøbslisten…" or "Log a workout…"). Prefer things the user actually does; '
-        . 'you may include one useful capability they have not tried. Return ONLY a JSON array of strings.';
+        . 'you may include one useful capability they have not tried. Never copy a message word for word; '
+        . 'never suggest retrying or confirming ("try again", "yes", "ok"); no two chips about the same '
+        . 'thing (including different wordings of it). If PREVIOUS CHIPS are given, keep the ones that '
+        . 'still fit what the user does and replace stale or repetitive ones, so the set evolves. '
+        . 'Return ONLY a JSON array of strings.';
 
     private const CAPABILITIES =
         'shopping & to-do lists, workouts & training plans, calendar, weather, expenses/receipts, '
@@ -36,18 +40,28 @@ final class QuickActionGenerator
     /**
      * Generates and stores starters for a user. Returns the stored list (or [] if
      * there wasn't enough history, or generation failed — the screen then falls back
-     * to frequent/default chips).
+     * to the seed defaults).
      *
      * @return array<int, string>
      */
     public function generateFor(int $userId): array
     {
-        $recent = $this->quickActions->recentPrompts($userId, 40);
+        // First run (no earlier set): read a wide slice of history. After that, only the last few
+        // days — the previous chips carry what was learned before.
+        $previous = $this->quickActions->previous($userId);
+        $recent   = $previous === []
+            ? $this->quickActions->recentPrompts($userId, 150, 30)
+            : $this->quickActions->recentPrompts($userId, 80, 4);
+        if (count($recent) < 3 && $previous !== []) {
+            $recent = $this->quickActions->recentPrompts($userId, 150, 30); // quiet week: look further back
+        }
         if (count($recent) < 3) {
             return []; // too little history to personalise — leave the defaults
         }
 
-        $prompt = 'CAPABILITIES: ' . self::CAPABILITIES . "\n\nRECENT MESSAGES (newest first):\n- "
+        $prompt = 'CAPABILITIES: ' . self::CAPABILITIES
+            . ($previous === [] ? '' : "\n\nPREVIOUS CHIPS:\n- " . implode("\n- ", $previous))
+            . "\n\nRECENT MESSAGES (newest first):\n- "
             . implode("\n- ", array_map(static fn (string $s): string => mb_substr($s, 0, 120), $recent));
 
         try {

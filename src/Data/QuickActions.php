@@ -40,9 +40,9 @@ class QuickActions
     }
 
     /**
-     * Blended suggestions: real repeats lead (what "based on how I actually use it"
-     * means), then the AI-personalised set fills remaining slots, then defaults.
-     * De-duplicated (normalized) and capped.
+     * The chips for the empty chat screen: the AI-written set built from the user's chat
+     * history by bin/quick-actions-cron.php, or the seed defaults until that exists
+     * (a new user, or a cron that has stopped for longer than CACHE_MAX_AGE_DAYS).
      *
      * @return array<int, string>
      */
@@ -50,83 +50,16 @@ class QuickActions
     {
         $out  = [];
         $seen = [];
-        $take = static function (string $text) use (&$out, &$seen, $max): void {
-            $key = self::normalize($text);
-            if ($key !== '' && !isset($seen[$key]) && count($out) < $max) {
-                $seen[$key] = true;
-                $out[]      = $text;
+        foreach ([$this->cached($userId), self::DEFAULTS] as $source) {
+            foreach ($source as $text) {
+                $key = self::normalize($text);
+                if ($key !== '' && !isset($seen[$key]) && count($out) < $max) {
+                    $seen[$key] = true;
+                    $out[]      = $text;
+                }
             }
-        };
-
-        // Real repeats lead but never fill every slot — leave room for the AI-personalised set.
-        foreach ($this->frequent($userId, max(1, intdiv($max, 2))) as $f) {
-            $take($f);
-        }
-        foreach ($this->cached($userId) as $c) {
-            $take($c);
-        }
-        foreach (self::DEFAULTS as $d) {
-            $take($d);
-        }
-
-        return $out;
-    }
-
-    /**
-     * The user's most-repeated prompts, most-used first. Grouped by the SAME
-     * normalize() used for de-duplication elsewhere (lowercased, collapsed
-     * whitespace, trailing punctuation stripped) — done in PHP rather than SQL
-     * so "What's on the shopping list?" and "what's on the shopping list" count
-     * as the same ask instead of two singletons that never reach $minCount.
-     *
-     * @return array<int, string>
-     */
-    public function frequent(int $userId, int $limit = 6, int $minCount = 2, int $minLen = 8, int $maxLen = 80, int $scanLimit = 300): array
-    {
-        $limit    = max(1, $limit);
-        $minCount = max(2, $minCount);
-        $minLen   = max(1, $minLen);
-        $maxLen   = max($minLen, $maxLen);
-        $scanLimit = max($limit, $scanLimit);
-
-        $stmt = $this->db->prepare(
-            "SELECT m.content
-             FROM messages m
-             JOIN conversations c ON c.id = m.conversation_id
-             WHERE c.user_id = :uid AND m.role = 'user'
-             ORDER BY m.id DESC
-             LIMIT {$scanLimit}"
-        );
-        $stmt->execute([':uid' => $userId]);
-
-        // Count occurrences per normalized key; keep the newest literal wording
-        // (rows arrive newest-first) to display, so the chip reads naturally.
-        $counts  = [];
-        $display = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $text = trim((string) $row['content']);
-            $len  = mb_strlen($text);
-            if ($len < $minLen || $len > $maxLen) {
-                continue;
-            }
-            $key = self::normalize($text);
-            if ($key === '' || self::isFiller($key)) {
-                continue;
-            }
-            $counts[$key] = ($counts[$key] ?? 0) + 1;
-            if (!isset($display[$key])) {
-                $display[$key] = $text;
-            }
-        }
-
-        $frequent = array_filter($counts, static fn (int $n): bool => $n >= $minCount);
-        arsort($frequent);
-
-        $out = [];
-        foreach (array_keys($frequent) as $key) {
-            $out[] = $display[$key];
-            if (count($out) >= $limit) {
-                break;
+            if ($out !== []) {
+                break; // one source only — never mix AI chips with the seed set
             }
         }
 
@@ -140,9 +73,26 @@ class QuickActions
      */
     public function cached(int $userId): array
     {
+        return $this->load($userId, true);
+    }
+
+    /**
+     * The last stored set regardless of age — fed back to the generator so the chips evolve
+     * from day to day instead of being rewritten from scratch.
+     *
+     * @return array<int, string>
+     */
+    public function previous(int $userId): array
+    {
+        return $this->load($userId, false);
+    }
+
+    /** @return array<int, string> */
+    private function load(int $userId, bool $freshOnly): array
+    {
         $stmt = $this->db->prepare(
-            'SELECT suggestions FROM quick_action_cache
-             WHERE user_id = :u AND generated_at >= (NOW() - INTERVAL ' . self::CACHE_MAX_AGE_DAYS . ' DAY)'
+            'SELECT suggestions FROM quick_action_cache WHERE user_id = :u'
+            . ($freshOnly ? ' AND generated_at >= (NOW() - INTERVAL ' . self::CACHE_MAX_AGE_DAYS . ' DAY)' : '')
         );
         $stmt->execute([':u' => $userId]);
         $json = $stmt->fetchColumn();
@@ -193,25 +143,36 @@ class QuickActions
      *
      * @return array<int, string>
      */
-    public function recentPrompts(int $userId, int $limit = 40): array
+    public function recentPrompts(int $userId, int $limit = 40, ?int $days = null): array
     {
-        $limit = max(1, min(100, $limit));
+        $limit = max(1, min(300, $limit));
+        $since = $days === null ? '' : ' AND m.created_at >= :since';
         $stmt  = $this->db->prepare(
             "SELECT m.content, MAX(m.id) AS mid
              FROM messages m JOIN conversations c ON c.id = m.conversation_id
              WHERE c.user_id = :u AND m.role = 'user'
-               AND CHAR_LENGTH(TRIM(m.content)) BETWEEN 3 AND 120
+               AND CHAR_LENGTH(TRIM(m.content)) BETWEEN 3 AND 120{$since}
              GROUP BY LOWER(TRIM(m.content))
              ORDER BY mid DESC
-             LIMIT " . $limit
+             LIMIT " . ($limit * 2)
         );
-        $stmt->execute([':u' => $userId]);
+        $params = [':u' => $userId];
+        if ($days !== null) {
+            $params[':since'] = gmdate('Y-m-d H:i:s', time() - $days * 86400);
+        }
+        $stmt->execute($params);
 
-        $out = [];
+        $out  = [];
+        $seen = [];
         foreach ($stmt->fetchAll() as $row) {
-            $t = trim((string) $row['content']);
-            if ($t !== '') {
-                $out[] = $t;
+            $t   = trim((string) $row['content']);
+            $key = self::normalize($t);
+            if ($key !== '' && !isset($seen[$key]) && !self::isFiller($key)) {
+                $seen[$key] = true;
+                $out[]      = $t;
+                if (count($out) >= $limit) {
+                    break;
+                }
             }
         }
 

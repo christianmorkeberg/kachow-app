@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Runs once a day (early morning). For every user with enough history it asks a
  * cheap model for ~6 fresh, personalised starters in the user's own language and
  * caches them (quick_action_cache). The empty-screen endpoint prefers this cache
- * and falls back to frequent/default chips when a user has no (fresh) row.
+ * and falls back to the seed defaults when a user has no (fresh) row.
  *
  * Safe to re-run; it just overwrites. Exits quietly if Gemini isn't configured.
  */

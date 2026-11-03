@@ -47,8 +47,9 @@ final class TestableQuickActions extends QuickActions
 
 $db = new PDO('sqlite::memory:');
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$db->sqliteCreateFunction('CHAR_LENGTH', static fn (?string $s): int => mb_strlen((string) $s)); // MySQL function
 $db->exec("CREATE TABLE conversations (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL)");
-$db->exec("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL)");
+$db->exec("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
 
 $db->exec("INSERT INTO conversations (id, user_id) VALUES (1, 1), (2, 1)");
 
@@ -57,42 +58,32 @@ $insertBot  = $db->prepare("INSERT INTO messages (conversation_id, role, content
 
 $tasks = new TestableQuickActions($db);
 
-echo "1) frequent() groups near-duplicate phrasing (punctuation/case vary) as ONE repeat\n";
-foreach (["What's on the shopping list?", "what's on the shopping list", "what's on the shopping list"] as $c) {
+echo "1) recentPrompts() drops retry/confirm filler and groups repeats\n";
+foreach (["What's on the shopping list?", "what's on the shopping list", 'prøv igen', 'Try again', 'ok', 'Log a run 5 km'] as $c) {
     $insertUser->execute([':cid' => 1, ':c' => $c]);
 }
 $insertBot->execute([':cid' => 1, ':c' => "Here's your list: milk, eggs."]);
+$recent = $tasks->recentPrompts(1, 40);
+check('filler is gone', !in_array('prøv igen', $recent, true) && !in_array('Try again', $recent, true) && !in_array('ok', $recent, true), json_encode($recent));
+check('repeat appears once, newest wording', count(array_filter($recent, static fn (string $s): bool => stripos($s, 'shopping list') !== false)) === 1, json_encode($recent));
+check('assistant replies are not included', !in_array("Here's your list: milk, eggs.", $recent, true), json_encode($recent));
 
-$frequent = $tasks->frequent(1);
-check('exactly one grouped entry', count($frequent) === 1, json_encode($frequent));
-check('display text is the newest literal wording', $frequent[0] === "what's on the shopping list", json_encode($frequent));
+echo "2) recentPrompts() day window\n";
+$db->exec("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (1, 'user', 'Old question about vinyl', datetime('now', '-20 days'))");
+check('4-day window excludes the 20-day-old message', !in_array('Old question about vinyl', $tasks->recentPrompts(1, 40, 4), true));
+check('30-day window includes it', in_array('Old question about vinyl', $tasks->recentPrompts(1, 40, 30), true));
 
-echo "2) frequent() ignores a single one-off ask (below minCount)\n";
-$insertUser->execute([':cid' => 2, ':c' => 'Did it rain in Odense yesterday']);
-check('still just the shopping-list repeat', count($tasks->frequent(1)) === 1, json_encode($tasks->frequent(1)));
-
-echo "3) frequent() respects length bounds (too short is dropped)\n";
-$insertUser->execute([':cid' => 2, ':c' => 'hi']);
-$insertUser->execute([':cid' => 2, ':c' => 'hi']);
-check('short "hi" repeat is NOT picked up (minLen)', !in_array('hi', $tasks->frequent(1), true), json_encode($tasks->frequent(1)));
-
-echo "4) suggestions() blends: real repeats FIRST, then cached AI set, then defaults\n";
+echo "3) suggestions() uses ONE source: the AI set when present\n";
 $tasks->setFakeCache(['Log a run…', 'How much moms do I owe?']);
+check('only the AI chips, no defaults mixed in', $tasks->suggestions(1, 6) === ['Log a run…', 'How much moms do I owe?'], json_encode($tasks->suggestions(1, 6)));
 
-$blended = $tasks->suggestions(1, 6);
-check('frequent chip leads', $blended[0] === "what's on the shopping list", json_encode($blended));
-check('cached AI chip follows', in_array('Log a run…', $blended, true), json_encode($blended));
-check('a default chip still fills a remaining slot', in_array("What's on my calendar today?", $blended, true), json_encode($blended));
+echo "4) suggestions() de-duplicates and caps\n";
+$tasks->setFakeCache(['Log a run', 'log a run…', 'A', 'B', 'C', 'D', 'E']);
+check('normalized duplicate dropped, capped at 6', count($tasks->suggestions(1, 6)) === 6 && count(array_filter($tasks->suggestions(1, 6), static fn (string $s): bool => stripos($s, 'log a run') === 0)) === 1, json_encode($tasks->suggestions(1, 6)));
 
-echo "5) suggestions() de-duplicates a cached chip that matches a default (normalized)\n";
-$tasks->setFakeCache(['Log a workout']); // no ellipsis — same ask as a DEFAULT
-$blended2 = $tasks->suggestions(1, 6);
-$count    = count(array_filter($blended2, static fn (string $s): bool => stripos($s, 'log a workout') === 0));
-check('"Log a workout" appears only once despite cache+default both having it', $count === 1, json_encode($blended2));
-
-echo "6) a fresh user with no history (and no cache) gets the default set\n";
+echo "5) no AI set yet -> the seed defaults\n";
 $tasks->setFakeCache([]);
-check('defaults returned for an unseen user', $tasks->suggestions(99) === QuickActions::DEFAULTS, json_encode($tasks->suggestions(99)));
+check('defaults returned', $tasks->suggestions(1) === QuickActions::DEFAULTS, json_encode($tasks->suggestions(1)));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
