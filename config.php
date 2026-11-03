@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+// The shared host's `php` can be the CGI binary, which doesn't define the CLI stream constants;
+// the cron scripts log with fwrite(STDERR, ...), so define them when missing.
+if (!defined('STDERR')) {
+    define('STDERR', fopen('php://stderr', 'w'));
+}
+if (!defined('STDOUT')) {
+    define('STDOUT', fopen('php://stdout', 'w'));
+}
+
 /**
  * Application bootstrap: loads secrets from .env into $_ENV.
  *
