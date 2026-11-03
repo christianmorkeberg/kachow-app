@@ -222,6 +222,10 @@ final class DataExport
     public static function label(string $column): string
     {
         $da = ['bilagsnr' => 'Bilagsnr.', 'ex_moms' => 'Beløb ekskl. moms', 'i_alt' => 'Beløb inkl. moms', 'beloeb' => 'Beløb', 'sektion' => 'Sektion',
+            'faktura' => 'Faktura', 'kunde' => 'Kunde', 'faktureret' => 'Faktureret', 'udestaaende' => 'Udestående', 'dage_siden_faktura' => 'Dage siden faktura',
+            'kvartal' => 'Kvartal', 'koebsmoms' => 'Købsmoms', 'til_betaling' => 'Til betaling', 'betalt_til_skat' => 'Betalt til SKAT', 'maaned' => 'Måned',
+            'indtaegter' => 'Indtægter', 'get_invoice_overview' => 'Fakturaoversigt', 'get_moms_by_quarter' => 'Moms pr. kvartal', 'get_budget' => 'Budget (12 måneder)',
+            'get_loan_pack' => 'Regnskabspakke',
             'get_ledger' => 'Kassekladde', 'get_trial_balance' => 'Saldobalance', 'get_balance_sheet' => 'Balance (status)'];
         if (isset($da[$column])) {
             return $da[$column];
@@ -245,18 +249,25 @@ final class DataExport
                 $m .= '<div><span>' . $e($k) . '</span> ' . $e($v) . '</div>';
             }
         }
-        $head = '';
-        foreach ($table['columns'] as $i => $c) {
-            $head .= '<th>' . $e($table['labels'][$i] ?? self::label($c)) . '</th>';
+        // One table, or several titled sections (the loan pack): each section is its own table under an h2, starting a new page after the first.
+        $sections = isset($table['sections']) && is_array($table['sections']) ? $table['sections'] : [['title' => '', 'table' => $table]];
+        $tables   = '';
+        foreach ($sections as $n => $sec) {
+            $t    = $sec['table'];
+            $head = '';
+            foreach ($t['columns'] as $i => $c) {
+                $head .= '<th>' . $e($t['labels'][$i] ?? self::label($c)) . '</th>';
+            }
+            $body = '';
+            foreach ($t['rows'] as $row) {
+                $body .= '<tr>' . implode('', array_map(static fn (string $c): string => preg_match('/^\d{2}-\d{2}-\d{4}$/', $c) === 1 ? '<td style="white-space:nowrap">' . $e($c) . '</td>' : '<td>' . $e($c) . '</td>', $row)) . '</tr>';
+            }
+            $foot = isset($t['total']) && $t['total'] !== null
+                ? '<tfoot><tr>' . implode('', array_map(static fn (string $c): string => '<td>' . $e($c) . '</td>', $t['total'])) . '</tr></tfoot>'
+                : '';
+            $tables .= ((string) $sec['title'] !== '' ? '<h2' . ($n > 0 ? ' class="pb"' : '') . '>' . $e((string) $sec['title']) . '</h2>' : '')
+                . '<table><thead><tr>' . $head . '</tr></thead><tbody>' . $body . '</tbody>' . $foot . '</table>';
         }
-        $body = '';
-        foreach ($table['rows'] as $row) {
-            $body .= '<tr>' . implode('', array_map(static fn (string $c): string => preg_match('/^\d{2}-\d{2}-\d{4}$/', $c) === 1 ? '<td style="white-space:nowrap">' . $e($c) . '</td>' : '<td>' . $e($c) . '</td>', $row)) . '</tr>';
-        }
-
-        $foot = isset($table['total']) && $table['total'] !== null
-            ? '<tfoot><tr>' . implode('', array_map(static fn (string $c): string => '<td>' . $e($c) . '</td>', $table['total'])) . '</tr></tfoot>'
-            : '';
         $note = $footer !== '' ? '<p class="note">' . nl2br($e($footer)) . '</p>' : '';
 
         return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . $e($title) . '</title><style>'
@@ -265,9 +276,10 @@ final class DataExport
             . 'table{border-collapse:collapse;width:100%}th,td{padding:6px 9px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}'
             . 'th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#555;border-bottom:2px solid #111}'
             . 'tfoot td{font-weight:700;border-top:2px solid #111;border-bottom:0}.note{color:#555;font-size:12px}'
+            . 'h2{font-size:16px;margin:26px 0 8px}h2.pb{page-break-before:always}'
             . '.bar{margin:0 0 18px}.bar button{font:inherit;padding:8px 14px;border:1px solid #111;background:#fff;border-radius:8px;cursor:pointer}'
             . '@media print{.bar{display:none}body{padding:0}}'
             . '</style></head><body><div class="bar"><button onclick="window.print()">' . $e(self::WORDS[$lang]['print'] ?? 'Print / save as PDF') . '</button></div><h1>' . $e($title) . '</h1><div class="meta">' . $m . '</div>'
-            . '<table><thead><tr>' . $head . '</tr></thead><tbody>' . $body . '</tbody>' . $foot . '</table>' . $note . '</body></html>';
+            . $tables . $note . '</body></html>';
     }
 }

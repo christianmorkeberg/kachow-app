@@ -12,6 +12,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use App\Data\BalanceItems;
 use App\Data\BalanceSheet;
 use App\Data\Ledger;
+use App\Data\LoanReports;
 
 if (!extension_loaded('pdo_sqlite')) {
     fwrite(STDERR, "pdo_sqlite not loaded — re-run with:\n  php -d extension=php_pdo_sqlite bin/ledger-test.php\n");
@@ -46,8 +47,8 @@ $db->exec("INSERT INTO income (user_id,status,doc_number,customer,issued_at,paid
     (2,'booked','X','Anden bruger','2025-02-10','2025-03-01',999,0,999,NULL,NULL)");
 $db->exec("UPDATE income SET currency='EUR' WHERE doc_number='K-2025-004'");
 $db->exec("INSERT INTO receipts (user_id,status,vendor,purchased_at,total,vat,category,file_ref,paid_privately,reimbursed_at) VALUES
-    (1,'confirmed','Staples','2025-01-15',1000,200,'kontor','b.jpg',0,NULL),
-    (1,'confirmed','Taxa','2025-06-02',500,100,'transport',NULL,1,NULL),
+    (1,'confirmed','Staples','2025-01-15',1000,200,'Office & Equipment','b.jpg',0,NULL),
+    (1,'confirmed','Taxa','2025-06-02',500,100,'Travel & Transport',NULL,1,NULL),
     (1,'draft','Kladde-bon','2025-06-03',50,10,NULL,NULL,0,NULL)");
 $db->exec("INSERT INTO owner_draws (user_id,drawn_at,amount,note) VALUES (1,'2025-04-01',3000,'Løn')");
 $db->exec("INSERT INTO cash_entries (user_id,occurred_at,direction,amount,category,note) VALUES (1,'2025-05-10','out',1000,'moms','Q1 moms')");
@@ -117,6 +118,31 @@ $items->set(1, 'asset', 'Bank', 12345.67, '2025-12-31');
 $b3 = $sheet->asOf(1, '2025-12-31', 2000.0, $items->inForce(1, '2025-12-31'));
 $p3 = array_column($b3['rows'], 'beloeb', 'post');
 check('stated bank balance overrides the computed one', $p3['Bankindestående'] === '12345,67' && str_starts_with($b3['bank_source'], 'oplyst saldo'), $b3['bank_source']);
+
+echo "8) resultatopgørelse, fakturaoversigt, moms pr. kvartal, budget\n";
+$lr = new LoanReports($db);
+$pl = array_column($lr->profitLoss(1, '2025-01-01', '2025-12-31', 500.0), 'beloeb', 'post');
+check('omsætning = 18000 ex moms', $pl['Omsætning'] === '18000,00', json_encode($pl));
+check('udgifter by Danish category, ex moms (800 + 400) + kørsel 500', $pl['Kontor og udstyr'] === '-800,00' && $pl['Rejser og transport'] === '-400,00' && $pl['Udgifter i alt'] === '-1700,00', json_encode($pl));
+check('resultat 16300', $pl['Resultat før skat'] === '16300,00');
+$inv = $lr->invoices(1, '2025-01-01', '2025-12-31');
+check('2 booked DKK invoices, paid + udestående', count($inv) === 2 && $inv[0]['status'] === 'Betalt 01-03-2025' && $inv[1]['status'] === 'Udestående' && $inv[1]['dage_siden_faktura'] !== '', json_encode($inv));
+$cu = $lr->customers(1, '2025-01-01', '2025-12-31');
+check('per customer: Kunde A 12500 paid, Kunde B 10000 outstanding', $cu[0]['kunde'] === 'Kunde A' && $cu[0]['udestaaende'] === '0,00' && $cu[1]['udestaaende'] === '10000,00', json_encode($cu));
+$mq = $lr->momsQuarters(1, 2025);
+check('Q1: salgsmoms 2500, købsmoms 200', $mq[0]['salgsmoms'] === '2500,00' && $mq[0]['koebsmoms'] === '200,00' && $mq[0]['til_betaling'] === '2300,00', json_encode($mq[0]));
+check('Q2: købsmoms 100 (udlæg) and 1000 paid to SKAT', $mq[1]['koebsmoms'] === '100,00' && $mq[1]['betalt_til_skat'] === '1000,00', json_encode($mq[1]));
+check('Q4: salgsmoms 2000; year total 4500', $mq[3]['salgsmoms'] === '2000,00' && $mq[4]['salgsmoms'] === '4500,00', json_encode($mq[4]));
+$bu = $lr->budget(1, '2025-12-01', 10.0);
+check('budget: 12 months + total, income avg 18000/12 +10%', count($bu['rows']) === 13 && $bu['avg_income'] === 1650.0 && $bu['rows'][0]['maaned'] === 'januar 2026', json_encode([$bu['avg_income'], $bu['rows'][0]]));
+$bo = $lr->budget(1, '2025-12-01', 0.0, 20000.0, 5000.0);
+check('budget overrides', $bo['rows'][12]['resultat'] === '180000,00', json_encode($bo['rows'][12]));
+
+echo "9) the pack as one document\n";
+$t1 = App\Support\DataExport::shape(App\Support\DataExport::table(['rows' => $mq]), [], 'da');
+$page = App\Support\DataExport::html('Regnskabspakke', ['sections' => [['title' => 'A', 'table' => $t1], ['title' => 'B', 'table' => $t1]]], ['Periode' => '2025'], '', 'da');
+check('two titled sections, second starts a new page', substr_count($page, '<h2') === 2 && substr_count($page, 'class="pb"') === 1);
+check('Danish headings in the section', str_contains($page, 'Købsmoms') && str_contains($page, 'Betalt til SKAT'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

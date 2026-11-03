@@ -113,7 +113,7 @@ final class Ledger
                 'text' => trim(((string) ($r['doc_number'] ?? '') !== '' ? $r['doc_number'] . ' · ' : '') . (string) ($r['customer'] ?? '') . ((string) ($r['note'] ?? '') !== '' ? ' — ' . $r['note'] : '')),
                 'account' => (string) ($r['category'] ?? '') !== '' ? (string) $r['category'] : 'Salg af ydelser',
                 'ex' => round((float) $r['amount_ex_vat'], 2), 'vat' => round((float) $r['vat'], 2), 'total' => round((float) $r['total'], 2),
-                'receipt' => (string) ($r['file_ref'] ?? '') !== '', 'status' => $r['paid_at'] !== null && $r['paid_at'] !== '' ? 'Betalt ' . Kr::date((string) $r['paid_at']) : 'Ikke betalt',
+                'receipt' => (string) ($r['file_ref'] ?? '') !== '', 'file_ref' => (string) ($r['file_ref'] ?? ''), 'status' => $r['paid_at'] !== null && $r['paid_at'] !== '' ? 'Betalt ' . Kr::date((string) $r['paid_at']) : 'Ikke betalt',
             ];
         }
 
@@ -136,7 +136,7 @@ final class Ledger
                 'text' => trim((string) ($r['vendor'] ?? '') . ((string) ($r['note'] ?? '') !== '' ? ' — ' . $r['note'] : '')),
                 'account' => (string) ($r['category'] ?? '') !== '' ? (self::CATEGORY_DA[(string) $r['category']] ?? ucfirst((string) $r['category'])) : 'Øvrige udgifter',
                 'ex' => -round($total - $vat, 2), 'vat' => -$vat, 'total' => -$total,
-                'receipt' => (string) ($r['file_ref'] ?? '') !== '',
+                'receipt' => (string) ($r['file_ref'] ?? '') !== '', 'file_ref' => (string) ($r['file_ref'] ?? ''),
                 'status' => !$priv ? 'Betalt af virksomheden' : ($r['reimbursed_at'] !== null && $r['reimbursed_at'] !== '' ? 'Udlæg tilbagebetalt ' . Kr::date((string) $r['reimbursed_at']) : 'Udlæg – skyldig til ejer'),
             ];
         }

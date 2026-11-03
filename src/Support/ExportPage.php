@@ -60,6 +60,28 @@ final class ExportPage
                 : ['body' => $html, 'mime' => 'text/html; charset=utf-8', 'filename' => 'timesheet_' . $stamp . '.html'];
         }
 
+        if (isset($built['sections'])) {
+            if ($format === 'csv') {
+                $rows = [];
+                foreach ($built['sections'] as $sec) {
+                    $rows[] = [(string) $sec['title']];
+                    $rows[] = $sec['table']['labels'];
+                    foreach ($sec['table']['rows'] as $r) {
+                        $rows[] = $r;
+                    }
+                    $rows[] = [];
+                }
+
+                return ['body' => self::csv($rows), 'mime' => 'text/csv; charset=utf-8', 'filename' => $base . '_' . $stamp . '.csv'];
+            }
+            $html = DataExport::html($title !== '' ? mb_substr($title, 0, 120) : DataExport::label((string) ($spec['source'] ?? 'Export')), ['sections' => $built['sections']],
+                $extra + [$lang === 'da' ? 'Dato' : 'Date' => date('d.m.Y')], $footer, $lang);
+
+            return $format === 'pdf'
+                ? ['body' => PdfRenderer::fromHtml($html), 'mime' => 'application/pdf', 'filename' => $base . '_' . $stamp . '.pdf']
+                : ['body' => $html, 'mime' => 'text/html; charset=utf-8', 'filename' => $base . '_' . $stamp . '.html'];
+        }
+
         if ($format === 'csv') {
             $rows = [];
             foreach ($extra as $k => $v) {

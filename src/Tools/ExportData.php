@@ -21,6 +21,7 @@ final class ExportData implements Tool
         'get_work_hours', 'get_work_log', 'get_expenses', 'get_income', 'get_mileage', 'get_trips', 'get_stays', 'get_workout_history',
         'get_calendar_events', 'get_vinyls', 'get_books', 'get_wishlist', 'get_shopping_list', 'get_owner_draws', 'get_moms', 'get_cash',
         'get_thermostat_probe', 'get_ledger', 'get_trial_balance', 'get_balance_sheet',
+        'get_invoice_overview', 'get_moms_by_quarter', 'get_budget', 'get_loan_pack',
     ];
 
     /** Export options the model sometimes puts inside args by mistake. */
@@ -160,14 +161,14 @@ final class ExportData implements Tool
         $lang     = $spec['lang'];
         $line     = $spec['layout'] === 'timesheet'
             ? $built['summary']['days'] . ($lang === 'da' ? ' dage · ' : ' days · ') . $built['summary']['total']
-            : $built['summary']['rows'] . ($lang === 'da' ? ' rækker' : ' rows');
+            : (isset($built['sections']) ? $built['summary']['sections'] . ($lang === 'da' ? ' afsnit' : ' sections') : $built['summary']['rows'] . ($lang === 'da' ? ' rækker' : ' rows'));
 
         return [
             'source' => $source, 'layout' => $spec['layout'], 'summary' => $built['summary'], 'csv_url' => $csvUrl, 'print_url' => $printUrl, 'pdf_url' => $pdfUrl,
             '_render' => [
                 'kind' => 'export_preview', 'title' => ((string) ($spec['title'] ?? '')) !== '' ? $spec['title'] : ($spec['layout'] === 'timesheet' ? ($lang === 'da' ? 'Timeseddel' : 'Timesheet') : DataExport::label($source)),
                 'summary' => $line, 'print_url' => $printUrl, 'csv_url' => $csvUrl, 'pdf_url' => $pdfUrl,
-            ],
+            ] + (!empty($built['year']) ? ['zip_url' => 'https://' . $host . '/api/bilag-zip.php?year=' . (int) $built['year']] : []),
         ];
     }
 
@@ -235,7 +236,7 @@ final class ExportData implements Tool
             return ['error' => 'unknown source'];
         }
         $args = is_array($spec['args'] ?? null) ? $spec['args'] : [];
-        if (in_array($spec['source'], ['get_thermostat_probe', 'get_ledger'], true)) {
+        if (in_array($spec['source'], ['get_thermostat_probe', 'get_ledger', 'get_loan_pack'], true)) {
             $args['_export'] = true;   // the whole log as rows, not just the 60 the model is shown
         }
         $result = $registry->dispatch((string) $spec['source'], $args, $userId);
@@ -258,6 +259,22 @@ final class ExportData implements Tool
                     'rounded_to' => $sheet['round'], 'break_deducted_days' => count(array_filter($sheet['days'], static fn (array $d): bool => $d['break'] > 0)), 'needs_fix' => $result['needs_fix'] ?? [],
                 ],
             ];
+        }
+
+        if (is_array($result['sections'] ?? null)) {   // several tables in one document (the loan pack)
+            $sections = [];
+            foreach ($result['sections'] as $sec) {
+                $t = DataExport::table(['rows' => $sec['rows']]);
+                if ($t === null || $t['rows'] === []) {
+                    continue;
+                }
+                $sections[] = ['title' => (string) $sec['title'], 'table' => DataExport::shape($t, [], (string) ($spec['lang'] ?? 'da'))];
+            }
+            if ($sections === []) {
+                return ['error' => 'nothing to export for that request'];
+            }
+
+            return ['sections' => $sections, 'year' => (int) ($result['aar'] ?? 0), 'meta' => ['Periode' => (string) ($result['periode'] ?? '')], 'summary' => ['rows' => array_sum(array_map(static fn (array $s): int => count($s['table']['rows']), $sections)), 'sections' => count($sections)]];
         }
 
         $table = DataExport::table($result, null, $spec['columns'] ?? null);
