@@ -25,6 +25,7 @@ use App\Data\Moms;
 use App\Data\BalanceItems;
 use App\Data\BalanceSheet;
 use App\Data\Ledger;
+use App\Data\LoanPack;
 use App\Data\LoanReports;
 use App\Data\OwnerDraws;
 use App\Data\ProfitLoss;
@@ -254,7 +255,7 @@ final class ToolRegistry
         $registry->register(new GetInvoiceOverview($loanReports));
         $registry->register(new GetMomsByQuarter($loanReports));
         $registry->register(new GetBudget($loanReports));
-        $registry->register(new GetLoanPack($ledger, $loanReports, new BalanceSheet(), $balanceItems, $userSettings, $mileage));
+        $registry->register(new GetLoanPack(new LoanPack($ledger, $loanReports, new BalanceSheet(), $balanceItems, $userSettings, $mileage->businessDeduction(...))));
         $registry->register(new GetProfitLoss(new ProfitLoss($income, $receipts, $userSettings, $mileage)));
         $mileageSuggest = new MileageSuggestions($timeline, $places, $mileage, $mapDistance);
         $registry->register(new LogTrip($mileage, $mapDistance, $userSettings));

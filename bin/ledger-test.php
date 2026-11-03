@@ -12,7 +12,9 @@ require __DIR__ . '/../vendor/autoload.php';
 use App\Data\BalanceItems;
 use App\Data\BalanceSheet;
 use App\Data\Ledger;
+use App\Data\LoanPack;
 use App\Data\LoanReports;
+use App\Data\UserSettings;
 
 if (!extension_loaded('pdo_sqlite')) {
     fwrite(STDERR, "pdo_sqlite not loaded — re-run with:\n  php -d extension=php_pdo_sqlite bin/ledger-test.php\n");
@@ -143,6 +145,18 @@ $t1 = App\Support\DataExport::shape(App\Support\DataExport::table(['rows' => $mq
 $page = App\Support\DataExport::html('Regnskabspakke', ['sections' => [['title' => 'A', 'table' => $t1], ['title' => 'B', 'table' => $t1]]], ['Periode' => '2025'], '', 'da');
 check('two titled sections, second starts a new page', substr_count($page, '<h2') === 2 && substr_count($page, 'class="pb"') === 1);
 check('Danish headings in the section', str_contains($page, 'Købsmoms') && str_contains($page, 'Betalt til SKAT'));
+
+echo "10) LoanPack builds the card from the pieces\n";
+$db->exec("CREATE TABLE user_settings (user_id INT, setting_key TEXT, setting_value TEXT, PRIMARY KEY (user_id, setting_key))");
+$db->exec("INSERT INTO user_settings VALUES (1, 'cash_opening', '2000')");
+$lp   = new LoanPack($ledger, $lr, $sheet, $items, new UserSettings($db), static fn (int $u, string $f, string $t): float => 500.0);
+$card = $lp->card(1, 2025);
+check('card kind and year', $card['kind'] === 'loan_pack' && $card['year'] === 2025);
+check('eight tabs incl. budget, in order', array_column($card['sections'], 'id') === ['result', 'balance', 'moms', 'customers', 'invoices', 'trial', 'ledger', 'budget'], json_encode(array_column($card['sections'], 'id')));
+check('key figures', $card['key']['omsaetning'] === '18000,00' && $card['key']['resultat'] === '16300,00' && $card['key']['udestaaende'] === '10000,00', json_encode($card['key']));
+check('download links carry the year', str_contains($card['pdf_url'], 'format=pdf') && str_contains($card['zip_url'], 'year=2025') && str_contains(urldecode($card['csv_url']), '"year":2025'));
+check('balance items in force are listed', count($card['items']) >= 1);
+check('export build (no budget) has seven sections', count($lp->build(1, 2025)['sections']) === 7);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
