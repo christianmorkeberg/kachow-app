@@ -20,7 +20,7 @@ final class ExportData implements Tool
     public const SOURCES = [
         'get_work_hours', 'get_work_log', 'get_expenses', 'get_income', 'get_mileage', 'get_trips', 'get_stays', 'get_workout_history',
         'get_calendar_events', 'get_vinyls', 'get_books', 'get_wishlist', 'get_shopping_list', 'get_owner_draws', 'get_moms', 'get_cash',
-        'get_thermostat_probe',
+        'get_thermostat_probe', 'get_ledger', 'get_trial_balance', 'get_balance_sheet',
     ];
 
     /** Export options the model sometimes puts inside args by mistake. */
@@ -235,7 +235,7 @@ final class ExportData implements Tool
             return ['error' => 'unknown source'];
         }
         $args = is_array($spec['args'] ?? null) ? $spec['args'] : [];
-        if ($spec['source'] === 'get_thermostat_probe') {
+        if (in_array($spec['source'], ['get_thermostat_probe', 'get_ledger'], true)) {
             $args['_export'] = true;   // the whole log as rows, not just the 60 the model is shown
         }
         $result = $registry->dispatch((string) $spec['source'], $args, $userId);

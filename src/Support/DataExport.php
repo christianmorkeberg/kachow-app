@@ -221,6 +221,11 @@ final class DataExport
     /** "total_minutes" → "Total minutes" */
     public static function label(string $column): string
     {
+        $da = ['bilagsnr' => 'Bilagsnr.', 'ex_moms' => 'Beløb ekskl. moms', 'i_alt' => 'Beløb inkl. moms', 'beloeb' => 'Beløb', 'sektion' => 'Sektion'];
+        if (isset($da[$column])) {
+            return $da[$column];
+        }
+
         return ucfirst(str_replace('_', ' ', $column));
     }
 

@@ -121,7 +121,7 @@ final class ToolSelector
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'get_books', 'get_moms',
-            'get_cash', 'record_cash_movement', 'get_profit_loss',
+            'get_cash', 'record_cash_movement', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item',
             'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'update_trip', 'delete_trip', 'get_driving_distance',
         ],
         'email' => [
@@ -345,6 +345,9 @@ final class ToolSelector
             'lav en faktura', 'opret en faktura', 'opret faktura', 'skriv en faktura', 'send a bill to',
             'company details', 'company profile', 'my cvr', 'cvr number', 'cvr-nummer', 'virksomhedsoplysninger',
             'payment details', 'my company is', 'min virksomhed', 'set my company',
+            // ledger / saldobalance / balance sheet (lånepakke)
+            'ledger', 'kassekladde', 'bogføringsjournal', 'posteringer', 'saldobalance', 'kontospecifikation', 'trial balance', 'balance sheet',
+            'balance pr', 'balancen', 'egenkapital', 'equity', 'status pr', 'aktiver', 'passiver', 'lånepakke', 'loan pack', 'regnskab til banken', 'bogholder',
             'indtægt', 'indtægter', 'omsætning', 'tjent', 'indtjening', 'debitor', 'skylder mig', 'udestående',
             // owner drawings / paying yourself (avoid bare "draw" — matches drawn/withdrawer/etc.)
             'owner draw', 'pay myself', 'paid myself', 'pay to myself', 'take out of the business',
