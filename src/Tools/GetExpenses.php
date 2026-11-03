@@ -45,6 +45,10 @@ final class GetExpenses implements Tool
                 'from'     => ['type' => 'string', 'description' => 'Start date YYYY-MM-DD (overrides period).'],
                 'to'       => ['type' => 'string', 'description' => 'End date YYYY-MM-DD (overrides period).'],
                 'category' => ['type' => 'string', 'enum' => Receipts::CATEGORIES, 'description' => 'Limit to one category.'],
+                'paid_privately' => [
+                    'type' => 'string', 'enum' => ['any', 'owed', 'repaid'],
+                    'description' => 'Only expenses paid with the user\'s PRIVATE money (udlæg): any = owed or repaid, owed = not paid back yet, repaid = paid back. For "what does the company owe me" use owed with period all.',
+                ],
             ],
             'required' => [],
         ];
@@ -59,26 +63,9 @@ final class GetExpenses implements Tool
         );
         $category = isset($arguments['category']) ? Receipts::normalizeCategory((string) $arguments['category']) : null;
 
-        $s = $this->receipts->summary($userId, $from, $to, $category);
-
-        $card = [
-            'kind'        => 'expenses',
-            'title'       => $label . ($category ? ' · ' . $category : ''),
-            'currencies'  => $s['currencies'],  // per-currency totals (never blended)
-            'count'       => $s['count'],
-            'by_category' => $category ? [] : $s['by_category'],
-            'items'       => array_map(static fn (array $i): array => [
-                'id'       => $i['id'],
-                'vendor'   => $i['vendor'],
-                'date'     => $i['date'],
-                'total'    => $i['total'],
-                'vat'      => $i['vat'],
-                'currency' => $i['currency'],
-                'category' => $i['category'],
-                'note'     => $i['note'],
-                'udlaeg'   => $i['udlaeg'],
-            ], $s['items']),
-        ];
+        $private = in_array($arguments['paid_privately'] ?? '', ['any', 'owed', 'repaid'], true) ? (string) $arguments['paid_privately'] : '';
+        $card    = $this->receipts->expensesCard($userId, $from, $to, $label, $category, $private);
+        $s       = $card;
 
         return [
             'period'      => $label,

@@ -225,6 +225,29 @@ final class Receipts
         return ['items' => $items, 'owed' => $fmt($sum['owed']), 'repaid' => $fmt($sum['repaid'])];
     }
 
+    /**
+     * The Expenses card (kind: expenses) for a period / category / private-money filter — one builder for the chat tool and the card's own endpoint.
+     *
+     * @return array<string, mixed>
+     */
+    public function expensesCard(int $userId, ?string $from, ?string $to, string $label, ?string $category = null, string $private = ''): array
+    {
+        $s = $this->summary($userId, $from, $to, $category, 'confirmed', $private);
+
+        return [
+            'kind'        => 'expenses',
+            'title'       => $label . ($category ? ' · ' . $category : ''),
+            'currencies'  => $s['currencies'],  // per-currency totals (never blended)
+            'count'       => $s['count'],
+            'by_category' => $category ? [] : $s['by_category'],
+            'paid_privately' => $private,
+            'items'       => array_map(static fn (array $i): array => [
+                'id' => $i['id'], 'vendor' => $i['vendor'], 'date' => $i['date'], 'total' => $i['total'], 'vat' => $i['vat'],
+                'currency' => $i['currency'], 'category' => $i['category'], 'note' => $i['note'], 'udlaeg' => $i['udlaeg'],
+            ], $s['items']),
+        ];
+    }
+
     /** The Udlæg card (kind: udlaeg): the full list, owed and repaid. @return array<string, mixed> */
     public function udlaegCard(int $userId): array
     {
@@ -369,10 +392,18 @@ final class Receipts
         ?string $from = null,
         ?string $to = null,
         ?string $category = null,
-        string $status = 'confirmed'
+        string $status = 'confirmed',
+        string $private = ''
     ): array {
         $where  = ['user_id = :u'];
         $params = [':u' => $userId];
+        if ($private === 'any') {          // paid with private money (udlæg), owed or repaid
+            $where[] = 'paid_privately = 1';
+        } elseif ($private === 'owed') {   // …and not paid back yet
+            $where[] = 'paid_privately = 1 AND reimbursed_at IS NULL';
+        } elseif ($private === 'repaid') {
+            $where[] = 'paid_privately = 1 AND reimbursed_at IS NOT NULL';
+        }
         if ($status === 'confirmed' || $status === 'draft') {
             $where[]      = 'status = :st';
             $params[':st'] = $status;

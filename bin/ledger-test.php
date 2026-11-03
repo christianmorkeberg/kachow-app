@@ -176,5 +176,15 @@ check('expense rows carry the tag', $tags['Taxa'] === 'owed' && $tags['Elgigante
 $rc->unreimburse(1, (int) $db->query("SELECT id FROM receipts WHERE vendor='Elgiganten'")->fetchColumn());
 check('undo makes it owed again', count($rc->udlaegList(1)['owed']) === 2 && array_column($rc->udlaegList(1)['owed'], 'total', 'currency')['DKK'] === 1200.0);
 
+echo "12) expenses card: paid-privately filter\n";
+$ac = $rc->expensesCard(1, null, null, 'All time', null, 'any');
+$ow = $rc->expensesCard(1, null, null, 'All time', null, 'owed');
+$rp = $rc->expensesCard(1, null, null, 'All time', null, 'repaid');
+$plain = $rc->expensesCard(1, null, null, 'All time');
+check('any = owed + repaid private ones only', count(array_filter($ac['items'], static fn (array $i): bool => $i['udlaeg'] === '')) === 0 && $ac['count'] >= 3, json_encode(array_column($ac['items'], 'udlaeg')));
+check('owed excludes repaid, repaid excludes owed', count(array_filter($ow['items'], static fn (array $i): bool => $i['udlaeg'] !== 'owed')) === 0 && count(array_filter($rp['items'], static fn (array $i): bool => $i['udlaeg'] !== 'reimbursed')) === 0);
+check('unfiltered card has every confirmed expense, rows tagged', $plain['count'] > $ac['count'] && $plain['paid_privately'] === '' && $plain['kind'] === 'expenses');
+check('currencies stay separate in the filtered totals', in_array('EUR', array_column($ac['currencies'], 'currency'), true) && in_array('DKK', array_column($ac['currencies'], 'currency'), true), json_encode($ac['currencies']));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
