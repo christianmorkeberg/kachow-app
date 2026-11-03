@@ -273,7 +273,14 @@ final class ExportData implements Tool
             return ['error' => 'no rows match those filters'];
         }
 
-        return $shaped + ['summary' => [
+        $meta = [];
+        if (isset($result['periode']) && is_string($result['periode'])) {
+            $meta['Periode'] = $result['periode'];
+        } elseif (isset($result['pr_dato']) && is_string($result['pr_dato'])) {
+            $meta['Pr. dato'] = \App\Support\Kr::date($result['pr_dato']);
+        }
+
+        return $shaped + ['meta' => $meta, 'summary' => [
             'rows' => count($shaped['rows']), 'columns' => $shaped['columns'], 'headings' => $shaped['labels'], 'total_row' => $shaped['total'],
             'source_columns' => $table['columns'], // the names where / sort_by / group_by / total_columns / calc / labels refer to
         ]];

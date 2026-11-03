@@ -18,6 +18,13 @@ final class Ledger
 {
     public const CASH_ACCOUNTS = ['moms' => 'Moms til/fra SKAT', 'tax' => 'Skat', 'fee' => 'Bankgebyrer', 'deposit' => 'Indskud', 'other' => 'Øvrige posteringer'];
 
+    /** Expense categories are stored in English (Receipts::CATEGORIES); the ledger shows them in Danish. */
+    private const CATEGORY_DA = [
+        'Groceries/Supplies' => 'Varer og materialer', 'Meals & Entertainment' => 'Måltider og repræsentation', 'Travel & Transport' => 'Rejser og transport',
+        'Office & Equipment' => 'Kontor og udstyr', 'Software & Subscriptions' => 'Software og abonnementer', 'Fees & Bank' => 'Gebyrer og bank',
+        'Marketing' => 'Markedsføring', 'Utilities & Phone' => 'El, internet og telefon', 'Other' => 'Øvrige udgifter',
+    ];
+
     private const TYPE_ORDER = ['Salg' => 1, 'Udgift' => 2, 'Privat hævning' => 3, 'Bankpostering' => 4];
 
     private PDO $db;
@@ -127,7 +134,7 @@ final class Ledger
             $out[] = [
                 '_id' => (int) $r['id'], 'date' => (string) $r['purchased_at'], 'type' => 'Udgift',
                 'text' => trim((string) ($r['vendor'] ?? '') . ((string) ($r['note'] ?? '') !== '' ? ' — ' . $r['note'] : '')),
-                'account' => (string) ($r['category'] ?? '') !== '' ? ucfirst((string) $r['category']) : 'Øvrige udgifter',
+                'account' => (string) ($r['category'] ?? '') !== '' ? (self::CATEGORY_DA[(string) $r['category']] ?? ucfirst((string) $r['category'])) : 'Øvrige udgifter',
                 'ex' => -round($total - $vat, 2), 'vat' => -$vat, 'total' => -$total,
                 'receipt' => (string) ($r['file_ref'] ?? '') !== '',
                 'status' => !$priv ? 'Betalt af virksomheden' : ($r['reimbursed_at'] !== null && $r['reimbursed_at'] !== '' ? 'Udlæg tilbagebetalt ' . Kr::date((string) $r['reimbursed_at']) : 'Udlæg – skyldig til ejer'),

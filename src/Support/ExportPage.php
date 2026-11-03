@@ -21,7 +21,7 @@ final class ExportPage
         $stamp  = date('Y-m-d');
         $title  = trim((string) ($spec['title'] ?? ''));
         $base   = preg_replace('/[^a-z0-9_-]+/i', '', (string) ($spec['source'] ?? 'export')) ?: 'export';
-        $extra  = [];
+        $extra  = is_array($built['meta'] ?? null) ? $built['meta'] : [];   // e.g. the period of a ledger; the user's own header lines come after
         foreach (is_array($spec['header'] ?? null) ? $spec['header'] : [] as $k => $v) {
             if (is_string($k) && (is_scalar($v) || $v === null)) {
                 $extra[mb_substr($k, 0, 60)] = mb_substr((string) $v, 0, 160);
@@ -83,7 +83,7 @@ final class ExportPage
         $html = DataExport::html(
             $title !== '' ? mb_substr($title, 0, 120) : DataExport::label((string) ($spec['source'] ?? 'Export')),
             ['columns' => $built['columns'], 'labels' => $built['labels'], 'rows' => $built['rows'], 'total' => $built['total']],
-            $extra + ['Date' => date('d.m.Y')],
+            $extra + [$lang === 'da' ? 'Dato' : 'Date' => date('d.m.Y')],
             $footer,
             $lang
         );

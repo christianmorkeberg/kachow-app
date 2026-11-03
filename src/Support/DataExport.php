@@ -221,7 +221,8 @@ final class DataExport
     /** "total_minutes" → "Total minutes" */
     public static function label(string $column): string
     {
-        $da = ['bilagsnr' => 'Bilagsnr.', 'ex_moms' => 'Beløb ekskl. moms', 'i_alt' => 'Beløb inkl. moms', 'beloeb' => 'Beløb', 'sektion' => 'Sektion'];
+        $da = ['bilagsnr' => 'Bilagsnr.', 'ex_moms' => 'Beløb ekskl. moms', 'i_alt' => 'Beløb inkl. moms', 'beloeb' => 'Beløb', 'sektion' => 'Sektion',
+            'get_ledger' => 'Kassekladde', 'get_trial_balance' => 'Saldobalance', 'get_balance_sheet' => 'Balance (status)'];
         if (isset($da[$column])) {
             return $da[$column];
         }
@@ -250,7 +251,7 @@ final class DataExport
         }
         $body = '';
         foreach ($table['rows'] as $row) {
-            $body .= '<tr>' . implode('', array_map(static fn (string $c): string => '<td>' . $e($c) . '</td>', $row)) . '</tr>';
+            $body .= '<tr>' . implode('', array_map(static fn (string $c): string => preg_match('/^\d{2}-\d{2}-\d{4}$/', $c) === 1 ? '<td style="white-space:nowrap">' . $e($c) . '</td>' : '<td>' . $e($c) . '</td>', $row)) . '</tr>';
         }
 
         $foot = isset($table['total']) && $table['total'] !== null
