@@ -7,6 +7,7 @@ namespace App\Tools;
 use App\Data\Connections;
 use App\Data\ExerciseAliases;
 use App\Data\Workouts;
+use App\Support\ExerciseNames;
 use App\Support\OneRepMax;
 use App\Support\TextMatch;
 use App\Support\TrainingLoad as Calc;
@@ -42,7 +43,9 @@ final class TrainingLoad implements Tool
             . 'It looks up the max itself (tested = an actual 1-rep lift, estimated = Epley 1RM) and returns '
             . 'the load for BOTH, rounded to loadable plates (2.5 kg steps unless round_to says otherwise). '
             . 'Report both results with the max each came from; if one basis is missing, say so. If the user '
-            . 'states their max ("my max is 100"), pass my_max. If the exercise isn\'t found, the result lists '
+            . 'states their max ("my max is 100"), pass my_max. To make the weights FOR A CONNECTED PERSON from THEIR OWN max ("lav også vægt til '
+            . 'Christian", "what should Alex lift at 85%") pass for_person (+ percent or reps) — do NOT use person/person_weight for that, and never use the '
+            . 'user\'s own max for someone else. If the exercise isn\'t found, the result lists '
             . 'known_exercises — retry with the right name (the other person may name it differently, e.g. '
             . '"Bænkpres" vs "Bench press"; use person_exercise).';
     }
@@ -58,6 +61,7 @@ final class TrainingLoad implements Tool
                 'person'          => ['type' => 'string', 'description' => 'Relative mode: the connected person (name/email) whose load to match.'],
                 'person_weight'   => ['type' => 'number', 'description' => 'Relative mode: the load (kg) that person lifts.'],
                 'person_exercise' => ['type' => 'string', 'description' => 'Relative mode: the exercise name as THEY log it, if different.'],
+                'for_person'      => ['type' => 'string', 'description' => 'Make the loads FOR this connected person (name/email) from THEIR max, with percent or reps. Their exercise name is matched across languages (Dødløft = Deadlift).'],
                 'my_max'          => ['type' => 'number', 'description' => 'A max the user states, used instead of looking it up.'],
                 'round_to'        => ['type' => 'number', 'description' => 'Loading step in kg (default 2.5; e.g. 1 or 2 for dumbbells).'],
                 'since'           => ['type' => 'string', 'description' => 'Only count maxes logged on/after YYYY-MM-DD (e.g. to ignore an old peak).'],
@@ -77,12 +81,16 @@ final class TrainingLoad implements Tool
         $since = isset($arguments['since']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $arguments['since'])
             ? (string) $arguments['since'] : null;
 
+        $forPerson = trim((string) ($arguments['for_person'] ?? ''));
         $percent  = isset($arguments['percent']) && $arguments['percent'] !== '' ? (float) $arguments['percent'] : null;
         $reps     = isset($arguments['reps']) && $arguments['reps'] !== '' ? (int) $arguments['reps'] : null;
         $person   = trim((string) ($arguments['person'] ?? ''));
         $theirKg  = isset($arguments['person_weight']) && $arguments['person_weight'] !== '' ? (float) $arguments['person_weight'] : null;
         $relative = $person !== '' || $theirKg !== null;
 
+        if ($forPerson !== '' && $relative) {
+            return ['error' => 'Use either for_person (loads from THEIR max) or person + person_weight (match their load), not both.'];
+        }
         if ($relative && ($person === '' || $theirKg === null || $theirKg <= 0)) {
             return ['error' => 'For a relative load give both person and person_weight (their load in kg).'];
         }
@@ -94,6 +102,40 @@ final class TrainingLoad implements Tool
         }
         if ($reps !== null && ($reps < 1 || $reps > 30)) {
             return ['error' => 'Reps must be between 1 and 30.'];
+        }
+
+        // Loads for ANOTHER person, from their own max.
+        if ($forPerson !== '') {
+            $access = ConnectionAccess::resolve($this->connections, $userId, $forPerson, 'workouts');
+            if (isset($access['error'])) {
+                return $access;
+            }
+            $theirs = isset($arguments['my_max']) && (float) $arguments['my_max'] > 0
+                ? ['exercise' => $exerciseArg, 'stated' => (float) $arguments['my_max'], 'tested' => null, 'estimated' => null]
+                : $this->maxes((int) $access['owner_id'], trim((string) ($arguments['person_exercise'] ?? '')) ?: $exerciseArg, $since);
+            if (isset($theirs['error'])) {
+                return $theirs + ['whose' => (string) ($access['person']['name'] ?? 'them'), 'note' => 'They have no logged max for this under that name — check known_exercises for how they name it, or ask them for their max (my_max). Never fall back to the user\'s own max.'];
+            }
+            $pct   = $percent ?? Calc::percentForReps((int) $reps);
+            $bases = $this->bases($theirs);
+            $out   = [
+                'for_person' => (string) ($access['person']['name'] ?? 'them'),
+                'exercise'   => $theirs['exercise'],
+                'round_to'   => $step,
+                'their_max'  => $this->describeMaxes($theirs),
+                'mode'       => $percent !== null ? $pct . '% of THEIR max' : 'load for ' . $reps . ' reps (Epley) from THEIR max',
+                'results'    => [],
+            ];
+            foreach ($bases as $basis => $max) {
+                $out['results'][$basis] = Calc::apply($max, $pct, $step);
+            }
+            if ($out['results'] === []) {
+                $out['note'] = 'They have no usable max for this — ask for it (my_max) instead of guessing.';
+            } elseif (array_diff(self::BASES, array_keys($out['results'])) !== [] && !isset($bases['stated'])) {
+                $out['note'] = 'No ' . implode('/', array_diff(self::BASES, array_keys($out['results']))) . ' max available for them — say so, and give the other.';
+            }
+
+            return $out;
         }
 
         // Your maxes: stated, or looked up from your records.
@@ -174,21 +216,7 @@ final class TrainingLoad implements Tool
         $sets = $this->workouts->getHistory($ownerId, $name, $since);
         if ($sets === []) {
             $known = $this->workouts->distinctExercises($ownerId, 40);
-            $hit   = null;
-            foreach ($known as $k) {
-                if (TextMatch::normalize($k) === TextMatch::normalize($exerciseArg)) {
-                    $hit = $k;
-                    break;
-                }
-            }
-            if ($hit === null) {
-                foreach ($known as $k) {
-                    if (TextMatch::similar($k, $exerciseArg, 80.0)) {
-                        $hit = $k;
-                        break;
-                    }
-                }
-            }
+            $hit   = ExerciseNames::matchIn($exerciseArg, $known);
             if ($hit !== null) {
                 $name = $hit;
                 $sets = $this->workouts->getHistory($ownerId, $name, $since);
