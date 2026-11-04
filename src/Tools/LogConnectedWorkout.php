@@ -12,7 +12,8 @@ use App\Data\Workouts;
 /**
  * Tool: log workout sets ON BEHALF OF a connected person (e.g. logging your gym
  * partner's sets for them). This is the one cross-user WRITE, gated by an explicit
- * `workouts_log` grant the other person must give (separate from the read scope).
+ * training permission (`workouts`, which also lets you view) the other person must give; the older separate
+ * `workouts_log` grant is still honoured where it was given.
  * Every set is stamped "logged by <you>" so the entry is attributable and the owner
  * can see and undo what someone else added.
  */
@@ -76,8 +77,8 @@ final class LogConnectedWorkout implements Tool
             $this->connections,
             $userId,
             (string) ($arguments['person'] ?? ''),
-            'workouts_log',
-            'They haven\'t given you permission to log workouts for them.'
+            ['workouts', Connections::LEGACY_LOG_SCOPE],
+            'They haven\'t shared their training with you, so I can\'t log workouts for them.'
         );
         if (isset($access['error'])) {
             return $access;

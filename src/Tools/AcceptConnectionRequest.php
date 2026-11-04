@@ -30,7 +30,7 @@ final class AcceptConnectionRequest implements Tool
         return 'Accepts a pending incoming connection request. Identify the requester by their email '
             . 'or name (see list_connections). Specify what YOU want to share back via "share" — any of: '
             . Connections::scopeGuide() . '. Defaults to workouts. Beyond workouts, add a scope only when '
-            . 'the user names it; "cycle", "workouts_log" and "home" only on an explicit ask. '
+            . 'the user names it; "cycle" and "home" only on an explicit ask. '
             . 'Only pending requests sent to you can be accepted.';
     }
 

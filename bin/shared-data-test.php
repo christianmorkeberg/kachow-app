@@ -14,6 +14,7 @@ use App\Data\Connections;
 use App\Data\Vinyls;
 use App\Data\WorkEvents;
 use App\Data\WorkoutPlans;
+use App\Tools\ConnectionAccess;
 use App\Tools\GetConnectedVinyls;
 use App\Tools\GetConnectedWorkHours;
 use App\Tools\GetConnectedWorkoutPlan;
@@ -160,6 +161,22 @@ check('Danish: "Kan du se Alex\' træningsplanlægning" → the plan tool', in_a
 check('"what records does Alex have?" → vinyls', in_array('get_connected_vinyls', $names('what vinyl records does Alex have?'), true));
 check('"is Alex still at work?" → work hours', in_array('get_connected_work_hours', $names('is Alex still at work?'), true));
 check('Danish: "er Alex på arbejde?" → work hours', in_array('get_connected_work_hours', $names('er Alex på arbejde?'), true));
+
+echo "\n7) one training permission: workouts covers viewing AND logging for them\n";
+$logGate = static fn (int $viewer): array => ConnectionAccess::resolve($conns, $viewer, 'Owner', ['workouts', Connections::LEGACY_LOG_SCOPE], 'denied');
+$link('accepted', 'workouts');
+check('sharing workouts is enough to log for them', isset($logGate(1)['owner_id']) && $logGate(1)['owner_id'] === 2, json_encode($logGate(1)));
+$link('accepted', 'wishlist');
+check('sharing something else is not', ($logGate(1)['error'] ?? '') === 'denied');
+$link('accepted', 'workouts_log');
+check('a grant given under the old separate name is still honoured', isset($logGate(1)['owner_id']));
+$link('pending', 'workouts');
+check('a connection that is not accepted gives nothing', isset($logGate(1)['error']));
+check('a stranger cannot log for them', isset($logGate(3)['error']));
+$link('accepted', 'workouts');
+check('viewing still needs the workouts scope (single string form)', isset(ConnectionAccess::resolve($conns, 1, 'Owner', 'workouts')['owner_id']) && isset(ConnectionAccess::resolve($conns, 1, 'Owner', 'vinyls')['error']));
+check('the old name is folded into workouts when sharing is saved', Connections::normalizeScopes(['workouts_log']) === 'workouts' && Connections::normalizeScopes(['workouts', 'workouts_log', 'cycle']) === 'workouts,cycle');
+check('the sharing guide no longer offers a separate log scope', !in_array('workouts_log', Connections::APPS, true) && !str_contains(Connections::scopeGuide(), 'workouts_log'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

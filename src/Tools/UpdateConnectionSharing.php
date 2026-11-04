@@ -25,8 +25,7 @@ final class UpdateConnectionSharing implements Tool
         return 'Changes what YOU share with a connected person (by their email or name). Provide the '
             . 'full new list in "share" — any of: ' . Connections::scopeGuide() . '. It replaces your previous '
             . 'choice, so first look at list_connections (you_share) and keep what is already shared unless the '
-            . 'user is removing it. "workouts_log" is a WRITE grant (e.g. a gym partner recording your sets), '
-            . 'separate from "workouts" (which only lets them view yours, planned workouts included). "home" is '
+            . 'user is removing it. "workouts" lets them view yours (planned workouts included) AND log sets for you (a gym partner recording your sets) — one permission. "home" is '
             . 'also a grant to ACT: they control your home devices through your home agent, so they need no Pico '
             . 'of their own. Pass an empty list to stop sharing anything with them (without removing the '
             . 'connection). Only affects your side of the sharing.';

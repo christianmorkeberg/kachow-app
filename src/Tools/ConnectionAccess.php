@@ -17,6 +17,7 @@ use App\Data\Connections;
 final class ConnectionAccess
 {
     /**
+     * @param string|list<string> $app The app (scope) that must be shared; with a list, any one of them is enough.
      * @param string|null $denyMessage Custom error when the scope isn't granted
      *                                  (e.g. for a write grant, where "they don't
      *                                  share their workouts_log with you" reads badly).
@@ -26,7 +27,7 @@ final class ConnectionAccess
         Connections $connections,
         int $viewerId,
         string $person,
-        string $app,
+        string|array $app,
         ?string $denyMessage = null
     ): array {
         $person = trim($person);
@@ -43,8 +44,9 @@ final class ConnectionAccess
         }
 
         $ownerId = (int) $entry['person']['id'];
-        if (!in_array($app, $connections->sharedScopes($ownerId, $viewerId), true)) {
-            return ['error' => $denyMessage ?? ('They do not share their ' . $app . ' with you.')];
+        $apps = (array) $app;
+        if (array_intersect($apps, $connections->sharedScopes($ownerId, $viewerId)) === []) {
+            return ['error' => $denyMessage ?? ('They do not share their ' . $apps[0] . ' with you.')];
         }
 
         return ['owner_id' => $ownerId, 'person' => $entry['person']];

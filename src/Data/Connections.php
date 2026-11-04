@@ -20,12 +20,14 @@ final class Connections
 {
     /**
      * Scopes that can be shared over a connection. Most are READ scopes ("they can
-     * see my X"); `workouts_log` is a WRITE grant ("they may log workouts FOR me") —
-     * deliberately separate from the `workouts` read scope so viewing and writing are
-     * two distinct, explicit opt-ins. `home` is also a grant to ACT: the other person's home-device
-     * commands (lights, thermostats) ride YOUR home agent when they have none of their own.
+     * see my X"); `workouts` is the one training grant: they can view your workouts AND log workouts
+     * FOR you (decided 2026-11-04 — one permission, no second opt-in). `home` is also a grant to ACT: the
+     * other person's home-device commands (lights, thermostats) ride YOUR home agent when they have none of their own.
      */
-    public const APPS = ['workouts', 'workouts_log', 'wishlist', 'calendar', 'cycle', 'home', 'vinyls', 'work_hours'];
+    public const APPS = ['workouts', 'wishlist', 'calendar', 'cycle', 'home', 'vinyls', 'work_hours'];
+
+    /** The old separate "log workouts for me" grant: no longer offered (workouts covers it), still honoured where it was already given. */
+    public const LEGACY_LOG_SCOPE = 'workouts_log';
 
     /**
      * What each scope lets the OTHER person do — the one place the sharing tools take their wording
@@ -33,8 +35,7 @@ final class Connections
      * Sharing is always opt-in per scope and per direction; nothing here is on by default.
      */
     public const SCOPE_HELP = [
-        'workouts'     => 'view your workout history, progress charts and planned workouts (read-only)',
-        'workouts_log' => 'LOG workouts for you (a write grant, separate from viewing)',
+        'workouts'     => 'view your workout history, progress charts and planned workouts AND log workouts for you (one training permission)',
         'wishlist'     => 'view your gift wishlist',
         'calendar'     => 'view your calendar events',
         'cycle'        => 'view your menstrual cycle status (sensitive)',
@@ -71,6 +72,7 @@ final class Connections
     public static function normalizeScopes(array $scopes): string
     {
         $clean = array_map(static fn ($s): string => strtolower(trim((string) $s)), $scopes);
+        $clean = array_map(static fn (string $s): string => $s === self::LEGACY_LOG_SCOPE ? 'workouts' : $s, $clean);   // the old log grant is the training grant now
         $valid = array_values(array_unique(array_intersect($clean, self::APPS)));
 
         return implode(',', $valid);

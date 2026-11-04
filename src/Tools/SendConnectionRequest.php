@@ -30,7 +30,7 @@ final class SendConnectionRequest implements Tool
         return 'Sends a connection request to another existing user by their email (and emails them a '
             . 'notification to sign in and accept), so you can share data with each other (e.g. workout '
             . 'stats). Specify what YOU want to share via "share" — any of: ' . Connections::scopeGuide() . '. '
-            . 'Beyond workouts, add a scope only when the user names it; "cycle", "workouts_log" and "home" only on an explicit ask. '
+            . 'Beyond workouts, add a scope only when the user names it; "cycle" and "home" only on an explicit ask. '
             . 'They must accept and choose what they share back. If the person has no account yet, use '
             . 'create_invite first (admin only). Defaults to sharing workouts if "share" is omitted.';
     }
