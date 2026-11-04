@@ -1037,6 +1037,9 @@ final class WorkEvents
                 [$a, $b] = [$b, $a];
             }
             $label = $a->format('j M') . ' – ' . $b->format($a->format('Y') === $b->format('Y') ? 'j M' : 'j M Y');
+            if ($a->format('j') === '1' && $a->format('Y-m') === $b->format('Y-m') && $b->format('j') === $b->format('t')) {
+                $label = $a->format('F Y');   // a whole calendar month reads as "November 2026"
+            }
             return [$a, $b->modify('+1 day'), $label, $label];
         }
 
