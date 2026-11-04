@@ -23,6 +23,7 @@ use App\Data\Mileage;
 use App\Data\MileageSuggestions;
 use App\Data\Moms;
 use App\Data\BalanceItems;
+use App\Data\EntryAttachments;
 use App\Data\BalanceSheet;
 use App\Data\Ledger;
 use App\Data\LoanPack;
@@ -328,6 +329,7 @@ final class ToolRegistry
         $registry->register(new SetDiagnostics($users, new AppFlags()));
         $registry->register(new GetVoiceLog(new VoiceLog(), $users));
         $registry->register($export);
+        $registry->register(new AttachExportToEntry($export, $income, $receipts, new EntryAttachments(), $receiptStorage));
         $export->setRegistry($registry);
         // Registered last: it reads the registry at call time to describe the full, current tool set.
         $registry->register(new ExplainCapabilities($registry));

@@ -142,6 +142,7 @@ final class Receipts
         if ($row === null) {
             return null;
         }
+        (new EntryAttachments($this->db))->purgeFor($userId, 'expense', $id);   // its extra files go with it
         $this->db->prepare('DELETE FROM receipts WHERE id = :id AND user_id = :u')
             ->execute([':id' => $id, ':u' => $userId]);
 

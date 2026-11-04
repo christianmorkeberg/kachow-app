@@ -51,6 +51,7 @@ final class Ledger
             $year = substr($r['date'], 0, 4);
             $n[$year] = ($n[$year] ?? 0) + 1;
             $r['voucher'] = $year . '-' . str_pad((string) $n[$year], 4, '0', STR_PAD_LEFT);
+            $r['entity_id'] = $r['_id'];
             unset($r['_id']);
             if (($from !== null && $r['date'] < $from) || ($to !== null && $r['date'] > $to)) {
                 continue;
@@ -109,7 +110,7 @@ final class Ledger
         $out = [];
         foreach ($stmt->fetchAll() as $r) {
             $out[] = [
-                '_id' => (int) $r['id'], 'date' => (string) $r['issued_at'], 'type' => 'Salg',
+                '_id' => (int) $r['id'], 'entity' => 'income', 'date' => (string) $r['issued_at'], 'type' => 'Salg',
                 'text' => trim(((string) ($r['doc_number'] ?? '') !== '' ? $r['doc_number'] . ' · ' : '') . (string) ($r['customer'] ?? '') . ((string) ($r['note'] ?? '') !== '' ? ' — ' . $r['note'] : '')),
                 'account' => (string) ($r['category'] ?? '') !== '' ? (string) $r['category'] : 'Salg af ydelser',
                 'ex' => round((float) $r['amount_ex_vat'], 2), 'vat' => round((float) $r['vat'], 2), 'total' => round((float) $r['total'], 2),
@@ -132,7 +133,7 @@ final class Ledger
             $vat   = round((float) $r['vat'], 2);
             $priv  = (int) ($r['paid_privately'] ?? 0) === 1;
             $out[] = [
-                '_id' => (int) $r['id'], 'date' => (string) $r['purchased_at'], 'type' => 'Udgift',
+                '_id' => (int) $r['id'], 'entity' => 'expense', 'date' => (string) $r['purchased_at'], 'type' => 'Udgift',
                 'text' => trim((string) ($r['vendor'] ?? '') . ((string) ($r['note'] ?? '') !== '' ? ' — ' . $r['note'] : '')),
                 'account' => (string) ($r['category'] ?? '') !== '' ? (self::CATEGORY_DA[(string) $r['category']] ?? ucfirst((string) $r['category'])) : 'Øvrige udgifter',
                 'ex' => -round($total - $vat, 2), 'vat' => -$vat, 'total' => -$total,

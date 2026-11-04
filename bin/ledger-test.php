@@ -14,6 +14,8 @@ use App\Data\BalanceSheet;
 use App\Data\Ledger;
 use App\Data\LoanPack;
 use App\Data\Receipts;
+use App\Data\EntryAttachments;
+use App\Receipts\ReceiptStorage;
 use App\Data\LoanReports;
 use App\Data\UserSettings;
 
@@ -185,6 +187,31 @@ check('any = owed + repaid private ones only', count(array_filter($ac['items'], 
 check('owed excludes repaid, repaid excludes owed', count(array_filter($ow['items'], static fn (array $i): bool => $i['udlaeg'] !== 'owed')) === 0 && count(array_filter($rp['items'], static fn (array $i): bool => $i['udlaeg'] !== 'reimbursed')) === 0);
 check('unfiltered card has every confirmed expense, rows tagged', $plain['count'] > $ac['count'] && $plain['paid_privately'] === '' && $plain['kind'] === 'expenses');
 check('currencies stay separate in the filtered totals', in_array('EUR', array_column($ac['currencies'], 'currency'), true) && in_array('DKK', array_column($ac['currencies'], 'currency'), true), json_encode($ac['currencies']));
+
+echo "13) extra attachments on an entry\n";
+$db->exec("CREATE TABLE entry_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, entity_type TEXT, entity_id INT, file_ref TEXT, mime TEXT, name TEXT, size INT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+$tmpDir = sys_get_temp_dir() . '/kachow-att-' . bin2hex(random_bytes(4));
+$store  = new ReceiptStorage($tmpDir);
+$src    = tempnam(sys_get_temp_dir(), 'src'); file_put_contents($src, "%PDF-1.4 test");
+$stored = $store->storeFile(1, $src, filesize($src), 'Timeseddel DSB 30.09-30.10.pdf');
+check('a PDF is stored verbatim under a random name', preg_match('/^[0-9a-f]{32}\.pdf$/', $stored['file_ref']) === 1 && $stored['mime'] === 'application/pdf' && is_file($tmpDir . '/1/' . $stored['file_ref']));
+check('display name keeps the readable name', $stored['name'] === 'Timeseddel DSB 30.09-30.10.pdf', $stored['name']);
+$bad = false; try { $store->storeFile(1, $src, filesize($src), 'evil.php'); } catch (RuntimeException $e) { $bad = true; }
+check('a .php (or any unlisted type) is refused', $bad);
+$big = false; try { $store->storeFile(1, $src, 13 * 1024 * 1024, 'x.pdf'); } catch (RuntimeException $e) { $big = true; }
+check('over 12 MB is refused', $big);
+$ea = new EntryAttachments($db);
+$aid = $ea->add(1, 'income', 7, $stored['file_ref'], $stored['mime'], $stored['name'], $stored['size']);
+$ea->add(1, 'income', 8, 'other.pdf', 'application/pdf', 'other.pdf', 10);
+check('listed for its own entry only', count($ea->listFor(1, 'income', 7)) === 1 && count($ea->listFor(1, 'expense', 7)) === 0 && count($ea->listFor(1, 'income', 8)) === 1);
+check('another user cannot read it', $ea->get(2, $aid) === null && $ea->get(1, $aid)['name'] === $stored['name']);
+$ea->purgeFor(1, 'income', 7, $store);
+check('purging the entry removes rows and files', $ea->listFor(1, 'income', 7) === [] && !is_file($tmpDir . '/1/' . $stored['file_ref']) && count($ea->listFor(1, 'income', 8)) === 1);
+$ref = $ea->delete(1, (int) $db->query("SELECT id FROM entry_attachments WHERE entity_id = 8")->fetchColumn());
+check('delete returns the file ref and drops the row', $ref === 'other.pdf' && $ea->listFor(1, 'income', 8) === []);
+$rows = $ledger->rows(1, '2025-01-01', '2025-12-31');
+check('ledger rows know their entry (for the bilag zip)', $rows[1]['entity'] === 'income' && $rows[1]['entity_id'] > 0 && $rows[0]['entity'] === 'expense');
+@unlink($src); @array_map('unlink', glob($tmpDir . '/1/*') ?: []); @rmdir($tmpDir . '/1'); @rmdir($tmpDir);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

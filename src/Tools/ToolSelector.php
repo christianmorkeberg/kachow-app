@@ -108,7 +108,7 @@ final class ToolSelector
             'log_work_time', 'get_work_log', 'export_work_log',
         ],
         'export' => [
-            'export_data',
+            'export_data', 'attach_export_to_entry',
         ],
         'devideas' => [
             'note_dev_idea', 'list_dev_ideas', 'set_dev_idea_status', 'update_dev_idea', 'remove_dev_idea',
@@ -121,7 +121,7 @@ final class ToolSelector
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'list_udlaeg', 'get_books', 'get_moms',
-            'get_cash', 'record_cash_movement', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item',
+            'get_cash', 'record_cash_movement', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item', 'attach_export_to_entry',
             'get_invoice_overview', 'get_moms_by_quarter', 'get_budget', 'get_loan_pack',
             'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'update_trip', 'delete_trip', 'get_driving_distance',
         ],
@@ -348,7 +348,7 @@ final class ToolSelector
             'payment details', 'my company is', 'min virksomhed', 'set my company',
             // ledger / saldobalance / balance sheet (lånepakke)
             'ledger', 'kassekladde', 'bogføringsjournal', 'posteringer', 'saldobalance', 'kontospecifikation', 'trial balance', 'balance sheet',
-            'balance pr', 'balancen', 'egenkapital', 'equity', 'status pr', 'aktiver', 'passiver', 'lånepakke', 'loan pack', 'regnskab til banken', 'bogholder', 'regnskabspakke', 'fakturaoversigt', 'moms pr. kvartal', 'momsoversigt', 'budget', 'resultatopgørelse', 'debitorer',
+            'balance pr', 'balancen', 'egenkapital', 'equity', 'status pr', 'aktiver', 'passiver', 'vedhæft', 'vedhæfte', 'attach the', 'attach it', 'attach a file', 'lånepakke', 'loan pack', 'regnskab til banken', 'bogholder', 'regnskabspakke', 'fakturaoversigt', 'moms pr. kvartal', 'momsoversigt', 'budget', 'resultatopgørelse', 'debitorer',
             'indtægt', 'indtægter', 'omsætning', 'tjent', 'indtjening', 'debitor', 'skylder mig', 'udestående',
             // owner drawings / paying yourself (avoid bare "draw" — matches drawn/withdrawer/etc.)
             'owner draw', 'pay myself', 'paid myself', 'pay to myself', 'take out of the business',

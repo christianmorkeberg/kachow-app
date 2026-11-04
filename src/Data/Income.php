@@ -195,6 +195,7 @@ final class Income
         if ($row === null) {
             return null;
         }
+        (new EntryAttachments($this->db))->purgeFor($userId, 'income', $id);   // its extra files go with it
         $this->db->prepare('DELETE FROM income WHERE id = :id AND user_id = :u')
             ->execute([':id' => $id, ':u' => $userId]);
 

@@ -89,6 +89,43 @@ final class ReceiptStorage
         return ['file_ref' => $name, 'mime' => 'image/jpeg'];
     }
 
+    /** Document types an ATTACHMENT may be (stored as they are, never run or shown inline): extension → mime. */
+    public const ATTACHMENT_TYPES = [
+        'pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'heic' => 'image/heic', 'heif' => 'image/heif',
+        'csv' => 'text/csv', 'txt' => 'text/plain',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xls' => 'application/vnd.ms-excel',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'doc' => 'application/msword',
+        'ods' => 'application/vnd.oasis.opendocument.spreadsheet', 'odt' => 'application/vnd.oasis.opendocument.text',
+    ];
+
+    /**
+     * Stores any allowed document verbatim (an hour schedule, a contract, a spreadsheet …) under a random name; the original name is for display only.
+     *
+     * @return array{file_ref:string, mime:string, name:string, size:int}
+     * @throws RuntimeException when the type is not allowed, the file is too large or cannot be stored
+     */
+    public function storeFile(int $userId, string $tmpPath, int $size, string $originalName): array
+    {
+        if ($size <= 0 || $size > self::MAX_BYTES) {
+            throw new RuntimeException('That file is too large (max 12 MB).');
+        }
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        if (!isset(self::ATTACHMENT_TYPES[$ext])) {
+            throw new RuntimeException('That file type is not allowed. Use PDF, an image, CSV, Excel, Word or a text file.');
+        }
+        $dir = $this->userDir($userId);
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new RuntimeException('Could not prepare storage for the file.');
+        }
+        $name = bin2hex(random_bytes(16)) . '.' . $ext;
+        if (!@copy($tmpPath, $dir . '/' . $name)) {
+            throw new RuntimeException('Could not store that file. Try again.');
+        }
+        $display = trim(preg_replace('/[^\p{L}\p{N} ._()\-]+/u', '_', basename($originalName)) ?? '') ?: ('file.' . $ext);
+
+        return ['file_ref' => $name, 'mime' => self::ATTACHMENT_TYPES[$ext], 'name' => mb_substr($display, 0, 160), 'size' => $size];
+    }
+
     /** Absolute path to a stored file, or null if the ref is unsafe/missing. */
     public function pathFor(int $userId, string $fileRef): ?string
     {
