@@ -154,6 +154,17 @@ final class ScheduledTasks
         return $stmt->rowCount() > 0;
     }
 
+    /** Deletes (cancels) one of the user's tasks or routines from the card, whatever state it is in (draft, active, paused, done). */
+    public function remove(int $userId, int $id): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE scheduled_tasks SET status = 'cancelled', run_requested_at = NULL WHERE id = :id AND user_id = :u AND status IN ('draft','active','paused','done')"
+        );
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
     /**
      * Marks a task as having a result worth seeing — called by notify_me every time it
      * fires, regardless of whether the push itself actually reached a device, so a missed
