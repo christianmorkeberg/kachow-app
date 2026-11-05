@@ -229,5 +229,28 @@ check('schedule wording', ScheduledTasks::describeSchedule('weekdays', '08:00', 
     && ScheduledTasks::describeSchedule('minutes', null, null, 60) === 'Every hour'
     && ScheduledTasks::describeSchedule('daily', '4:05', null, null) === 'Every day at 04:05');
 
+echo "   what the last run did (card, read-only)\n";
+check('without a messages table the card still lists (last_calls null)', array_values(array_filter($t2->listForCard(1), fn ($i) => $i['id'] === $b))[0]['last_calls'] === null);
+$db2->exec("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT, tool_name TEXT, card TEXT, diagnostics TEXT)");
+$diag = json_encode(['model' => 'm-1', 'calls' => [['name' => 'get_home_devices', 'ok' => true, 'ms' => 12, 'error' => null], ['name' => 'notify_me', 'ok' => false, 'ms' => 3, 'error' => 'boom']], 'timing' => ['total_ms' => 1845]]);
+$db2->prepare("INSERT INTO messages (conversation_id, role, content, diagnostics) VALUES (11, 'assistant', 'old', NULL)")->execute();
+$db2->prepare("INSERT INTO messages (conversation_id, role, content, diagnostics) VALUES (11, 'assistant', 'done', ?)")->execute([$diag]);
+$lc = array_values(array_filter($t2->listForCard(1), fn ($i) => $i['id'] === $b))[0]['last_calls'];
+check('the last run\'s tool calls are listed with ok / ms / error', is_array($lc) && count($lc['calls']) === 2 && $lc['calls'][0]['name'] === 'get_home_devices' && $lc['calls'][1]['ok'] === false && $lc['calls'][1]['error'] === 'boom', json_encode($lc));
+check('model and total time come along', $lc['model'] === 'm-1' && $lc['total_ms'] === 1845);
+$db2->exec("INSERT INTO messages (conversation_id, role, content, diagnostics) VALUES (11, 'assistant', 'replayed', NULL)");
+check('a replay (no diagnostics on the latest message) shows nothing rather than an older run', array_values(array_filter($t2->listForCard(1), fn ($i) => $i['id'] === $b))[0]['last_calls'] === null);
+$db2->exec("INSERT INTO messages (conversation_id, role, content, diagnostics) VALUES (11, 'assistant', 'x', '" . json_encode(['calls' => []]) . "')");
+$lc2 = array_values(array_filter($t2->listForCard(1), fn ($i) => $i['id'] === $b))[0]['last_calls'];
+check('a run that called no tools says so (empty list, not null)', $lc2 !== null && $lc2['calls'] === []);
+$cardItem = array_values(array_filter(ScheduledTasks::card($t2->listForCard(1))['items'], fn ($i) => $i['id'] === $b))[0];
+check('the card item carries last_calls', array_key_exists('last_calls', $cardItem) && $cardItem['last_calls']['calls'] === []);
+
+echo "   delete from the card\n";
+check('someone else cannot delete it', $t2->remove(2, $b) === false && $t2->find(1, $b) !== null);
+check('delete works on a paused task and it leaves the card', $t2->remove(1, $a) === true && !in_array($a, array_column($t2->listForCard(1), 'id'), true));
+check('delete works on a finished one-off', $t2->remove(1, $c) === true && !in_array($c, array_column($t2->listForCard(1), 'id'), true));
+check('deleting twice reports nothing to delete', $t2->remove(1, $c) === false);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

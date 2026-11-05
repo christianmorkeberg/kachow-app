@@ -369,6 +369,10 @@ final class ScheduledTasks
         $stmt = $this->db->prepare($this->cardSelect() . " WHERE user_id = :u AND status IN ('draft','active','paused','done')");
         $stmt->execute([':u' => $userId]);
         $rows = array_map([self::class, 'cardRow'], $stmt->fetchAll());
+        foreach ($rows as &$row) {
+            $row['last_calls'] = $row['last_run_at'] !== null ? $this->lastRunCalls($row['conversation_id']) : null;
+        }
+        unset($row);
 
         $rank = ['draft' => 0, 'active' => 1, 'paused' => 2, 'done' => 3];
         usort($rows, static function (array $a, array $b) use ($rank): int {
@@ -380,6 +384,46 @@ final class ScheduledTasks
         return array_values(array_filter($rows, static function (array $r) use (&$done): bool {
             return $r['status'] !== 'done' || ++$done <= 10;
         }));
+    }
+
+    /**
+     * What the task's latest run did, from the diagnostics stored on its last assistant message: the tools it called (name, ok, ms,
+     * error), the model and the total time. null when there is nothing recorded (a replay of recorded steps makes no model call).
+     * Read-only: purely for the card's "What it did" line — it changes nothing about how a run behaves.
+     *
+     * @return array{calls:list<array<string,mixed>>, model:?string, total_ms:?int}|null
+     */
+    private function lastRunCalls(int $conversationId): ?array
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT diagnostics FROM messages WHERE conversation_id = :c AND role = 'assistant' ORDER BY id DESC LIMIT 1");
+            $stmt->execute([':c' => $conversationId]);
+            $raw = $stmt->fetchColumn();
+        } catch (\Throwable) {
+            return null;
+        }
+        $d = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
+        if (!is_array($d)) {
+            return null;
+        }
+        $calls = [];
+        foreach ((array) ($d['calls'] ?? []) as $c) {
+            if (!is_array($c) || !isset($c['name'])) {
+                continue;
+            }
+            $calls[] = [
+                'name'  => (string) $c['name'],
+                'ok'    => (bool) ($c['ok'] ?? true),
+                'ms'    => isset($c['ms']) ? (int) $c['ms'] : null,
+                'error' => isset($c['error']) && $c['error'] !== null ? mb_substr((string) $c['error'], 0, 200) : null,
+            ];
+        }
+
+        return [
+            'calls'    => $calls,
+            'model'    => isset($d['model']) ? (string) $d['model'] : null,
+            'total_ms' => isset($d['timing']['total_ms']) ? (int) $d['timing']['total_ms'] : null,
+        ];
     }
 
     /**
@@ -510,6 +554,7 @@ final class ScheduledTasks
                 'last_title'  => $t['last_result_title'],
                 'last_summary' => $t['last_summary'],
                 'unseen'      => $t['has_unseen_result'],
+                'last_calls'  => $t['last_calls'] ?? null,
                 'conversation_id' => $t['conversation_id'],
             ];
         }
