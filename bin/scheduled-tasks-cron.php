@@ -105,7 +105,8 @@ if (!WebPush::isConfigured()) {
 const UNATTENDED_PREAMBLE = "[Scheduled task — this is an unattended run, nobody is "
     . "watching live. Do ONLY what the instruction below specifically asks. If it's a "
     . "check/notify instruction, don't also send messages, delete anything, or take any "
-    . "other action on your own initiative. If the instruction says to ASK the user whether to do something (\"…if so, ask if they want me to turn them off\"), "
+    . "other action on your own initiative. Earlier messages in this conversation are earlier runs: what they found is out of date, so always check again with your tools "
+    . "now — never answer from earlier messages or from memory. If the instruction says to ASK the user whether to do something (\"…if so, ask if they want me to turn them off\"), "
     . "call notify_me with the question as the body AND `offer` holding the exact tool calls to make on a yes — a plain question in a notification cannot be answered. ";
 
 /** Appended per task: how the run should report back. */
@@ -125,6 +126,11 @@ const RETRY_PREAMBLE = "[Scheduled task — RETRY. This is an unattended run. Th
     . "could not reach the home agent. Try the instruction below once more, doing only what it asks. "
     . "If the home agent is still unreachable, call notify_me ONCE saying what could not be done "
     . "and that it will not be tried again.]";
+
+/** A run that called no tool at all checked nothing and did nothing (report #75: it wrote "I sent a notification" and had called nothing). One firmer retry. */
+const NO_TOOLS_PREAMBLE = "[Scheduled task — RETRY. This is an unattended run. Your previous attempt answered in text WITHOUT calling any tool, "
+    . "so nothing was checked and nothing was done. Do the instruction below now by actually calling the tools it needs (look things up, act, "
+    . "and call notify_me where it says to tell the user). Do not describe or claim anything you did not do with a tool call.]";
 
 $tasks     = new ScheduledTasks();
 $notifier  = Notifier::fromEnv();
@@ -233,6 +239,16 @@ $execute = static function (array $task) use ($registry, $notifier, $tasks, $con
     if (ToolMemory::homeUnreachable($fresh)) {
         sleep(RETRY_AFTER_SECONDS);
         $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, RETRY_PREAMBLE);
+    }
+    // A run that called NO tool answered from text alone: nothing was checked or done, whatever it says. One firmer retry; if it
+    // still calls nothing the run is recorded as an error — never as a quiet "nothing to report", and never as "I sent a notification".
+    if ($loop->lastCalls() === []) {
+        $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, NO_TOOLS_PREAMBLE);
+        if ($loop->lastCalls() === []) {
+            $tasks->recordRun($task['id'], false, 'The assistant answered without using any tools, so nothing was checked or done this time. It said: ' . trim((string) $reply));
+
+            return;
+        }
     }
     // A run that was only home-device writes is kept as the routine's exact steps, so the next one is a replay.
     if (empty($task['steps']) && !RoutineSteps::conditional((string) $task['instruction'])) {
