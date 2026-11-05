@@ -527,6 +527,20 @@ final class ToolSelector
     ];
 
     /**
+     * Exactly the declarations whose name is in $names (a scheduled task's learned tool set), in registry order.
+     *
+     * @param array<int, array<string, mixed>> $declarations
+     * @param list<string> $names
+     * @return array<int, array<string, mixed>>
+     */
+    public static function only(array $declarations, array $names): array
+    {
+        $want = array_flip($names);
+
+        return array_values(array_filter($declarations, static fn (array $d): bool => isset($want[(string) ($d['name'] ?? '')])));
+    }
+
+    /**
      * Returns the subset of $declarations relevant to $message (or all of them if
      * nothing matched).
      *

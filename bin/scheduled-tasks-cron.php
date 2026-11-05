@@ -233,6 +233,17 @@ $execute = static function (array $task) use ($registry, $notifier, $tasks, $con
     }
 
     $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
+    // A task that has run a few times offers the model only the generic tools it used before (+ notify_me): no tool selection to pay for, and
+    // nothing unrelated to wander to. One run in ten goes wide again so the set is re-learned, and any run that calls nothing retries wide below.
+    $learned = null;
+    if (random_int(1, 10) !== 1) {
+        try {
+            $learned = (new \App\Diagnostics\ToolCallLog())->learnedTools((int) $task['id']);
+        } catch (\Throwable) {
+            $learned = null;   // log not migrated yet: wide, as before
+        }
+    }
+    $loop->setToolSubset($learned === null ? null : array_values(array_unique(array_merge($learned, ['notify_me']))));
     $seen = count($conversations->messages($task['conversation_id']));
     $report = $task['notify_always'] ? REPORT_ALWAYS : REPORT_QUIET;
     // The rules go to the model as context for this run only; the conversation keeps just the instruction,
@@ -248,6 +259,7 @@ $execute = static function (array $task) use ($registry, $notifier, $tasks, $con
     // A run that called NO tool answered from text alone: nothing was checked or done, whatever it says. One firmer retry; if it
     // still calls nothing the run is recorded as an error — never as a quiet "nothing to report", and never as "I sent a notification".
     if ($loop->lastCalls() === []) {
+        $loop->setToolSubset(null);   // maybe the learned set was too narrow: the retry gets every tool
         $reply = $loop->handle($task['user_id'], $task['conversation_id'], $task['instruction'], null, null, null, NO_TOOLS_PREAMBLE);
         if ($loop->lastCalls() === []) {
             $tasks->recordRun($task['id'], false, 'The assistant answered without using any tools, so nothing was checked or done this time. It said: ' . trim((string) $reply));
@@ -264,6 +276,7 @@ $execute = static function (array $task) use ($registry, $notifier, $tasks, $con
     }
     // What the run came to, for the scheduled-tasks card (its closing words; a notify_me has its own title).
     $tasks->recordRun($task['id'], true, (string) $reply);
+    $loop->setToolSubset(null);
 };
 
 // ---- Routine runs that were REQUESTED (a phrase, the card's Run now, an approved question, a place trigger) ----

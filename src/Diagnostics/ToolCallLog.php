@@ -65,6 +65,34 @@ final class ToolCallLog
         ], $stmt->fetchAll());
     }
 
+    /**
+     * The generic tools a scheduled task / routine has really used, learned from its own past runs — or null while there is too little
+     * evidence (fewer than $minRuns runs that made a successful call). A "run" is the calls sharing a minute (a run takes seconds). A tool
+     * counts if it worked at least once; one that only ever failed is left out, so a misfire is not learned.
+     *
+     * @return list<string>|null sorted tool names
+     */
+    public function learnedTools(int $taskId, int $minRuns = 3, int $days = 60): ?array
+    {
+        $stmt = $this->pdo()->prepare('SELECT tool, ok, created_at FROM tool_call_log WHERE task_id = :t AND created_at >= :since ORDER BY id DESC LIMIT 200');
+        $stmt->execute([':t' => $taskId, ':since' => gmdate('Y-m-d H:i:s', time() - $days * 86400)]);
+        $runs = [];
+        $tools = [];
+        foreach ($stmt->fetchAll() as $r) {
+            if ((int) $r['ok'] === 1) {
+                $runs[substr((string) $r['created_at'], 0, 16)] = true;
+                $tools[(string) $r['tool']] = true;
+            }
+        }
+        if (count($runs) < $minRuns || $tools === []) {
+            return null;
+        }
+        $names = array_keys($tools);
+        sort($names);
+
+        return $names;
+    }
+
     /** Registered tool names with no call in the last $days days (candidates for pruning from the wide set). */
     public function unused(array $registered, int $days = 60): array
     {

@@ -301,6 +301,9 @@ final class AssistantLoop
     /** Every tool call of the last handle() with its FULL arguments — what a routine records as its exact steps. @var list<array{name:string, args:array<string, mixed>, ok:bool}> */
     private array $lastCalls = [];
 
+    /** @var list<string>|null When set, ONLY these tools are offered (a scheduled task's learned tool set); null = the usual routing. */
+    private ?array $toolSubset = null;
+
     /** DB id of the user message persisted this turn (for "report this message"). */
     private ?int $lastUserMessageId = null;
 
@@ -536,6 +539,12 @@ final class AssistantLoop
      *
      * @return list<array{name:string, args:array<string, mixed>, ok:bool}>
      */
+    /** Offer only these tools on the next turns (null = back to normal routing). Used by the scheduled-tasks cron. */
+    public function setToolSubset(?array $names): void
+    {
+        $this->toolSubset = $names === null ? null : array_values(array_map('strval', $names));
+    }
+
     public function lastCalls(): array
     {
         return $this->lastCalls;
@@ -661,6 +670,10 @@ final class AssistantLoop
             // image implies (event, list item, reminder, expense…).
             $groups       = ['IMAGE (all tools)'];
             $declarations = $this->tools->declarations();
+        } elseif ($this->toolSubset !== null) {
+            // A scheduled task that has run before: only the generic tools it used (see ToolCallLog::learnedTools) — no selection to pay for.
+            $groups       = ['LEARNED (' . count($this->toolSubset) . ' tools)'];
+            $declarations = ToolSelector::only($this->tools->declarations(), $this->toolSubset);
         } elseif ($wideTools) {
             // No keyword narrowing: the full toolset is on the table (see above).
             $groups       = ['ALL (wide)'];

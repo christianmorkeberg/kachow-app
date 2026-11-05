@@ -77,5 +77,18 @@ $reg2->setCallLog(new ToolCallLog(new PDO('sqlite::memory:')));   // no table
 $reg2->register(new FakeTool('get_home_devices', ['on' => 2]));
 check('the tool still returns its result when the table is missing', $reg2->dispatch('get_home_devices', [], 1) === ['on' => 2]);
 
+echo "4) learned tool set for a scheduled task\n";
+$ins = $db->prepare('INSERT INTO tool_call_log (user_id, source, task_id, tool, ok, ms, created_at) VALUES (1, \'scheduled\', ?, ?, ?, 5, ?)');
+$ins->execute([9, 'get_home_devices', 1, '2026-11-01 07:00:01']); $ins->execute([9, 'notify_me', 1, '2026-11-01 07:00:03']);
+$ins->execute([9, 'get_home_devices', 1, '2026-11-02 07:00:01']);
+check('two runs are too little evidence (null: stay wide)', $log->learnedTools(9, 3, 3650) === null);
+$ins->execute([9, 'get_home_devices', 1, '2026-11-03 07:00:02']); $ins->execute([9, 'web_search', 0, '2026-11-03 07:00:04']);
+check('three runs: the tools that worked, sorted — a tool that only failed is not learned', $log->learnedTools(9, 3, 3650) === ['get_home_devices', 'notify_me'], json_encode($log->learnedTools(9, 3, 3650)));
+check('another task has its own (empty) evidence', $log->learnedTools(10, 3, 3650) === null);
+check('old runs do not count (window)', $log->learnedTools(9, 3, 1) === null);
+$decls = [['name' => 'a'], ['name' => 'get_home_devices'], ['name' => 'notify_me'], ['name' => 'z']];
+check('ToolSelector::only keeps exactly the named declarations, in order', array_column(\App\Tools\ToolSelector::only($decls, ['notify_me', 'get_home_devices']), 'name') === ['get_home_devices', 'notify_me']);
+check('…and nothing for an empty / unknown set', \App\Tools\ToolSelector::only($decls, ['nope']) === []);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

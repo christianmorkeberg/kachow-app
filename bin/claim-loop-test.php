@@ -80,5 +80,30 @@ $saved = [];
 $r = run([text('Jeg har tilføjet idéen.'), text('Jeg har tilføjet idéen, den er gemt.')], $note, 'dev ide: y');
 check('nothing saved, and the reply says so instead of repeating the lie', $saved === [] && str_contains($r['reply'], 'ikke gemt') && str_contains($r['reply'], 'NOT saved') && !str_contains($r['reply'], 'tilføjet'), $r['reply']);
 
+echo "5) a scheduled task's learned tool set: only those tools are offered\n";
+$other = new class implements Tool {
+    public function name(): string { return 'get_weather'; }
+    public function description(): string { return 'Weather.'; }
+    public function parameters(): array { return ['type' => 'object', 'properties' => []]; }
+    public function execute(array $arguments, int $userId): array { return ['temp' => 5]; }
+};
+$offered = [];
+$client = new GeminiClient('k', ['m1'], function (string $url, array $payload, array $headers, ?int $t = null) use (&$offered): array {
+    $offered = array_map(static fn (array $d): string => (string) $d['name'], $payload['tools'][0]['function_declarations'] ?? []);
+
+    return [200, json_encode(text('ok'))];
+});
+$registry = new ToolRegistry();
+$registry->register($note);
+$registry->register($other);
+$loop = new AssistantLoop($client, $registry, new Conversations($db), wideTools: true);
+$loop->setToolSubset(['get_weather']);
+$loop->handle(1, (new Conversations($db))->start(1), 'check it');
+check('only the learned tool goes to the model', $offered === ['get_weather'], json_encode($offered));
+check('the diagnostics say the tools were learned', str_starts_with((string) ($loop->lastDiagnostics()['routing'][0] ?? ''), 'LEARNED (1'), json_encode($loop->lastDiagnostics()['routing'] ?? null));
+$loop->setToolSubset(null);
+$loop->handle(1, (new Conversations($db))->start(1), 'check it');
+check('back to the full set when the subset is cleared', count($offered) === 2, json_encode($offered));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

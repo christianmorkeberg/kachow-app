@@ -422,6 +422,7 @@ final class ScheduledTasks
         return [
             'calls'    => $calls,
             'model'    => isset($d['model']) ? (string) $d['model'] : null,
+            'routing'  => isset($d['routing'][0]) ? (string) $d['routing'][0] : null,
             'total_ms' => isset($d['timing']['total_ms']) ? (int) $d['timing']['total_ms'] : null,
         ];
     }
