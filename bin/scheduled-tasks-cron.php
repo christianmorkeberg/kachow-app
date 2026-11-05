@@ -134,6 +134,9 @@ const NO_TOOLS_PREAMBLE = "[Scheduled task — RETRY. This is an unattended run.
 
 $tasks     = new ScheduledTasks();
 $notifier  = Notifier::fromEnv();
+if (random_int(1, 500) === 1) {
+    (new \App\Diagnostics\ToolCallLog())->prune(180);   // keep ~6 months of the tool-call log
+}
 $utc       = new DateTimeZone('UTC');
 
 try {
@@ -197,6 +200,8 @@ $routines = new Routines();
  */
 $execute = static function (array $task) use ($registry, $notifier, $tasks, $conversations, $loop, $routines): void {
     $userId = (int) $task['user_id'];
+    // Every tool call in this run is logged as coming from a scheduled task (clock) or a routine (phrase / place / sensor), with the task id.
+    $registry->setContext(($task['trigger_type'] ?? 'time') === 'time' ? 'scheduled' : 'routine', (int) $task['id'], (int) $task['conversation_id']);
 
     if (!empty($task['steps'])) {
         $call = static function (string $tool, array $args) use ($registry, $userId): array {

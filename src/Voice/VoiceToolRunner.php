@@ -57,7 +57,7 @@ final class VoiceToolRunner
                 $result = ['answer' => (string) $g['reply']];
                 $card   = $g['card'] ?? null;
             } else {
-                $result = $this->registry->dispatch($name, $args, $userId);
+                $result = $this->registry->dispatch($name, $args, $userId, 'voice');
                 $card   = isset($result['_render']) && is_array($result['_render']) ? $result['_render'] : null;
             }
         } catch (Throwable $e) {

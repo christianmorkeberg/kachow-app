@@ -621,6 +621,7 @@ final class AssistantLoop
         $this->lastSuggestions = null;
         $this->lastAssistantMessageId = null;
         $this->lastCalls = [];
+        $this->tools->setConversation($conversationId);
 
         // One read of the history: the text turns the model replays, plus a digest of what
         // earlier turns created (tool rows are stored but never replayed — see ToolMemory).

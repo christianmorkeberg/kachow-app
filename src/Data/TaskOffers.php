@@ -131,7 +131,7 @@ final class TaskOffers
                 continue;
             }
             try {
-                $res = $registry->dispatch($tool, is_array($c['args'] ?? null) ? $c['args'] : [], $userId);
+                $res = $registry->dispatch($tool, is_array($c['args'] ?? null) ? $c['args'] : [], $userId, 'offer');
             } catch (Throwable $e) {
                 $res = ['error' => $e->getMessage()];
             }

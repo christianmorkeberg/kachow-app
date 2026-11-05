@@ -239,7 +239,7 @@ final class ExportData implements Tool
         if (in_array($spec['source'], ['get_thermostat_probe', 'get_ledger', 'get_loan_pack'], true)) {
             $args['_export'] = true;   // the whole log as rows, not just the 60 the model is shown
         }
-        $result = $registry->dispatch((string) $spec['source'], $args, $userId);
+        $result = $registry->dispatch((string) $spec['source'], $args, $userId, 'export');
         if (isset($result['error'])) {
             return ['error' => (string) $result['error']];
         }

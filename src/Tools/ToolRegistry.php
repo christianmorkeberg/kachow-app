@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\AgentCommands;
+use App\Diagnostics\ToolCallLog;
 use App\Data\HomeDevices;
 use App\Data\HomeState;
 use App\Data\ApiTokens;
@@ -82,6 +83,11 @@ final class ToolRegistry
 {
     /** @var array<string, Tool> */
     private array $tools = [];
+
+    private string $source = 'chat';
+    private ?int $taskId = null;
+    private ?int $conversationId = null;
+    private ?ToolCallLog $callLog = null;
 
     public function register(Tool $tool): void
     {
@@ -387,13 +393,55 @@ final class ToolRegistry
      * @param array<string, mixed> $arguments
      * @return array<string, mixed>
      */
-    public function dispatch(string $name, array $arguments, int $userId): array
+    public function dispatch(string $name, array $arguments, int $userId, ?string $source = null): array
     {
         $tool = $this->get($name);
         if ($tool === null) {
             throw new InvalidArgumentException("Unknown tool: {$name}");
         }
 
-        return $tool->execute($arguments, $userId);
+        // Every call from every entry point passes here, so this is the one place that logs which tool ran, for whom, from where
+        // (chat / scheduled / routine / voice / live / offer / export), whether it worked and how long it took — never the arguments.
+        $t0 = microtime(true);
+        try {
+            $result = $tool->execute($arguments, $userId);
+        } catch (\Throwable $e) {
+            $this->log($userId, $source, $name, false, $t0, get_class($e) . ': ' . $e->getMessage());
+            throw $e;
+        }
+        $err = $result['error'] ?? null;
+        $this->log($userId, $source, $name, $err === null, $t0, $err === null ? null : (is_string($err) ? $err : (string) json_encode($err)));
+
+        return $result;
+    }
+
+    /** What the calls that follow come from ('chat' by default; the cron sets 'scheduled' / 'routine' with the task id). */
+    public function setContext(string $source, ?int $taskId = null, ?int $conversationId = null): void
+    {
+        $this->source         = $source;
+        $this->taskId         = $taskId;
+        $this->conversationId = $conversationId;
+    }
+
+    /** The conversation the next calls belong to (the chat loop sets it each turn); the source stays as it was. */
+    public function setConversation(?int $conversationId): void
+    {
+        $this->conversationId = $conversationId;
+    }
+
+    public function setCallLog(?ToolCallLog $log): void
+    {
+        $this->callLog = $log;
+    }
+
+    private function log(int $userId, ?string $source, string $tool, bool $ok, float $t0, ?string $error): void
+    {
+        try {
+            ($this->callLog ??= new ToolCallLog())->record(
+                $userId, $source ?? $this->source, $tool, $ok, (int) round((microtime(true) - $t0) * 1000), $error, $this->taskId, $this->conversationId
+            );
+        } catch (\Throwable) {
+            // logging never breaks a tool
+        }
     }
 }
