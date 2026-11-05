@@ -46,8 +46,17 @@ final class WebPush implements Sender
         return self::env('VAPID_PUBLIC_KEY');
     }
 
+    /** Why the last send was not 'ok' (HTTP status + the push service's reason), or null. Read by Notifier for its log and the test result. */
+    private ?string $lastDetail = null;
+
+    public function lastDetail(): ?string
+    {
+        return $this->lastDetail;
+    }
+
     public function send(array $subscription, string $payloadJson): string
     {
+        $this->lastDetail = null;
         $sub = Subscription::create([
             'endpoint' => $subscription['endpoint'],
             'keys'     => ['p256dh' => $subscription['p256dh'], 'auth' => $subscription['auth']],
@@ -57,6 +66,9 @@ final class WebPush implements Sender
         if ($report->isSuccess()) {
             return 'ok';
         }
+
+        $status = $report->getResponse()?->getStatusCode();
+        $this->lastDetail = trim(($status !== null ? $status . ' ' : '') . mb_substr((string) $report->getReason(), 0, 160));
 
         return $report->isSubscriptionExpired() ? 'expired' : 'failed';
     }

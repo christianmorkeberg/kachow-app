@@ -74,11 +74,24 @@ final class Notifier
         }
     }
 
+    /** @var array{devices:int, ok:int, results:list<array{id:int, result:string, detail:?string}>} what the last deliver() did, per device */
+    private array $lastDelivery = ['devices' => 0, 'ok' => 0, 'results' => []];
+
+    /** What the last notification did, per device (for the test button). A failure used to leave no trace at all. */
+    public function lastDelivery(): array
+    {
+        return $this->lastDelivery;
+    }
+
     /** Fans a payload out to every device, pruning any that have expired. */
     private function deliver(int $userId, string $type, string $title, string $body, ?string $url): int
     {
         $subs = $this->subscriptions->forUser($userId);
+        $this->lastDelivery = ['devices' => count($subs), 'ok' => 0, 'results' => []];
         if ($subs === []) {
+            // Nothing to send to: the notification is in the bell, but no phone was ever told. Leave a trace so "I get no notifications" can be diagnosed.
+            error_log('push: user ' . $userId . ' type ' . $type . ' -> no subscribed device (the phone is not registered with the server)');
+
             return 0;
         }
 
@@ -96,14 +109,21 @@ final class Notifier
         $sent = 0;
         foreach ($subs as $s) {
             $result = $this->sender->send($s, (string) $payload);
+            $detail = method_exists($this->sender, 'lastDetail') ? $this->sender->lastDetail() : null;
+            $this->lastDelivery['results'][] = ['id' => $s['id'], 'result' => $result, 'detail' => $detail];
             if ($result === 'ok') {
                 $this->subscriptions->touch($s['id']);
                 $sent++;
-            } elseif ($result === 'expired') {
-                $this->subscriptions->deleteByEndpoint($s['endpoint']);
+            } else {
+                error_log('push: user ' . $userId . ' type ' . $type . ' device ' . $s['id'] . ' -> ' . $result . ($detail !== null && $detail !== '' ? ' (' . $detail . ')' : ''));
+                if ($result === 'expired') {
+                    $this->subscriptions->deleteByEndpoint($s['endpoint']);   // the phone registers again by itself next time the app opens
+                }
+                // 'failed' is transient — leave the subscription in place.
             }
-            // 'failed' is transient — leave the subscription in place.
         }
+
+        $this->lastDelivery['ok'] = $sent;
 
         return $sent;
     }

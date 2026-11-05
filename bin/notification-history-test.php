@@ -66,7 +66,7 @@ $db->exec("UPDATE notification_history SET created_at = '2000-01-01 00:00:00' WH
 check('old entries are purged, recent ones kept', $h->purgeOld(1) === 1 && !in_array($old, array_column($h->list(1, 100), 'id'), true) && count($h->list(1)) >= 3);
 
 echo "\n4) Notifier records what it sends\n";
-$db->exec('CREATE TABLE push_subscriptions (id INTEGER PRIMARY KEY, user_id INT, endpoint TEXT, p256dh TEXT, auth TEXT, created_at TEXT, last_sent_at TEXT)');
+$db->exec('CREATE TABLE push_subscriptions (id INTEGER PRIMARY KEY, user_id INT, endpoint TEXT, endpoint_hash TEXT, p256dh TEXT, auth TEXT, created_at TEXT, last_sent_at TEXT)');
 $db->exec('CREATE TABLE notification_prefs (user_id INT, type_key TEXT, enabled INT)');
 $sender = new class implements Sender {
     public array $sent = [];
@@ -89,6 +89,25 @@ $n->sendTest(1);
 check('a test push is not history', count($h->list(1, 100)) === $cnt);
 $broken = new Notifier(new PushSubscriptions($db), new NotificationPrefs($db), $sender, new NotificationHistory(new PDO('sqlite::memory:')));
 check('a failing history never blocks the push', $broken->notify(1, NotificationTypes::REMINDER, 'R', 'b') === 1);
+
+echo "\n4b) a push that does not arrive leaves a trace (per-device result)\n";
+$sender2 = new class implements Sender {
+    public string $result = 'expired';
+    public function send(array $sub, string $payload): string { return $this->result; }
+    public function lastDetail(): ?string { return $this->result === 'ok' ? null : '410 Gone'; }
+};
+$db->exec('DELETE FROM push_subscriptions');
+$n2 = new Notifier(new PushSubscriptions($db), new NotificationPrefs($db), $sender2, $h);
+$n2->sendTest(1);
+check('no device: devices 0, nothing sent', $n2->lastDelivery()['devices'] === 0 && $n2->lastDelivery()['ok'] === 0 && $n2->lastDelivery()['results'] === []);
+$db->exec("INSERT INTO push_subscriptions (id, user_id, endpoint, endpoint_hash, p256dh, auth) VALUES (7, 1, 'https://push.example/7', '" . hash('sha256', 'https://push.example/7') . "', 'k', 'a')");
+check('an expired subscription is reported with its reason …', $n2->sendTest(1) === 0 && $n2->lastDelivery()['results'][0]['result'] === 'expired' && $n2->lastDelivery()['results'][0]['detail'] === '410 Gone' && $n2->lastDelivery()['devices'] === 1);
+check('… and removed, so the phone can register again', (int) $db->query('SELECT COUNT(*) FROM push_subscriptions WHERE id = 7')->fetchColumn() === 0);
+$db->exec("INSERT INTO push_subscriptions (id, user_id, endpoint, endpoint_hash, p256dh, auth) VALUES (8, 1, 'https://push.example/8', '" . hash('sha256', 'https://push.example/8') . "', 'k', 'a')");
+$sender2->result = 'failed';
+check('a transient failure keeps the subscription', $n2->sendTest(1) === 0 && (int) $db->query('SELECT COUNT(*) FROM push_subscriptions WHERE id = 8')->fetchColumn() === 1 && $n2->lastDelivery()['results'][0]['result'] === 'failed');
+$sender2->result = 'ok';
+check('a success is counted', $n2->sendTest(1) === 1 && $n2->lastDelivery()['ok'] === 1 && $n2->lastDelivery()['results'][0]['detail'] === null);
 
 echo "\n5) the developer's feedback push\n";
 check('it opens the open reports', NotificationTypes::deepLink(NotificationTypes::FEEDBACK_REPORT) === '/?card=feedback');
