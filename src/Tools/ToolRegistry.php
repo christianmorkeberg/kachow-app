@@ -191,6 +191,8 @@ final class ToolRegistry
         $registry->register(new GetWeatherForecast($weatherService));
         $registry->register(new GetKioskSetup(new ApiTokens()));
         $registry->register(new GetPowerPrices(new PowerPrices(new EnergiDataService())));
+        $registry->register(new GetPlugPower(\App\Energy\Tuya::fromEnv()));
+        $registry->register(new GetPlugEnergy(new \App\Data\PowerReadings(), new PowerPrices(new EnergiDataService())));
         $registry->register(new GetWorkHours($workEvents));
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new ShowChart());
