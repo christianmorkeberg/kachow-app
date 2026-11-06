@@ -81,7 +81,7 @@ final class UpdateCalendarEvent implements Tool
                 'time_zone' => [
                     'type'        => 'string',
                     'description' => 'IANA time zone for new start/end times (e.g. "Europe/Copenhagen"). '
-                        . 'Omit to keep the event\'s current zone.',
+                        . 'Omit to read a time WITHOUT an offset in the user\'s zone (Europe/Copenhagen); a time ending in Z or +hh:mm means that exact instant.',
                 ],
                 'attendees' => [
                     'type'        => 'array',

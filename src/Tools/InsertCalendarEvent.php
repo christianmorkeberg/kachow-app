@@ -73,7 +73,7 @@ final class InsertCalendarEvent implements Tool
                 ],
                 'time_zone' => [
                     'type'        => 'string',
-                    'description' => 'Optional IANA time zone for the times (default "UTC").',
+                    'description' => 'Optional IANA time zone for times that have no offset (default "Europe/Copenhagen", the user\'s zone). A time ending in Z or +hh:mm means that exact instant.',
                 ],
                 'calendar_id' => [
                     'type'        => 'string',
@@ -114,7 +114,7 @@ final class InsertCalendarEvent implements Tool
             $end,
             isset($arguments['description']) && $arguments['description'] !== '' ? (string) $arguments['description'] : null,
             isset($arguments['location']) && $arguments['location'] !== '' ? (string) $arguments['location'] : null,
-            isset($arguments['time_zone']) && $arguments['time_zone'] !== '' ? (string) $arguments['time_zone'] : 'UTC',
+            isset($arguments['time_zone']) && $arguments['time_zone'] !== '' ? (string) $arguments['time_zone'] : Calendar::DISPLAY_TZ,
             isset($arguments['calendar_id']) && $arguments['calendar_id'] !== '' ? (string) $arguments['calendar_id'] : 'primary',
             !empty($arguments['all_day']),
             isset($arguments['attendees']) && is_array($arguments['attendees']) && $arguments['attendees'] !== []

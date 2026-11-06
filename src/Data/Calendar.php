@@ -26,6 +26,32 @@ final class Calendar
 {
     private const PRIMARY = 'primary';
 
+    /** The zone every event time is shown in (and naive times are read in): Google returns each event in ITS calendar's own zone. */
+    public const DISPLAY_TZ = 'Europe/Copenhagen';
+
+    /**
+     * An RFC3339 date-time moved to the display zone (same instant, local offset), so the date and clock digits are what the user
+     * lives by — whatever zone the source calendar is set to (report #76: a +08:00 calendar showed 17:00 as 00:00 the next day).
+     * Date-only (all-day) values and anything unparsable are returned unchanged.
+     */
+    public static function localise(?string $dateTime): ?string
+    {
+        if ($dateTime === null || strlen($dateTime) <= 10) {
+            return $dateTime;
+        }
+        try {
+            return (new DateTimeImmutable($dateTime))->setTimezone(new \DateTimeZone(self::DISPLAY_TZ))->format('Y-m-d\TH:i:sP');
+        } catch (\Throwable) {
+            return $dateTime;
+        }
+    }
+
+    /** Whether a date-time string says which zone it is in (a trailing Z or ±hh:mm / ±hhmm). */
+    public static function hasOffset(string $dateTime): bool
+    {
+        return (bool) preg_match('/(Z|[+-]\d{2}:?\d{2})$/i', trim($dateTime));
+    }
+
     public function __construct(
         private GoogleOAuth $oauth,
     ) {
@@ -50,6 +76,7 @@ final class Calendar
             $result = $service->events->listEvents($calendar['id'], [
                 'timeMin'      => $from,
                 'timeMax'      => $to,
+                'timeZone'     => self::DISPLAY_TZ,   // ask Google for the user's zone, not each calendar's own (normalize() enforces it too)
                 'singleEvents' => true,
                 'orderBy'      => 'startTime',
                 'maxResults'   => $maxResultsPerCalendar,
@@ -249,8 +276,8 @@ final class Calendar
     /**
      * Creates an event on the primary calendar and returns the created event.
      *
-     * $start/$end are RFC3339 timestamps. Times are interpreted in $timeZone
-     * (default UTC — the app runs in UTC and the model is expected to pass UTC).
+     * $start/$end are RFC3339 timestamps. A time that carries its own offset (or Z) means exactly that instant; one without is
+     * read in $timeZone (default Europe/Copenhagen — the user's zone; it used to be UTC, which put a plain "12:00" an hour late).
      *
      * $attendees is a list of email addresses — this also covers inviting one of the
      * user's OWN other calendars to block time on it too (a secondary Google Calendar's
@@ -268,7 +295,7 @@ final class Calendar
         string $end,
         ?string $description = null,
         ?string $location = null,
-        string $timeZone = 'UTC',
+        string $timeZone = self::DISPLAY_TZ,
         string $calendarId = self::PRIMARY,
         bool $allDay = false,
         ?array $attendees = null,
@@ -363,7 +390,9 @@ final class Calendar
                 $nowAllDay = $allDay ?? $wasAllDay;
                 $startVal  = $start ?? ($wasAllDay ? $current->getStart()->getDate() : $current->getStart()->getDateTime());
                 $endVal    = $end   ?? ($wasAllDay ? $current->getEnd()->getDate()   : $current->getEnd()->getDateTime());
-                $tz        = $timeZone ?? ($current->getStart()->getTimeZone() ?: 'UTC');
+                // A time the model gave without an offset is the user's local time — not the event's own zone (a shared calendar may be set to another one).
+                $naive     = ($start !== null && !self::hasOffset($start)) || ($end !== null && !self::hasOffset($end));
+                $tz        = $timeZone ?? ($naive ? self::DISPLAY_TZ : ($current->getStart()->getTimeZone() ?: self::DISPLAY_TZ));
 
                 if ($nowAllDay) {
                     $startDate    = substr(trim((string) $startVal), 0, 10);
@@ -529,8 +558,8 @@ final class Calendar
             'summary'     => $event->getSummary(),
             'description' => $event->getDescription(),
             'location'    => $event->getLocation(),
-            'start'       => $start ? ($start->getDateTime() ?? $start->getDate()) : null,
-            'end'         => $end ? ($end->getDateTime() ?? $end->getDate()) : null,
+            'start'       => $start ? self::localise($start->getDateTime() ?? $start->getDate()) : null,
+            'end'         => $end ? self::localise($end->getDateTime() ?? $end->getDate()) : null,
             'allDay'      => $start ? ($start->getDateTime() === null) : null,
             'attendees'   => $attendees,
             'htmlLink'    => $event->getHtmlLink(),
