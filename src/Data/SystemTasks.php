@@ -67,12 +67,6 @@ final class SystemTasks
                 . 'instead of waiting in the Pico\'s one-at-a-time queue. Needs a cPanel entry every 5 minutes, or the dispatcher.',
             'script' => 'home-state-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 5,
         ],
-        'power_readings' => [
-            'label'       => 'Smart plug power readings',
-            'description' => 'Every 5 minutes reads each smart plug that measures power (Tuya cloud) and keeps watts, volts, amps and the plug\'s kWh counter, for "how much did the freezer use this week" '
-                . 'and what it cost. Needs TUYA_ACCESS_ID / TUYA_ACCESS_SECRET / TUYA_REGION in the server .env and the power_readings table; does nothing until then.',
-            'script' => 'power-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 5,
-        ],
         'thermostat_probe' => [
             'label'       => 'Thermostat probe',
             'description' => 'Experiment: reads every radiator thermostat once a minute through the home agent and logs what it says, to find out how often '

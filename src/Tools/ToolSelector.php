@@ -91,7 +91,7 @@ final class ToolSelector
         ],
         // Electricity price per kWh (spot + tariffs), cheapest hours for the dishwasher / washer.
         'power' => [
-            'get_power_prices', 'get_plug_power', 'get_plug_energy',
+            'get_power_prices',
         ],
         // The full-screen wall display: its sign-in link.
         'kiosk' => [
@@ -266,12 +266,9 @@ final class ToolSelector
         'power' => [
             'electricity', 'power price', 'power cost', 'spot price', 'spotprice', 'kwh', 'tariff', 'cheapest hour',
             'cheapest time', 'cheapest when', 'cheap power', 'dishwasher', 'washing machine', 'tumble dryer', 'charge the car',
-            // Smart plugs that measure power
-            'smart plug', 'smartplug', 'the plug', 'power draw', 'power usage', 'energy usage', 'how much power', 'how many watts', ' watts', 'wattage', 'power consumption',
             // Danish
             'elpris', 'strøm', 'spotpris', 'kilowatt', 'tarif', 'billigste time', 'billigste tid', 'billig strøm', 'opvasker',
             'vaskemaskine', 'tørretumbler', 'oplade bilen',
-            'smart stik', 'stikkontakt', 'stikket', 'strømforbrug', 'hvor meget strøm', 'effektforbrug', 'watt',
         ],
         'weather' => [
             'weather', 'forecast', 'temperature', ' rain', 'raining', 'sunny', ' wind ', 'windy',
