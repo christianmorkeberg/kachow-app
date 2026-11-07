@@ -99,6 +99,15 @@ final class HomeEndpoint
 
                 return [$status, $body];
             }
+            if ($part === 'valvestatus') {
+                // Only what became of the targets sent to the valves (sending / confirmed / failed) — the server's own records, no Pico, a few bytes: the Home card polls it, even minimised.
+                $sets = [];
+                foreach ((new ValveSets($state))->all($userId) as $vid => $s) {
+                    $sets[(string) $vid] = ['state' => $s['state'], 'target' => $s['target'], 'age_s' => $s['age_s']];
+                }
+
+                return [200, ['ok' => true, 'sets' => (object) $sets]];
+            }
             if ($part === 'thermostats') {
                 $svc  = new ThermostatService($home, $settings, $state);
                 $read = $svc->rows($userId, $fresh);
@@ -116,7 +125,7 @@ final class HomeEndpoint
                 return [200, ['ok' => true, 'thermostats' => $rows, 'cached_at' => $read['at']]];
             }
 
-            return [400, ['error' => 'Use ?part=lights or ?part=thermostats.']];
+            return [400, ['error' => 'Use ?part=lights, ?part=thermostats or ?part=valvestatus.']];
         } catch (Throwable $e) {
             error_log('HomeEndpoint: ' . $e->getMessage());
 
