@@ -105,7 +105,13 @@ final class HomeEndpoint
                 if ($read['error'] !== null) {
                     return [502, ['error' => $read['error']]];
                 }
-                $rows = array_map(static fn (array $r): array => $r + ['room' => $svc->roomFor($userId, (string) ($r['name'] ?? ''))], $read['rows']);
+                $sets = (new ValveSets($state))->all($userId);   // what became of the last target sent to each valve: sending / confirmed / failed
+                $rows = array_map(static function (array $r) use ($svc, $userId, $sets): array {
+                    $s = $sets[(int) ($r['id'] ?? -1)] ?? null;
+
+                    return $r + ['room' => $svc->roomFor($userId, (string) ($r['name'] ?? ''))]
+                        + ($s !== null ? ['set_state' => $s['state'], 'set_target' => $s['target'], 'set_age_s' => $s['age_s']] : []);
+                }, $read['rows']);
 
                 return [200, ['ok' => true, 'thermostats' => $rows, 'cached_at' => $read['at']]];
             }

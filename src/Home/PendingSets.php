@@ -42,6 +42,7 @@ final class PendingSets
             $batch['danish']          = $danish;
         }
         $this->state->put($userId, self::KIND, $batch);
+        (new ValveSets($this->state))->mark($userId, $item['id'], 'sending', (float) $item['target'], $now);
     }
 
     /** @return array{at:int, conversation_id:?int, danish:bool, items:list<array{id:int, name:string, target:float, confirmed:bool}>}|null */
@@ -69,6 +70,7 @@ final class PendingSets
             if ((int) $i['id'] === $id && !$i['confirmed'] && abs($target - (float) $i['target']) <= self::TOLERANCE_C) {
                 $i['confirmed'] = true;
                 $hit            = true;
+                (new ValveSets($this->state))->mark($userId, $id, 'confirmed', (float) $i['target']);
             }
         }
         unset($i);
@@ -116,6 +118,17 @@ final class PendingSets
         }
         unset($i);
         $this->state->put($userId, self::KIND, $b);
+    }
+
+    /** The valves of a batch that was given up on (the deadline) still have no confirmation: the Home card shows them as failed, with a retry. @param array<string, mixed> $batch */
+    public function recordFailures(int $userId, array $batch): void
+    {
+        $valves = new ValveSets($this->state);
+        foreach ((array) ($batch['items'] ?? []) as $i) {
+            if (empty($i['confirmed'])) {
+                $valves->mark($userId, (int) $i['id'], 'failed', (float) $i['target']);
+            }
+        }
     }
 
     /** Whose batches are waiting. @return list<int> */

@@ -73,6 +73,7 @@ final class ThermostatConfirm
         if ($now - (int) ($b['at'] ?? $now) >= self::DEADLINE_S) {
             $left = $this->pending->take($this->userId);
             if ($left !== null) {
+                $this->pending->recordFailures($this->userId, $left);
                 $this->announce($left);
 
                 return ['outcome' => 'deadline'];
@@ -162,6 +163,7 @@ final class ThermostatConfirm
         if ($left === null) {
             return ['outcome' => 'settled elsewhere', 'checks' => $checks];
         }
+        $this->pending->recordFailures($this->userId, $left);
         $this->announce($left);
 
         return ['outcome' => 'deadline', 'checks' => $checks];
