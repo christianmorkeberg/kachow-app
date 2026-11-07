@@ -67,6 +67,12 @@ final class SystemTasks
                 . 'instead of waiting in the Pico\'s one-at-a-time queue. Needs a cPanel entry every 5 minutes, or the dispatcher.',
             'script' => 'home-state-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 5,
         ],
+        'thermostat_watch' => [
+            'label'       => 'Radiator confirmation watch',
+            'description' => 'Every minute checks the radiator targets that were sent but not yet confirmed by the valve: confirms them, sends a target again if the valve has not got it (after 90 s and 240 s), and tells you at 8 minutes '
+                . 'if one still did not arrive. A safety net that does not depend on anything running after the chat reply. Needs a cron entry every minute, or the dispatcher.',
+            'script' => 'thermostat-watch-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 1,
+        ],
         'thermostat_probe' => [
             'label'       => 'Thermostat probe',
             'description' => 'Experiment: reads every radiator thermostat once a minute through the home agent and logs what it says, to find out how often '

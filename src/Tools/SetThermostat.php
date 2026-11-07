@@ -22,6 +22,9 @@ final class SetThermostat implements Tool
     /** How long to wait for a valve to confirm before answering "sent" (the command stays queued on the Pico, see HomeDeviceCall::executeSoft). */
     private const CONFIRM_WAIT_S = 4.0;
 
+    /** A valve not heard for this many minutes is probably out of reach: the user is warned when sending to it. */
+    private const QUIET_WARN_MIN = 30;
+
     public function __construct(private Tool $home, private UserSettings $settings, private ?HomeState $state = null)
     {
     }
@@ -62,10 +65,11 @@ final class SetThermostat implements Tool
         if ($t === null) {
             return ['error' => 'Which thermostat? They are: ' . implode(', ', array_map(static fn (array $x): string => $x['name'], $all)) . '.'];
         }
-        $call = [
-            'device' => 'shelly', 'method' => 'POST', 'path' => '/rpc/BluTrv.Call',
-            'body'   => ['id' => $t['id'], 'method' => 'TRV.SetTarget', 'params' => ['id' => 0, 'target_C' => $target]],
-        ];
+        $call = ThermostatService::setCall($t['id'], $target);
+        // A valve not heard for a long time is probably out of reach (flat battery, out of range): say so NOW instead of promising it will apply.
+        $heard = (new ThermostatService($this->home, $this->settings, $this->state))->lastHeardMinutes($userId, $t['id']);
+        $quiet = $heard !== null && $heard >= self::QUIET_WARN_MIN
+            ? ' WARNING: this valve was last heard ' . $heard . ' minutes ago — it may be out of reach or have a flat battery, so tell the user it might not apply the change.' : '';
         // The Pico runs ONE command at a time and a sleepy valve takes 10+ s to confirm: wait only briefly, leave the command queued (it keeps for 3 min)
         // and answer "sent" — "all radiators to 15" then takes seconds, not 45 (report #66). Falls back to the full wait when the home call cannot do it.
         $res = $this->home instanceof HomeDeviceCall ? $this->home->executeSoft($call, $userId, self::CONFIRM_WAIT_S) : $this->home->execute($call, $userId);
@@ -76,12 +80,12 @@ final class SetThermostat implements Tool
             return [
                 'set' => 'sent', 'thermostat' => $t['name'], 'target_c' => $target,
                 'will_notify' => $watching,
-                'note' => $watching
+                'note' => $quiet . ($watching
                     ? 'The command is queued for the valve, which has not confirmed yet — it sleeps between reports and applies it within a few minutes. The user gets a notification '
                         . 'automatically as soon as the valves have confirmed (or if one does not). Say in one short line that it is sent and that you will let them know when it is done — '
                         . 'do not offer to check later.'
                     : 'The command is queued for the valve, which has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
-                        . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.',
+                        . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.'),
             ];
         }
         if (isset($res['error'])) {
@@ -90,10 +94,17 @@ final class SetThermostat implements Tool
             if (self::timedOut((string) $res['error'])) {
                 $ping = $this->home->execute(['device' => 'shelly', 'method' => 'GET', 'path' => '/rpc/BluTrv.GetStatus?id=' . $t['id']], $userId);
                 if (!isset($ping['error']) && !empty($ping['response']['paired'])) {
+                    // Delivered but unconfirmed: follow it up like a queued one (it used to be forgotten here — nobody checked whether the valve ever applied it).
+                    (new ThermostatService($this->home, $this->settings, $this->state))->noteTarget($userId, $t['id'], $target);
+                    $watching = $this->watchConfirmation($userId, $t['id'], $t['name'], $target);
+
                     return [
-                        'set' => 'sent', 'thermostat' => $t['name'], 'target_c' => $target,
-                        'note' => 'The command is sent to the valve, but the valve has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
-                            . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.',
+                        'set' => 'sent', 'thermostat' => $t['name'], 'target_c' => $target, 'will_notify' => $watching,
+                        'note' => $quiet . ($watching
+                            ? 'The command is sent to the valve, but the valve has not confirmed yet — it sleeps between reports and applies it within a minute or two. The user gets a notification '
+                                . 'automatically as soon as the valves have confirmed (or if one does not). Say in one short line that it is sent and that you will let them know when it is done — do not offer to check later.'
+                            : 'The command is sent to the valve, but the valve has not confirmed yet — it sleeps between reports and applies it within a minute or two. '
+                                . 'Say it is sent (not that it failed) and offer to check with get_thermostats in a few minutes.'),
                     ];
                 }
             }
@@ -117,10 +128,13 @@ final class SetThermostat implements Tool
     private function watchConfirmation(int $userId, int $id, string $name, float $target): bool
     {
         $service = new ThermostatService($this->home, $this->settings, $this->state);
-        $hook    = $service->hookActive($userId);
-        if ((!$hook && !AfterReply::enabled()) || $this->state === null) {
+        if ($this->state === null) {
             return false;
         }
+        // The batch is ALWAYS registered: the gateway's script, the watcher after this reply and the per-minute safety net (bin/thermostat-watch-cron.php) all work from it.
+        // The user is only promised a follow-up when one of them can actually run.
+        $hook    = $service->hookActive($userId);
+        $alive   = $hook || AfterReply::enabled() || $service->watcherAlive($userId);
         $ctx = AfterReply::context();
         (new PendingSets($this->state))->add($userId, ['id' => $id, 'name' => $name, 'target' => $target], isset($ctx['conversation_id']) ? (int) $ctx['conversation_id'] : null, (bool) ($ctx['danish'] ?? false));
         if (AfterReply::enabled()) {
@@ -135,12 +149,13 @@ final class SetThermostat implements Tool
                     static fn (int $valve): ?float => $svc->targetOf($userId, $valve),
                     new ConfirmDelivery($userId),
                     static function (int $s): void { sleep($s); },
-                    static fn (): int => time()
-                ))->run(480);
-            }, 480);
+                    static fn (): int => time(),
+                    static fn (int $valve, float $t): bool => $svc->resend($userId, $valve, $t)
+                ))->run(ThermostatConfirm::DEADLINE_S);
+            }, ThermostatConfirm::DEADLINE_S);
         }
 
-        return true;
+        return $alive;
     }
 
     private static function timedOut(string $error): bool

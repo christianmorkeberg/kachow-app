@@ -30,12 +30,13 @@ final class PendingSets
      *
      * @param array{id:int, name:string, target:float} $item
      */
-    public function add(int $userId, array $item, ?int $conversationId, bool $danish): void
+    public function add(int $userId, array $item, ?int $conversationId, bool $danish, ?int $now = null): void
     {
+        $now ??= time();
         $e     = $this->state->get($userId, self::KIND);
-        $batch = $e !== null && time() - (int) ($e['data']['at'] ?? 0) <= self::MAX_AGE_S ? $e['data'] : ['at' => time(), 'conversation_id' => $conversationId, 'danish' => $danish, 'items' => []];
+        $batch = $e !== null && $now - (int) ($e['data']['at'] ?? 0) <= self::MAX_AGE_S ? $e['data'] : ['at' => $now, 'conversation_id' => $conversationId, 'danish' => $danish, 'items' => []];
         $batch['items'] = array_values(array_filter($batch['items'], static fn (array $i): bool => (int) $i['id'] !== $item['id']));
-        $batch['items'][] = ['id' => $item['id'], 'name' => $item['name'], 'target' => $item['target'], 'confirmed' => false];
+        $batch['items'][] = ['id' => $item['id'], 'name' => $item['name'], 'target' => $item['target'], 'confirmed' => false, 'sent_at' => $now, 'resends' => 0];
         if ($conversationId !== null) {
             $batch['conversation_id'] = $conversationId;
             $batch['danish']          = $danish;
@@ -92,6 +93,35 @@ final class PendingSets
         $this->state->put($userId, self::KIND, $b);
 
         return null;
+    }
+
+    /**
+     * Bookkeeping after someone polled the valves: when (so the per-minute safety net leaves a batch alone that a live watcher is working on) and which
+     * valves were just sent their target AGAIN. Written only while the batch still exists (a confirmation may have taken it a moment ago).
+     *
+     * @param list<int> $resentIds
+     */
+    public function markChecked(int $userId, int $now, array $resentIds = []): void
+    {
+        $b = $this->get($userId);
+        if ($b === null) {
+            return;
+        }
+        $b['checked_at'] = $now;
+        foreach ($b['items'] as &$i) {
+            if (in_array((int) $i['id'], $resentIds, true)) {
+                $i['resends'] = (int) ($i['resends'] ?? 0) + 1;
+                $i['sent_at'] = $now;
+            }
+        }
+        unset($i);
+        $this->state->put($userId, self::KIND, $b);
+    }
+
+    /** Whose batches are waiting. @return list<int> */
+    public function usersWaiting(): array
+    {
+        return $this->state->usersWith(self::KIND);
     }
 
     /** Takes the batch as it stands (confirmed and still pending valves) — the deadline's way out. Null when someone else already announced it. @return array<string, mixed>|null */

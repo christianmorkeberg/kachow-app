@@ -122,6 +122,49 @@ final class ThermostatService
         return ['rows' => $rows, 'error' => null, 'at' => $at, 'cached' => false];
     }
 
+    /** The home-agent call that sets one valve's target (what set_thermostat sends, and what a re-send repeats). @return array<string, mixed> */
+    public static function setCall(int $id, float $targetC): array
+    {
+        return [
+            'device' => 'shelly', 'method' => 'POST', 'path' => '/rpc/BluTrv.Call',
+            'body'   => ['id' => $id, 'method' => 'TRV.SetTarget', 'params' => ['id' => 0, 'target_C' => $targetC]],
+        ];
+    }
+
+    /**
+     * Sends a target to one valve AGAIN (the first command may have been dropped: the home agent's queue keeps a command only 3 minutes, a sleepy valve may
+     * not have woken). Same soft send as the first time; true when the call was accepted or queued.
+     */
+    public function resend(int $userId, int $id, float $targetC): bool
+    {
+        $call = self::setCall($id, $targetC);
+        $res  = $this->home instanceof \App\Tools\HomeDeviceCall ? $this->home->executeSoft($call, $userId, 2.0) : $this->home->execute($call, $userId);
+
+        return ($res['queued'] ?? false) === true || !isset($res['error']);
+    }
+
+    /** Minutes since the valve last reported, from the cached readings; null when unknown. */
+    public function lastHeardMinutes(int $userId, int $id): ?int
+    {
+        $e = $this->state?->get($userId, 'thermostats');
+        foreach ((array) ($e['data']['rows'] ?? []) as $r) {
+            if ((int) ($r['id'] ?? -1) === $id) {
+                return isset($r['updated_ts']) && is_numeric($r['updated_ts']) ? max(0, (int) round((time() - (int) $r['updated_ts']) / 60))
+                    : (isset($r['last_heard_minutes_ago']) ? (int) $r['last_heard_minutes_ago'] + (int) round((time() - $e['at']) / 60) : null);
+            }
+        }
+
+        return null;
+    }
+
+    /** Whether the per-minute watcher (bin/thermostat-watch-cron.php) ran lately — then a sent target is followed up even when nothing else can. */
+    public function watcherAlive(int $userId): bool
+    {
+        $e = $this->state?->get($userId, 'thermostat_watch_beat');
+
+        return $e !== null && time() - $e['at'] <= 180;
+    }
+
     /** After a successful (or sent) set: the cached target of that valve now says what was asked, so the next read does not show the old one. */
     public function noteTarget(int $userId, int $id, float $targetC): void
     {

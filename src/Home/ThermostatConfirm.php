@@ -17,18 +17,108 @@ final class ThermostatConfirm
     /** Seconds to wait before each check; the last value repeats until the time is up. */
     private const DELAYS = [20, 30, 40, 60];
 
+    /** After this long without confirmation the user is told it did not work (and which valves). */
+    public const DEADLINE_S = 480;
+
+    /** A valve that still has not confirmed is sent its target AGAIN this long after its last send: first and second re-send (then it is left to the deadline). */
+    private const RESEND_AFTER = [90, 240];
+
     /**
      * @param callable(int):?float            $targetOf the valve's reported target in °C, null when it could not be read
      * @param callable(string, ?int):void     $deliver  (text, conversation id): the push and the message in the chat
      * @param callable(int):void              $sleep    seconds
      * @param callable():int                  $now      unix seconds
+     * @param (callable(int, float):bool)|null $resend  sends a valve its target again (the first command may have been dropped); null = never
      */
-    public function __construct(private PendingSets $pending, private int $userId, private $targetOf, private $deliver, private $sleep, private $now)
+    public function __construct(private PendingSets $pending, private int $userId, private $targetOf, private $deliver, private $sleep, private $now, private $resend = null)
     {
     }
 
+    /**
+     * One look at the pending valves, without waiting: confirms those that report the asked target, sends the others their target again when it is time, and at the
+     * deadline tells the user what did not arrive. This is the per-minute safety net's step (bin/thermostat-watch-cron.php) — it does not depend on a request that
+     * keeps running after the reply. A batch a live watcher touched less than $minIdleS ago is left alone.
+     *
+     * @return array{outcome: string} none | busy | confirmed | waiting | deadline
+     */
+    public function tick(int $minIdleS = 0): array
+    {
+        $now = ($this->now)();
+        $b   = $this->pending->get($this->userId);
+        if ($b === null) {
+            return ['outcome' => 'none'];
+        }
+        if ($minIdleS > 0 && $now - (int) ($b['checked_at'] ?? $b['at'] ?? $now) < $minIdleS) {
+            return ['outcome' => 'busy'];
+        }
+        foreach ($b['items'] as $it) {
+            if (!empty($it['confirmed'])) {
+                continue;
+            }
+            $t = ($this->targetOf)((int) $it['id']);
+            if ($t === null || abs($t - (float) $it['target']) > PendingSets::TOLERANCE_C) {
+                continue;
+            }
+            $done = $this->pending->confirm($this->userId, (int) $it['id'], $t);
+            if ($done !== null) {
+                $this->announce($done);
+
+                return ['outcome' => 'confirmed'];
+            }
+        }
+        $b = $this->pending->get($this->userId);
+        if ($b === null) {
+            return ['outcome' => 'none'];
+        }
+        if ($now - (int) ($b['at'] ?? $now) >= self::DEADLINE_S) {
+            $left = $this->pending->take($this->userId);
+            if ($left !== null) {
+                $this->announce($left);
+
+                return ['outcome' => 'deadline'];
+            }
+
+            return ['outcome' => 'none'];
+        }
+        $this->pending->markChecked($this->userId, $now, $this->resendDue($b, $now));
+
+        return ['outcome' => 'waiting'];
+    }
+
+    /**
+     * Sends the valves that are still pending their target again, when it is time (90 s after the last send, then 240 s) — a command can be dropped (the home
+     * agent's queue keeps one only 3 minutes) or a valve may not have woken. Harmless: it is the same target. Returns the ids sent.
+     *
+     * @param array<string, mixed> $b a PendingSets batch
+     * @return list<int>
+     */
+    private function resendDue(array $b, int $now): array
+    {
+        $sent = [];
+        if ($this->resend === null) {
+            return $sent;
+        }
+        foreach ($b['items'] as $it) {
+            if (!empty($it['confirmed'])) {
+                continue;
+            }
+            $n = (int) ($it['resends'] ?? 0);
+            if ($n >= count(self::RESEND_AFTER) || $now - (int) ($it['sent_at'] ?? $b['at'] ?? $now) < self::RESEND_AFTER[$n]) {
+                continue;
+            }
+            try {
+                ($this->resend)((int) $it['id'], (float) $it['target']);
+            } catch (\Throwable $e) {
+                error_log('ThermostatConfirm resend: ' . $e->getMessage());
+            }
+            $sent[] = (int) $it['id'];
+        }
+
+        return $sent;
+    }
+
     /** @return array{outcome: string, checks: int} outcome: confirmed | deadline | settled elsewhere */
-    public function run(int $maxSeconds = 480): array
+    public function run(int $maxSeconds = self::DEADLINE_S): array
     {
         $start  = ($this->now)();
         $checks = 0;
@@ -62,6 +152,10 @@ final class ThermostatConfirm
 
                     return ['outcome' => 'confirmed', 'checks' => $checks];
                 }
+            }
+            $b = $this->pending->get($this->userId);
+            if ($b !== null) {
+                $this->pending->markChecked($this->userId, ($this->now)(), $this->resendDue($b, ($this->now)()));
             }
         }
         $left = $this->pending->take($this->userId);
@@ -100,14 +194,19 @@ final class ThermostatConfirm
                 ? 'Radiatorerne er nu sat' . ($same ? ' til' . $t . ': ' : ': ') . $names($ok) . '.'
                 : 'The radiators are now set' . ($same ? ' to' . $t . ': ' : ': ') . $names($ok) . '.';
         }
+        $resent = max(array_map(static fn (array $i): int => (int) ($i['resends'] ?? 0), $left));
+        $again  = $resent > 0
+            ? ($danish ? ' Jeg har sendt den igen ' . $resent . ($resent === 1 ? ' gang' : ' gange') . '.' : ' I sent it again ' . $resent . ($resent === 1 ? ' time' : ' times') . '.')
+            : '';
+        $retry  = $danish ? ' Sig “prøv igen” for at sende den på ny.' : ' Say “try again” to send it once more.';
         if ($ok === []) {
             return $danish
-                ? 'Ingen af radiatorerne har bekræftet' . $t . ' endnu (' . $names($left) . '). De kan være uden for rækkevidde — tjek dem om lidt.'
-                : 'None of the radiators has confirmed' . $t . ' yet (' . $names($left) . '). They may be out of reach — check them in a bit.';
+                ? 'Ingen af radiatorerne har bekræftet' . $t . ' (' . $names($left) . ').' . $again . ' De kan være uden for rækkevidde eller have fladt batteri.' . $retry
+                : 'None of the radiators has confirmed' . $t . ' (' . $names($left) . ').' . $again . ' They may be out of reach or have a flat battery.' . $retry;
         }
 
         return $danish
-            ? $names($ok) . ' er nu sat' . ($same ? ' til' . $t : '') . ', men ' . $names($left) . ' har ikke bekræftet endnu.'
-            : $names($ok) . ' now set' . ($same ? ' to' . $t : '') . ', but ' . $names($left) . ' has not confirmed yet.';
+            ? $names($ok) . ' er nu sat' . ($same ? ' til' . $t : '') . ', men ' . $names($left) . ' har ikke bekræftet.' . $again . $retry
+            : $names($ok) . ' now set' . ($same ? ' to' . $t : '') . ', but ' . $names($left) . ' has not confirmed.' . $again . $retry;
     }
 }

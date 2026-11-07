@@ -44,7 +44,7 @@ $state   = new HomeState($db);
 $pending = new PendingSets($state);
 
 /** A watcher on a fake clock. $reports: valve id => the second (from start) at which it reports the new target; -1 = cannot be read. */
-function watcher(PendingSets $p, array $reports, array &$log, int &$clock, ?callable $duringSleep = null): ThermostatConfirm
+function watcher(PendingSets $p, array $reports, array &$log, int &$clock, ?callable $duringSleep = null, ?callable $resend = null): ThermostatConfirm
 {
     return new ThermostatConfirm(
         $p, 1,
@@ -55,13 +55,14 @@ function watcher(PendingSets $p, array $reports, array &$log, int &$clock, ?call
         },
         static function (string $text, ?int $conv) use (&$log): void { $log[] = [$text, $conv]; },
         static function (int $s) use (&$clock, $duringSleep): void { $clock += $s; if ($duringSleep !== null) { $duringSleep(); } },
-        static function () use (&$clock): int { return $clock; }
+        static function () use (&$clock): int { return $clock; },
+        $resend
     );
 }
 function batch(PendingSets $p, array $targets, bool $danish = true, ?int $conv = 9): void
 {
     $names = [200 => 'Stue', 201 => 'Badeværelse', 202 => 'Soveværelse'];
-    foreach ($targets as $id => $t) { $p->add(1, ['id' => $id, 'name' => $names[$id], 'target' => (float) $t], $conv, $danish); }
+    foreach ($targets as $id => $t) { $p->add(1, ['id' => $id, 'name' => $names[$id], 'target' => (float) $t], $conv, $danish, $GLOBALS['clock'] ?? null); }   // the fake clock, so ages line up
 }
 
 echo "2) the watcher polls only what is pending, and tells once\n";
@@ -74,9 +75,11 @@ check('the batch is gone afterwards', $pending->get(1) === null);
 
 $db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock;
 batch($pending, [200 => 16, 201 => 16, 202 => 16], false);
-$r = watcher($pending, [200 => $t0 + 10, 201 => $t0 + 10], $log, $clock)->run(480);
-check('one valve never confirms: at the deadline ONE message says which (English)', $r['outcome'] === 'deadline' && count($log) === 1 && $log[0][0] === 'Stue, Badeværelse now set to 16°, but Soveværelse has not confirmed yet.', json_encode($log));
+$resent = [];
+$r = watcher($pending, [200 => $t0 + 10, 201 => $t0 + 10], $log, $clock, null, static function (int $id, float $t) use (&$resent): bool { $resent[] = $id; return true; })->run(480);
+check('one valve never confirms: at the deadline ONE message says which (English)', $r['outcome'] === 'deadline' && count($log) === 1 && $log[0][0] === 'Stue, Badeværelse now set to 16°, but Soveværelse has not confirmed. I sent it again 2 times. Say “try again” to send it once more.', json_encode($log));
 check('it gave up inside the time budget', $clock - $t0 <= 480, (string) ($clock - $t0));
+$englishDeadline = $log[0][0] ?? '';
 
 $db->exec('DELETE FROM home_state'); $log = []; $clock = 1000;
 batch($pending, [200 => 16]);
@@ -120,7 +123,7 @@ $queued = new class implements Tool {
 $tool = new SetThermostat($queued, new UserSettings($db), $state);
 AfterReply::reset();
 $r = $tool->execute(['thermostat' => 'Stue', 'temperature_c' => 16], 1);
-check('nothing can follow up (no AfterReply, no gateway script): sent, no promise, offer to check, nothing stored', $r['set'] === 'sent' && $r['will_notify'] === false && str_contains($r['note'], 'offer to check') && $pending->get(1) === null);
+check('nothing can follow up (no AfterReply, no gateway script, no watcher): sent, no promise, offer to check — but the batch is stored for the safety net', $r['set'] === 'sent' && $r['will_notify'] === false && str_contains($r['note'], 'offer to check') && $pending->get(1) !== null);
 AfterReply::enable(['danish' => true, 'conversation_id' => 12]);
 $a = $tool->execute(['thermostat' => 'Stue', 'temperature_c' => 16], 1);
 $b = $tool->execute(['thermostat' => 'Badeværelse', 'temperature_c' => 16], 1);
@@ -133,6 +136,71 @@ $db->exec('DELETE FROM home_state');
 $state->put(1, 'thermostats', ['rows' => [], 'hook_at' => time() - 60]);
 $c = $tool->execute(['thermostat' => 'Soveværelse', 'temperature_c' => 16], 1);
 check('gateway script active but no AfterReply: still promises (the gateway will tell), stores it, queues no watcher', $c['will_notify'] === true && $pending->get(1) !== null && AfterReply::hasWork() === false);
+
+echo "5) re-sending, the per-minute safety net and the warning\n";
+check('the valve that never confirmed was sent its target again, twice (90 s and 240 s after the send), the others not', $resent === [202, 202], json_encode($resent));
+check('…and the deadline message says so', str_contains($englishDeadline, 'I sent it again 2 times'), $englishDeadline);
+
+$db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock; $resent = [];
+batch($pending, [200 => 16]);
+$mk = static function (array $reports) use ($pending, &$log, &$clock, &$resent): ThermostatConfirm {
+    return watcher($pending, $reports, $log, $clock, null, static function (int $id, float $t) use (&$resent, &$clock): bool { $resent[] = [$id, $t, $clock]; return true; });
+};
+$clock = $t0 + 30;
+check('tick: too early to re-send, still waiting', $mk([200 => $t0 + 9999])->tick()['outcome'] === 'waiting' && $resent === []);
+$clock = $t0 + 100;
+$mk([200 => $t0 + 9999])->tick();
+check('tick at 100 s: the first re-send (same target 16)', count($resent) === 1 && $resent[0][1] === 16.0, json_encode($resent));
+check('…recorded on the batch (resends 1, send time reset)', $pending->get(1)['items'][0]['resends'] === 1 && $pending->get(1)['items'][0]['sent_at'] === $t0 + 100);
+$clock = $t0 + 130;
+$mk([200 => $t0 + 9999])->tick();
+check('tick 30 s later: not again yet', count($resent) === 1);
+$clock = $t0 + 345;
+$mk([200 => $t0 + 9999])->tick();
+check('tick 245 s after the second send time: the second (last) re-send', count($resent) === 2);
+$clock = $t0 + 400;
+$mk([200 => $t0 + 9999])->tick();
+check('never a third re-send', count($resent) === 2);
+$clock = $t0 + 485;
+$r = $mk([200 => $t0 + 9999])->tick();
+check('at the deadline the user is told, once, in Danish, with the retry hint', $r['outcome'] === 'deadline' && count($log) === 1 && str_contains($log[0][0], 'Ingen af radiatorerne har bekræftet 16°') && str_contains($log[0][0], 'prøv igen') && str_contains($log[0][0], 'sendt den igen 2 gange'), json_encode($log));
+check('a second tick finds nothing (no double message)', $mk([])->tick()['outcome'] === 'none' && count($log) === 1);
+
+$db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock; $resent = [];
+batch($pending, [200 => 16]);
+$clock = $t0 + 50;
+check('tick sees the valve report the target: confirmed + announced', $mk([200 => $t0 + 10])->tick()['outcome'] === 'confirmed' && count($log) === 1 && str_contains($log[0][0], 'sat til 16°') && $resent === []);
+
+$db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock; $resent = [];
+batch($pending, [200 => 16]);
+$pending->markChecked(1, $t0 + 60);
+$clock = $t0 + 100;
+check('tick leaves a batch a live watcher touched 40 s ago alone (minIdle 120)', $mk([200 => $t0 + 9999])->tick(120)['outcome'] === 'busy' && $resent === []);
+$clock = $t0 + 200;
+check('…but takes over once the watcher has been silent for 2 minutes', $mk([200 => $t0 + 9999])->tick(120)['outcome'] === 'waiting');
+check('usersWaiting lists whose batches are waiting', $pending->usersWaiting() === [1]);
+
+$db->exec('DELETE FROM home_state');
+$state->put(1, 'thermostats', ['rows' => [['id' => 202, 'name' => 'Soveværelse', 'current_c' => 18.0, 'target_c' => 16.0, 'updated_ts' => time() - 50 * 60]]], time());
+AfterReply::reset();
+$w = $tool->execute(['thermostat' => 'Soveværelse', 'temperature_c' => 17], 1);
+check('a valve not heard for 50 minutes: the model is told to warn the user it may not apply', str_contains($w['note'], 'WARNING') && str_contains($w['note'], '50 minutes'), $w['note']);
+$state->put(1, 'thermostats', ['rows' => [['id' => 202, 'name' => 'Soveværelse', 'updated_ts' => time() - 2 * 60]]], time());
+$ok = $tool->execute(['thermostat' => 'Soveværelse', 'temperature_c' => 17], 1);
+check('a valve heard 2 minutes ago: no warning', !str_contains($ok['note'], 'WARNING'));
+$state->put(1, 'thermostat_watch_beat', ['at' => time() - 30]);
+$db->exec("DELETE FROM home_state WHERE kind = 'pending_sets'");
+$beat = $tool->execute(['thermostat' => 'Soveværelse', 'temperature_c' => 18], 1);
+check('the per-minute watcher is alive: the follow-up is promised even with no AfterReply and no gateway script', $beat['will_notify'] === true && $pending->get(1) !== null);
+$timedOut = new class implements Tool {
+    public function name(): string { return 'home_device_call'; }
+    public function description(): string { return 'fake'; }
+    public function parameters(): array { return ['type' => 'object', 'properties' => []]; }
+    public function execute(array $a, int $userId): array { return str_contains((string) ($a['path'] ?? ''), 'GetStatus') ? ['response' => ['paired' => true]] : ['error' => 'ETIMEDOUT']; }
+};
+$db->exec("DELETE FROM home_state WHERE kind = 'pending_sets'");
+$tt = (new SetThermostat($timedOut, new UserSettings($db), $state))->execute(['thermostat' => 'Stue', 'temperature_c' => 16], 1);
+check('delivered but timed out at the gateway: sent AND followed up (it used to be forgotten)', $tt['set'] === 'sent' && $tt['will_notify'] === true && $pending->get(1) !== null && $pending->get(1)['items'][0]['name'] === 'Stue', json_encode($tt));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

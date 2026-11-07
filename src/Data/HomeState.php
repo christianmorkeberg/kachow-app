@@ -92,6 +92,19 @@ final class HomeState
         }
     }
 
+    /** The (home-owner) user ids that have an entry of this kind — what the per-minute watcher walks. @return list<int> */
+    public function usersWith(string $kind): array
+    {
+        try {
+            $stmt = $this->db->prepare('SELECT user_id FROM home_state WHERE kind = :k');
+            $stmt->execute([':k' => $kind]);
+
+            return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
     public function forget(int $userId, string $kind): void
     {
         try {
