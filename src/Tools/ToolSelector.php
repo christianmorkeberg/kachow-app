@@ -134,6 +134,10 @@ final class ToolSelector
         'feedback' => [
             'list_feedback', 'resolve_feedback', 'set_diagnostics', 'get_voice_log',
         ],
+        // The recruiter chat: links per application, caps, conversations and left messages (owner only).
+        'recruiter' => [
+            'create_recruiter_link', 'list_recruiter_links', 'update_recruiter_link', 'get_recruiter_conversation', 'list_about_entries', 'update_about_entry',
+        ],
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder', 'resolve_reminder',
             'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
@@ -496,6 +500,11 @@ final class ToolSelector
             'sæt på pause', 'på pause', 'genoptag', 'deaktiver',
         ],
         // Developer/admin: reviewing user "report to developer" feedback + diagnostics toggle.
+        'recruiter' => [
+            'recruiter assistant', 'what does the recruiter', 'about entries', 'visibility', 'recruiter', 'recruiters', 'recruiter link', 'recruiter chat', 'link for the application', 'job posting', 'job application', 'application link', 'meet link',
+            // Danish
+            'rekrutterer', 'rekrutteringslink', 'ansøgningslink', 'link til ansøgningen', 'jobopslag', 'stillingsopslag', 'jobansøgning',
+        ],
         'feedback' => [
             'feedback report', 'feedback reports', 'user reports', 'bug report', 'bug reports',
             'error report', 'error reports', 'reported', 'any feedback', 'what did users report',

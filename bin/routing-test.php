@@ -280,6 +280,11 @@ $cases = [
     ['msg' => 'hvornår er strømmen billigst i nat?', 'expect' => 'power'],
     ['msg' => 'hvornår skal jeg tænde for opvaskeren?', 'expect' => 'power'],
     ['msg' => 'er det billigt at køre vaskemaskinen nu', 'expect' => 'power'],
+    ['msg' => 'make a recruiter link for the Acme application', 'expect' => 'recruiter'],
+    ['msg' => 'has anyone opened the recruiter link yet?', 'expect' => 'recruiter'],
+    ['msg' => 'lav et link til ansøgningen hos Novo', 'expect' => 'recruiter'],
+    ['msg' => 'did a recruiter leave a message', 'expect' => 'recruiter'],
+    ['msg' => 'what does the recruiter assistant know about me', 'expect' => 'recruiter'],
     // ---- weather ----
     ['msg' => "what's the weather tomorrow?", 'expect' => 'weather'],
     ['msg' => 'do I need an umbrella today?', 'expect' => 'weather'],

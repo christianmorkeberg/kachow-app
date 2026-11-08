@@ -67,6 +67,11 @@ final class SystemTasks
                 . 'instead of waiting in the Pico\'s one-at-a-time queue. Needs a cPanel entry every 5 minutes, or the dispatcher.',
             'script' => 'home-state-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 5,
         ],
+        'recruiter' => [
+            'label'       => 'Recruiter chat upkeep',
+            'description' => 'Every 15 minutes retries messages that recruiters left and that neither the push nor the email reached you with; once a night deletes recruiter chat logs older than 14 days (left messages are kept).',
+            'script' => 'recruiter-cron.php', 'frequency' => 'minutes', 'time_of_day' => null, 'day_of_week' => null, 'interval_minutes' => 15,
+        ],
         'thermostat_watch' => [
             'label'       => 'Radiator confirmation watch',
             'description' => 'Every minute checks the radiator targets that were sent but not yet confirmed by the valve: confirms them, sends a target again if the valve has not got it (after 90 s and 240 s), and tells you at 8 minutes '

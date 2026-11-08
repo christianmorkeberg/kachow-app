@@ -14,6 +14,10 @@
 		Strict-Transport-Security "max-age=31536000"
 	}
 
+	# The recruiter page: /meet/<token> -> meet.php (on the Apache host error.php hands the same path over).
+	@meet path_regexp meet ^/meet/([a-f0-9]{40})/?$
+	rewrite @meet /meet.php?t={re.meet.1}
+
 	php_fastcgi php:9000
 	file_server
 }

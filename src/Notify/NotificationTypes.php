@@ -30,9 +30,17 @@ final class NotificationTypes
     public const HOME_AGENT_OFFLINE = 'home_agent_offline';
     public const CHAT_REPLY = 'chat_reply';
     public const FOLLOW_UP = 'follow_up';
+    public const RECRUITER = 'recruiter';
 
     /** @var array<string, array{label:string, description:string, default:bool, admin?:bool}> */
     private const CATALOGUE = [
+        // A recruiter opened one of the links to the recruiter chat, or left a message there (App\Recruiter). Developer/owner only.
+        self::RECRUITER => [
+            'label'       => 'Recruiter links',
+            'description' => 'When a recruiter opens one of your links for the first time, or leaves you a message.',
+            'default'     => true,
+            'admin'       => true,
+        ],
         // Sent from a follow-up that runs after a chat answer (App\Support\AfterReply), e.g. "the radiators are now set to 16°" once the sleepy valves confirmed.
         self::FOLLOW_UP => [
             'label'       => 'Follow-ups to your requests',

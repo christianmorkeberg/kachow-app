@@ -224,6 +224,14 @@ final class ToolRegistry
         $registry->register(new GetWorkLog($workLog));
         $registry->register(new ExportWorkLog($workLog));
         $registry->register(new NoteDevIdea($devIdeas, $users));
+        // The recruiter chat's owner tools (links, caps, conversations): owner/admin only inside each tool.
+        $recruiterLinks = new \App\Recruiter\RecruiterLinks();
+        $registry->register(new CreateRecruiterLink($users, $recruiterLinks, new \App\Recruiter\AboutEntries(), static fn (): \App\Assistant\GeminiClient => \App\Assistant\GeminiClient::fromEnv()));
+        $registry->register(new ListRecruiterLinks($users, $recruiterLinks));
+        $registry->register(new UpdateRecruiterLink($users, $recruiterLinks));
+        $registry->register(new GetRecruiterConversation($users, $recruiterLinks));
+        $registry->register(new ListAboutEntries($users, new \App\Recruiter\AboutEntries()));
+        $registry->register(new UpdateAboutEntry($users, new \App\Recruiter\AboutEntries()));
         $registry->register(new ListDevIdeas($devIdeas, $users));
         $registry->register(new SetDevIdeaStatus($devIdeas, $users));
         $registry->register(new UpdateDevIdea($devIdeas, $users));
