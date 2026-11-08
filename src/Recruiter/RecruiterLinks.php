@@ -236,13 +236,71 @@ final class RecruiterLinks
         return $stmt->rowCount();
     }
 
-    /** Deletes chat messages older than the retention (leads are kept). @return int how many */
+    /** Deletes chat messages (and the unanswered-question notes) older than the retention (leads are kept). @return int how many chat messages */
     public function purge(?int $days = null): int
     {
+        $before = gmdate('Y-m-d H:i:s', time() - ($days ?? self::RETENTION_DAYS) * 86400);
         $stmt = $this->db->prepare('DELETE FROM recruiter_messages WHERE created_at < :t');
-        $stmt->execute([':t' => gmdate('Y-m-d H:i:s', time() - ($days ?? self::RETENTION_DAYS) * 86400)]);
+        $stmt->execute([':t' => $before]);
+        $n = $stmt->rowCount();
+        try {
+            $this->db->prepare('DELETE FROM recruiter_gaps WHERE created_at < :t')->execute([':t' => $before]);
+        } catch (\Throwable) {
+            // the gaps table is not migrated yet: nothing to purge
+        }
 
-        return $stmt->rowCount();
+        return $n;
+    }
+
+    /**
+     * Notes that the facts could not answer a recruiter's question (the lookup found nothing). Best effort: a missing table never breaks the chat, and the same question
+     * twice in a row on one link is noted once.
+     */
+    public function addGap(int $linkId, string $question, string $topic, string $tool): void
+    {
+        try {
+            $q = mb_substr(trim($question), 0, 1500);
+            $last = $this->db->prepare('SELECT question FROM recruiter_gaps WHERE link_id = :l ORDER BY id DESC LIMIT 1');
+            $last->execute([':l' => $linkId]);
+            if ($q === '' || $last->fetchColumn() === $q) {
+                return;
+            }
+            $this->db->prepare('INSERT INTO recruiter_gaps (link_id, question, topic, tool, created_at) VALUES (:l, :q, :t, :tool, :now)')
+                ->execute([':l' => $linkId, ':q' => $q, ':t' => mb_substr(trim($topic), 0, 160), ':tool' => mb_substr($tool, 0, 30), ':now' => gmdate('Y-m-d H:i:s')]);
+        } catch (\Throwable $e) {
+            error_log('recruiter gap: ' . $e->getMessage());
+        }
+    }
+
+    /** The questions nothing answered, newest first. @return list<array<string, mixed>> */
+    public function gaps(int $userId, int $limit = 50): array
+    {
+        try {
+            $stmt = $this->db->prepare(
+                'SELECT g.id, g.question, g.topic, g.created_at, k.label AS link_label FROM recruiter_gaps g JOIN recruiter_links k ON k.id = g.link_id
+                 WHERE k.user_id = :u AND g.dismissed_at IS NULL ORDER BY g.id DESC LIMIT ' . max(1, min(200, $limit))
+            );
+            $stmt->execute([':u' => $userId]);
+
+            return $stmt->fetchAll();
+        } catch (\Throwable) {
+            return [];   // not migrated yet
+        }
+    }
+
+    /** Marks one (or all) of the user's unanswered questions as dealt with. */
+    public function dismissGap(int $userId, ?int $id = null): int
+    {
+        try {
+            $sql = 'UPDATE recruiter_gaps SET dismissed_at = :n WHERE dismissed_at IS NULL AND link_id IN (SELECT id FROM recruiter_links WHERE user_id = :u)' . ($id !== null ? ' AND id = :id' : '');
+            $par = [':n' => gmdate('Y-m-d H:i:s'), ':u' => $userId] + ($id !== null ? [':id' => $id] : []);
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($par);
+
+            return $stmt->rowCount();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private static function envInt(string $key, int $default): int

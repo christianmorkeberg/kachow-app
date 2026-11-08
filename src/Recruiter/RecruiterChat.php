@@ -19,6 +19,10 @@ final class RecruiterChat
     /** A recruiter may leave at most this many messages per link per day (the assistant cannot be used to spam the owner). */
     private const LEADS_PER_DAY  = 3;
 
+    private string $question = '';
+    /** @var list<string> the screenshots show_demo asked for during this turn */
+    private array $demo = [];
+
     public function __construct(
         private GeminiClient $gemini,
         private AboutEntries $entries,
@@ -30,13 +34,15 @@ final class RecruiterChat
 
     /**
      * @param array<string, mixed> $link
-     * @return array{reply:string, tokens:int, tools:list<string>, error:?string}
+     * @return array{reply:string, tokens:int, tools:list<string>, demo:list<string>, error:?string}
      */
     public function reply(array $link, string $userText, ?string $ipHash = null): array
     {
+        $this->question = trim(mb_substr($userText, 0, self::MAX_USER_CHARS));
+        $this->demo     = [];
         $userText = trim(mb_substr($userText, 0, self::MAX_USER_CHARS));
         if ($userText === '') {
-            return ['reply' => '', 'tokens' => 0, 'tools' => [], 'error' => 'empty'];
+            return ['reply' => '', 'tokens' => 0, 'tools' => [], 'demo' => [], 'error' => 'empty'];
         }
         $owner = (int) $link['user_id'];
         $linkId = (int) $link['id'];
@@ -78,7 +84,7 @@ final class RecruiterChat
         } catch (Throwable $e) {
             error_log('recruiter chat: ' . $e->getMessage());
 
-            return ['reply' => '', 'tokens' => $tokens, 'tools' => $used, 'error' => 'model'];   // nothing is stored or counted: the recruiter can simply try again
+            return ['reply' => '', 'tokens' => $tokens, 'tools' => $used, 'demo' => [], 'error' => 'model'];   // nothing is stored or counted: the recruiter can simply try again
         }
 
         if ($reply === '') {
@@ -93,7 +99,7 @@ final class RecruiterChat
         $this->links->addMessage($linkId, 'assistant', $reply, $tokens);
         $this->links->addUsage($linkId, $tokens, 1);
 
-        return ['reply' => $reply, 'tokens' => $tokens, 'tools' => $used, 'error' => null];
+        return ['reply' => $reply, 'tokens' => $tokens, 'tools' => $used, 'demo' => $this->demo, 'error' => null];
     }
 
     /** @return list<string> the words of the owner's name (left out of fact searches) */
@@ -130,6 +136,7 @@ final class RecruiterChat
                 : array_values(array_filter($this->entries->search($owner, $topic, 8, null, $this->nameWords()), static fn (array $e): bool => $e['category'] !== 'kachow'));
             $hits = array_slice($all, 0, 5);
             if ($hits === []) {
+                $this->links->addGap((int) $link['id'], $this->question, $topic, $name);   // so the owner can see what to add next
                 return ['found' => false, 'note' => 'Nothing in the facts covers that. Say you do not know it, and offer to pass a message to ' . $this->ownerName . '.'];
             }
 
@@ -138,6 +145,15 @@ final class RecruiterChat
                 'entries' => array_map(static fn (array $e): array => ['title' => $e['title'], 'text' => $e['text'], 'level' => $e['level']], $hits),
                 'note'    => 'Use only this. Entries with level "summary" may be said only as given, with no added detail.',
             ];
+        }
+        if ($name === 'show_demo') {
+            $ids = RecruiterDemo::ids((string) ($args['topic'] ?? ''));
+            if ($ids === null) {
+                return ['shown' => false, 'error' => 'Unknown topic. Use tour, home, routines, shopping or books.'];
+            }
+            $this->demo = array_values(array_unique(array_merge($this->demo, $ids)));
+
+            return ['shown' => true, 'slides' => $ids, 'note' => 'The page now shows these screenshots (fictional demo data). Say one short sentence about what they are looking at.'];
         }
         if ($name === 'leave_message') {
             $n = trim((string) ($args['name'] ?? ''));

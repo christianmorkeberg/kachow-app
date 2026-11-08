@@ -36,6 +36,8 @@ final class RecruiterCard
             'title'   => 'Recruiter',
             'links'   => $linkRows,
             'leads'   => $leads,
+            // What recruiters asked that the facts could not answer (newest first) — the list of what to add next.
+            'gaps'    => array_map(static fn (array $g): array => ['id' => (int) $g['id'], 'question' => $g['question'], 'topic' => $g['topic'], 'link' => $g['link_label'], 'at' => $g['created_at']], $links->gaps($userId, 30)),
             'facts'   => $counts + ['total' => count($all)],
             'entries' => array_map(static fn (array $e): array => [
                 'id' => (int) $e['id'], 'category' => $e['category'], 'title' => $e['title'], 'visibility' => $e['visibility'], 'has_summary' => trim((string) ($e['summary'] ?? '')) !== '',
