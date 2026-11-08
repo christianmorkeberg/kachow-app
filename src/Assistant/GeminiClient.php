@@ -97,6 +97,7 @@ final class GeminiClient
         ?int $timeoutMs = null,
         ?string $functionCallingMode = null,
         bool $googleSearch = false,
+        bool $codeExecution = false,
     ): array {
         $model ??= $this->models[0];
 
@@ -141,6 +142,11 @@ final class GeminiClient
             // Gemini's built-in Google Search grounding. Used on its OWN call (WebSearch), never
             // alongside the app's function tools, so it works whatever the model allows mixing.
             $payload['tools'][] = ['google_search' => new \stdClass()];
+        }
+
+        if ($codeExecution) {
+            // Gemini's built-in Python sandbox (RunPython). Like Google Search it goes on its OWN call, never alongside the app's function tools.
+            $payload['tools'][] = ['code_execution' => new \stdClass()];
         }
 
         $url = self::BASE . '/models/' . rawurlencode($model) . ':generateContent';
@@ -232,6 +238,27 @@ final class GeminiClient
         }
 
         return $text;
+    }
+
+    /**
+     * What the built-in sandbox ran: the Python the model wrote and what it printed, in order (a call can run several snippets).
+     *
+     * @return list<array{code:string, output:string, outcome:string}>
+     */
+    public static function extractCodeRuns(array $response): array
+    {
+        $runs = [];
+        foreach (self::firstCandidateParts($response) as $part) {
+            if (isset($part['executableCode']['code'])) {
+                $runs[] = ['code' => (string) $part['executableCode']['code'], 'output' => '', 'outcome' => ''];
+            } elseif (isset($part['codeExecutionResult']) && $runs !== []) {
+                $last = count($runs) - 1;
+                $runs[$last]['output']  = (string) ($part['codeExecutionResult']['output'] ?? '');
+                $runs[$last]['outcome'] = (string) ($part['codeExecutionResult']['outcome'] ?? '');
+            }
+        }
+
+        return $runs;
     }
 
     /**

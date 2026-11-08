@@ -285,6 +285,9 @@ $cases = [
     ['msg' => 'lav et link til ansøgningen hos Novo', 'expect' => 'recruiter'],
     ['msg' => 'did a recruiter leave a message', 'expect' => 'recruiter'],
     ['msg' => 'what does the recruiter assistant know about me', 'expect' => 'recruiter'],
+    ['msg' => 'what time is sunset in Aarhus next Friday', 'expect' => 'compute'],
+    ['msg' => 'beregn gennemsnittet af de her tal', 'expect' => 'compute'],
+    ['msg' => 'how many days until 24 December', 'expect' => 'compute'],
     // ---- weather ----
     ['msg' => "what's the weather tomorrow?", 'expect' => 'weather'],
     ['msg' => 'do I need an umbrella today?', 'expect' => 'weather'],

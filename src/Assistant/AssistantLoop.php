@@ -55,6 +55,12 @@ final class AssistantLoop
     /** Don't start a call with less than this left in the turn budget (ms). */
     private const MIN_CALL_MS = 3000;
 
+    /** When the assistant cannot do what was asked: say so, and ASK before noting it as a dev idea (never file it unasked). */
+    private const GAP_RULE = 'WHEN YOU CANNOT DO SOMETHING. If the user asks for something none of your tools can do (and run_python, if available, cannot compute it), say so plainly in one sentence — never '
+        . 'pretend or approximate. Then ask once, briefly, whether they want it noted as a dev idea ("Want me to note that as a dev idea?"), with a [[suggest: …]] marker for yes. Only call '
+        . 'note_dev_idea after they say yes, with the request and what was missing in `details`. Do not offer this for things that are merely unclear, for a one-off failure of a tool that '
+        . 'normally works, or when this is an unattended run with nobody to ask.';
+
     // Public so explain_capabilities can surface the actual operating rules verbatim —
     // the authoritative "how each feature behaves" reference, kept as one source of truth.
     public const DEFAULT_SYSTEM_INSTRUCTION =
@@ -399,6 +405,7 @@ final class AssistantLoop
     ) {
         // Always registered, but only handed to the model on a turn the user approved (see handle()).
         $this->tools->register(new WebSearch($gemini));
+        $this->tools->register(new \App\Tools\RunPython($gemini));   // routed by keywords (ToolSelector 'compute'); computes only, never acts
     }
 
     /**
@@ -1216,7 +1223,8 @@ final class AssistantLoop
     private function buildSystemInstruction(int $userId, string $userMessage = '', ?array $location = null, bool $hasImage = false, array $groups = [], string $toolMemory = '', ?array $openView = null): string
     {
         $system = $this->systemInstruction
-            . "\n\n" . self::nowLine();
+            . "\n\n" . self::nowLine()
+            . "\n\n" . self::GAP_RULE;
 
         // Ids from earlier turns, so a correction updates what exists instead of duplicating it.
         if ($toolMemory !== '') {

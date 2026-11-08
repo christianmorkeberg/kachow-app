@@ -138,6 +138,10 @@ final class ToolSelector
         'recruiter' => [
             'create_recruiter_link', 'list_recruiter_links', 'update_recruiter_link', 'get_recruiter_conversation', 'list_about_entries', 'update_about_entry',
         ],
+        // Work something out with code (dates, sun times, unit/money maths, statistics over given data).
+        'compute' => [
+            'run_python',
+        ],
         'reminders' => [
             'set_reminder', 'set_place_reminder', 'list_reminders', 'cancel_reminder', 'resolve_reminder',
             'schedule_task', 'list_scheduled_tasks', 'set_scheduled_task_active', 'update_system_task', 'cancel_scheduled_task',
@@ -504,6 +508,11 @@ final class ToolSelector
             'recruiter assistant', 'what does the recruiter', 'about entries', 'visibility', 'recruiter', 'recruiters', 'recruiter link', 'recruiter chat', 'link for the application', 'job posting', 'job application', 'application link', 'meet link',
             // Danish
             'rekrutterer', 'rekrutteringslink', 'ansøgningslink', 'link til ansøgningen', 'jobopslag', 'stillingsopslag', 'jobansøgning',
+        ],
+        'compute' => [
+            'calculate', 'compute', 'work out', 'how many days', 'how many hours', 'how long until', 'sunset', 'sunrise', 'dusk', 'convert ', 'percent of', 'percentage', 'average of', 'standard deviation', 'run python', 'with python',
+            // Danish
+            'beregn', 'regn ud', 'hvor mange dage', 'hvor mange timer', 'hvor lang tid til', 'solnedgang', 'solopgang', 'omregn', 'procent af', 'gennemsnit af', 'med python',
         ],
         'feedback' => [
             'feedback report', 'feedback reports', 'user reports', 'bug report', 'bug reports',

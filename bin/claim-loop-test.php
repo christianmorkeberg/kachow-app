@@ -103,7 +103,7 @@ check('only the learned tool goes to the model', $offered === ['get_weather'], j
 check('the diagnostics say the tools were learned', str_starts_with((string) ($loop->lastDiagnostics()['routing'][0] ?? ''), 'LEARNED (1'), json_encode($loop->lastDiagnostics()['routing'] ?? null));
 $loop->setToolSubset(null);
 $loop->handle(1, (new Conversations($db))->start(1), 'check it');
-check('back to the full set when the subset is cleared', count($offered) === 2, json_encode($offered));
+check('back to the full set when the subset is cleared', count(array_diff($offered, ['run_python'])) === 2, json_encode($offered));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
