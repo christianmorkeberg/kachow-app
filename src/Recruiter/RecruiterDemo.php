@@ -10,35 +10,40 @@ namespace App\Recruiter;
  */
 final class RecruiterDemo
 {
-    /** @return array<string, array{image:string, title:array{en:string, da:string}, caption:array{en:string, da:string}}> in tour order */
+    /** @return array<string, array{live:string, image:string, title:array{en:string, da:string}, caption:array{en:string, da:string}}> in tour order */
     public static function slides(): array
     {
         return [
             'home' => [
+                'live'    => '/demo.php?card=home',
                 'image'   => '/assets/demo/home.png',
                 'title'   => ['en' => 'Home: lights and radiators', 'da' => 'Hjem: lys og radiatorer'],
                 'caption' => ['en' => 'Lights and radiator thermostats in one card. After a radiator is set, the card shows sending → confirmed, or "unconfirmed" with a retry — Kachow checks that things really happened.',
                               'da' => 'Lys og radiatortermostater i ét kort. Når en radiator er sat, viser kortet sender → bekræftet, eller "ubekræftet" med et nyt forsøg — Kachow tjekker, at tingene rent faktisk skete.'],
             ],
             'routines' => [
+                'live'    => '/demo.php?card=routines',
                 'image'   => '/assets/demo/routines.png',
                 'title'   => ['en' => 'Routines that report what they did', 'da' => 'Rutiner der fortæller, hvad de gjorde'],
                 'caption' => ['en' => 'Scheduled routines and what each run actually did: which tools it called and whether they worked. Routines learn which generic tools they need, so later runs are faster and cheaper.',
                               'da' => 'Planlagte rutiner og hvad hver kørsel faktisk gjorde: hvilke værktøjer den brugte, og om de virkede. Rutiner lærer, hvilke generiske værktøjer de skal bruge, så senere kørsler er hurtigere og billigere.'],
             ],
             'mileage' => [
+                'live'    => '/demo.php?card=mileage',
                 'image'   => '/assets/demo/mileage.png',
                 'title'   => ['en' => 'Location → an automatic driving log', 'da' => 'Lokation → en automatisk kørebog'],
                 'caption' => ['en' => 'Kachow reads the phone\'s location privately, notices drives between known places and suggests the driving-log entries — one tap logs one, with business and commute trips treated differently for tax. Raw location points are deleted after 60 days.',
                               'da' => 'Kachow læser telefonens lokation privat, opdager ture mellem kendte steder og foreslår kørebogsposterne — ét tryk registrerer dem, med erhverv og pendling behandlet forskelligt skattemæssigt. Rå lokationspunkter slettes efter 60 dage.'],
             ],
             'shopping' => [
+                'live'    => '/demo.php?card=shopping',
                 'image'   => '/assets/demo/shopping.png',
                 'title'   => ['en' => 'Everyday cards', 'da' => 'Hverdagskort'],
                 'caption' => ['en' => 'Plain everyday things too, like a shopping list grouped by category — edited by tapping or by just saying what to add.',
                               'da' => 'Også helt almindelige ting, som en indkøbsliste grupperet efter kategori — redigeres ved at trykke eller ved bare at sige, hvad der skal på.'],
             ],
             'books' => [
+                'live'    => '/demo.php?card=books',
                 'image'   => '/assets/demo/books.png',
                 'title'   => ['en' => 'A bookkeeping assistant', 'da' => 'En bogføringsassistent'],
                 'caption' => ['en' => 'A bookkeeping aid for a sole proprietorship: expected balance and what is free to spend after VAT and tax are set aside. It is an aid, not the legal ledger.',
