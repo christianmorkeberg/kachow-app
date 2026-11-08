@@ -35,7 +35,7 @@ final class RunPython implements Tool
             . 'your head: dates and durations, sunrise/sunset or other astronomy, unit conversions, percentages and money maths, statistics or sorting over a list of values, '
             . 'parsing messy text. Pass a complete, self-contained `task` and, if it needs numbers or text, put them in `data` (it has NO access to the user\'s data, the web or their '
             . 'devices). It only computes: it cannot change anything, so use the normal tools to act on the result. Mention that the figure was computed, and offer the code if '
-            . 'they ask how. Do NOT use it for things a normal tool already does exactly (training maths, bookkeeping totals, routine conditions such as sunset).';
+            . 'they ask how. Call it ONLY when the user has asked for something to be calculated — never because they merely mention a topic ("I made a routine with sunset"), and never to double-check a figure already computed in this conversation. Do NOT use it for things a normal tool already does exactly (training maths, bookkeeping totals, routine conditions such as sunset).';
     }
 
     public function parameters(): array

@@ -60,6 +60,8 @@ final class UpdateRoutine implements Tool
         if (isset($fields['trigger_config']) && ($fields['trigger_kind'] ?? '') !== $r['trigger_type']) {
             return ['error' => 'That is a ' . $r['trigger_type'] . ' routine — a different kind of trigger needs a new routine.'];
         }
+        $names  = RoutineSpec::placeNames($this->places, $userId);
+        $before = $this->routines->summary($userId, $r['id'], $names);
         $this->routines->update($userId, $r['id'], $fields);
 
         $status = (string) ($arguments['status'] ?? '');
@@ -69,10 +71,19 @@ final class UpdateRoutine implements Tool
             }
         }
 
-        return [
+        $after = $this->routines->summary($userId, $r['id'], $names);
+        $out   = [
             'updated' => true,
-            'routine' => $this->routines->summary($userId, $r['id'], RoutineSpec::placeNames($this->places, $userId)),
+            'routine' => $after,
             '_render' => $this->tasks->cardForUser($userId, $this->places),
         ];
+        if ($before === $after) {
+            // The user asked for what is already there (e.g. "again"): say so instead of announcing a change that did not happen.
+            $out['updated'] = false;
+            $out['unchanged'] = true;
+            $out['note'] = 'Nothing changed — the routine already is exactly like this. Say so in one short sentence (and, if they seem to expect something different, ask what they see or want).';
+        }
+
+        return $out;
     }
 }

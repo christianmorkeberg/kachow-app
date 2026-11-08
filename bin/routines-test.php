@@ -160,6 +160,10 @@ check('run_routine matches the phrase, asks for the run, and says what to tell t
 check('asking again while it waits is not a second run', ($run->execute(['routine' => 'Away'], 7)['started'] ?? true) === false);
 $u2 = $update->execute(['routine' => 'Away', 'phrases' => ['bye'], 'instruction' => 'Lights off.', 'mode' => 'ask'], 7);
 check('update_routine changes only what is given (phrases REPLACE)', $R->get(7, $id1)['phrases'] === ['bye'] && $R->get(7, $id1)['instruction'] === 'Lights off.' && $R->get(7, $id1)['run_mode'] === 'ask' && $R->get(7, $id1)['label'] === 'Away');
+$same = $update->execute(['routine' => 'Away', 'conditions' => ['sun' => 'dark']], 7);
+$again = $update->execute(['routine' => 'Away', 'conditions' => ['sun' => 'dark']], 7);
+check('asking for what is already there says "nothing changed" instead of announcing an update', ($same['updated'] ?? false) === true && ($again['updated'] ?? true) === false && ($again['unchanged'] ?? false) === true && str_contains((string) $again['note'], 'Nothing changed'), json_encode($again));
+$update->execute(['routine' => 'Away', 'conditions' => []], 7);
 check('a phrase routine cannot be given a place trigger', isset($update->execute(['routine' => 'Away', 'trigger_event' => 'leave', 'trigger_place_type' => 'home'], 7)['error']));
 $update->execute(['routine' => 'Away', 'status' => 'paused'], 7);
 check('a paused routine can still be found for editing, not for running', $R->get(7, $id1)['status'] === 'paused' && isset($run->execute(['routine' => 'Away'], 7)['error']) && ($update->execute(['routine' => 'Away', 'status' => 'active'], 7)['updated'] ?? false));
