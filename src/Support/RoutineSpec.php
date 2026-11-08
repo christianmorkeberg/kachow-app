@@ -28,7 +28,7 @@ final class RoutineSpec
             'trigger_sensor_value' => ['type' => 'string', 'description' => 'The number or state to compare with, e.g. "50" or "open".'],
             'conditions'  => [
                 'type' => 'object',
-                'description' => 'Optional. When it should (not) run — say ONLY what the user asked for. weekdays: ISO days 1=Mon..7=Sun. between: ["07:00","22:00"] local. cooldown_minutes. '
+                'description' => 'Optional. When it should (not) run — say ONLY what the user asked for. weekdays: ISO days 1=Mon..7=Sun. between: ["07:00","22:00"] local. sun: "dark" = only after sunset / before sunrise, "daylight" = only between them — it follows the seasons by itself, so use it (NOT a fixed between window) for "after sunset", "when it gets dark", "in daylight"; sun_offset_min shifts sunset and sunrise (30 = half an hour after sunset). cooldown_minutes. '
                     . 'away: only when the user is NOT at home. others_away: only when nobody else in the household is home. in_places: only while the user is inside one of these '
                     . 'saved places / regions (names). out_places: only while inside none of them. from / until: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" local — only within that period '
                     . '("only this Saturday" = from and until that date). once: true = a ONE-OFF, finished after its first run. After saving, read the conditions back from the result '
@@ -36,6 +36,8 @@ final class RoutineSpec
                 'properties' => [
                     'weekdays' => ['type' => 'array', 'items' => ['type' => 'integer']],
                     'between'  => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'sun'      => ['type' => 'string', 'enum' => ['dark', 'daylight']],
+                    'sun_offset_min' => ['type' => 'integer'],
                     'cooldown_minutes' => ['type' => 'integer'],
                     'away'     => ['type' => 'boolean'],
                     'others_away' => ['type' => 'boolean'],

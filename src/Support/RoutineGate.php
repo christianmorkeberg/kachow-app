@@ -13,6 +13,8 @@ use DateTimeImmutable;
  * Conditions (all optional, all must hold):
  *   weekdays          list of ISO days 1=Mon..7=Sun
  *   between           ["HH:MM","HH:MM"] local; a window that wraps midnight ("22:00","06:00") is fine
+ *   sun               "dark" = only after sunset / before sunrise, "daylight" = only between them (follows the seasons — Sun, computed locally);
+ *   sun_offset_min    shifts sunrise AND sunset by N minutes (positive = later; "half an hour after sunset" = dark + 30)
  *   cooldown_minutes  not again within N minutes of the last run
  *   away              true = only when the user is NOT at a home place (false/absent: no condition)
  *   others_away       true = only when nobody else in the household is known to be home
@@ -46,6 +48,13 @@ final class RoutineGate
         $between = $conditions['between'] ?? null;
         if (is_array($between) && count($between) === 2 && !self::inWindow((string) $between[0], (string) $between[1], $nowLocal)) {
             return 'outside its time window (' . $between[0] . '–' . $between[1] . ')';
+        }
+        $sun = (string) ($conditions['sun'] ?? '');
+        if ($sun === 'dark' || $sun === 'daylight') {
+            $dark = Sun::isDark($nowLocal, (int) ($conditions['sun_offset_min'] ?? 0));
+            if ($dark !== null && $dark !== ($sun === 'dark')) {
+                return $sun === 'dark' ? 'it is not dark yet' : 'it is not daylight';
+            }
         }
         $cool = (int) ($conditions['cooldown_minutes'] ?? 0);
         if ($cool > 0 && $lastRunLocal !== null && $nowLocal->getTimestamp() - $lastRunLocal->getTimestamp() < $cool * 60) {
@@ -144,6 +153,14 @@ final class RoutineGate
                 $out['between'] = [trim((string) $in['between'][0]), trim((string) $in['between'][1])];
             }
         }
+        $sun = strtolower(trim((string) ($in['sun'] ?? '')));
+        if ($sun === 'dark' || $sun === 'daylight') {
+            $out['sun'] = $sun;
+            $off = (int) ($in['sun_offset_min'] ?? 0);
+            if ($off !== 0) {
+                $out['sun_offset_min'] = max(-180, min(180, $off));
+            }
+        }
         if (isset($in['cooldown_minutes']) && (int) $in['cooldown_minutes'] > 0) {
             $out['cooldown_minutes'] = min(1440, (int) $in['cooldown_minutes']);
         }
@@ -183,6 +200,10 @@ final class RoutineGate
         }
         if (!empty($c['between'])) {
             $bits[] = $c['between'][0] . '–' . $c['between'][1];
+        }
+        if (!empty($c['sun'])) {
+            $off    = (int) ($c['sun_offset_min'] ?? 0);
+            $bits[] = ($c['sun'] === 'dark' ? 'after sunset' : 'in daylight') . ($off !== 0 ? ' (' . ($off > 0 ? '+' : '') . $off . ' min)' : '');
         }
         if (!empty($c['cooldown_minutes'])) {
             $bits[] = 'not again within ' . $c['cooldown_minutes'] . ' min';

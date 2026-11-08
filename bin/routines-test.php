@@ -338,5 +338,18 @@ check('where the user is now: inside the region from a fresh point', $inside ===
 check('a stale or inaccurate point says "unknown", never a guess', \App\Support\PlaceNow::inside(['recorded_at' => gmdate('Y-m-d H:i:s', time() - 3600), 'lat' => 55.7, 'lon' => 13.0, 'acc' => 10], $places->list(1), [(int) $pl1['id']], time()) === [(int) $pl1['id'] => null]
     && \App\Support\PlaceNow::inside(['recorded_at' => gmdate('Y-m-d H:i:s', time() - 60), 'lat' => 55.7, 'lon' => 13.0, 'acc' => 500], $places->list(1), [(int) $pl1['id']], time()) === [(int) $pl1['id'] => null]
     && \App\Support\PlaceNow::inside(null, $places->list(1), [(int) $pl1['id']], time()) === [(int) $pl1['id'] => null]);
+
+// ---- sun: "after sunset" follows the seasons ----
+$cph = static fn (string $d): DateTimeImmutable => new DateTimeImmutable($d, new DateTimeZone('Europe/Copenhagen'));
+$dec = \App\Support\Sun::times($cph('2026-12-21 12:00'));
+$jun = \App\Support\Sun::times($cph('2026-06-21 12:00'));
+check('sunset in Copenhagen: ~15:40 on 21 Dec, ~22:00 on 21 Jun', $dec !== null && $jun !== null && $dec['sunset']->format('H:i') >= '15:30' && $dec['sunset']->format('H:i') <= '15:50' && $jun['sunset']->format('H:i') >= '21:50' && $jun['sunset']->format('H:i') <= '22:10');
+check('dark at 17:00 in December, not at 17:00 in June', \App\Support\Sun::isDark($cph('2026-12-21 17:00')) === true && \App\Support\Sun::isDark($cph('2026-06-21 17:00')) === false);
+check('dark early in the morning, not at noon', \App\Support\Sun::isDark($cph('2026-12-21 05:00')) === true && \App\Support\Sun::isDark($cph('2026-12-21 12:00')) === false);
+check('the gate: sun=dark holds back in the afternoon sun, lets through after sunset', RoutineGate::check(['sun' => 'dark'], $cph('2026-06-21 17:00'), null) === 'it is not dark yet' && RoutineGate::check(['sun' => 'dark'], $cph('2026-12-21 17:00'), null) === null);
+check('the gate: sun=daylight is the opposite', RoutineGate::check(['sun' => 'daylight'], $cph('2026-12-21 17:00'), null) === 'it is not daylight' && RoutineGate::check(['sun' => 'daylight'], $cph('2026-12-21 12:00'), null) === null);
+check('the offset moves sunset: +60 min is still light shortly after sunset', RoutineGate::check(['sun' => 'dark', 'sun_offset_min' => 60], $dec['sunset']->modify('+10 minutes'), null) === 'it is not dark yet' && RoutineGate::check(['sun' => 'dark', 'sun_offset_min' => 60], $dec['sunset']->modify('+70 minutes'), null) === null);
+check('normalize keeps sun + offset, drops junk', RoutineGate::normalize(['sun' => 'Dark', 'sun_offset_min' => 30]) === ['sun' => 'dark', 'sun_offset_min' => 30] && RoutineGate::normalize(['sun' => 'purple']) === []);
+check('describe says it in words', str_contains(RoutineGate::describe(['sun' => 'dark', 'sun_offset_min' => 30]), 'after sunset (+30 min)'));
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
