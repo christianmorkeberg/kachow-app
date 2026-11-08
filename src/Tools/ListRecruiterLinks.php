@@ -10,7 +10,7 @@ use App\Recruiter\RecruiterLinks;
 /** Tool (owner/admin only): the recruiter links with their state, usage and opens, and the messages recruiters have left. */
 final class ListRecruiterLinks implements Tool
 {
-    public function __construct(private Users $users, private RecruiterLinks $links)
+    public function __construct(private Users $users, private RecruiterLinks $links, private ?\App\Recruiter\AboutEntries $entries = null)
     {
     }
 
@@ -47,6 +47,10 @@ final class ListRecruiterLinks implements Tool
             ];
         }
         $res = ['count' => count($out), 'links' => $out];
+        if ($this->entries !== null) {
+            // The card carries the detail (links, messages, facts with their visibility); the model only needs the summary above.
+            $res['_render'] = \App\Recruiter\RecruiterCard::build($userId, $this->links, $this->entries, $host);
+        }
         if (!empty($arguments['include_messages'])) {
             $res['left_messages'] = $this->links->leads($userId);
             $this->links->markLeadsRead($userId);

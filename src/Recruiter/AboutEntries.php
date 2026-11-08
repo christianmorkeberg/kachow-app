@@ -53,6 +53,83 @@ final class AboutEntries
         return $n;
     }
 
+    /** Largest import accepted: entries, and characters per entry body. */
+    public const MAX_ENTRIES = 300;
+    public const MAX_BODY    = 8000;
+
+    /**
+     * Checks a JSON text from the import (a paste or an uploaded file) and turns it into clean entries. Nothing is written. Visibility defaults to PRIVATE when missing or unknown.
+     *
+     * @return array{entries: list<array<string, mixed>>, errors: list<string>, counts: array{public:int, summary:int, private:int}}
+     */
+    public static function parseImport(string $json): array
+    {
+        $out = ['entries' => [], 'errors' => [], 'counts' => ['public' => 0, 'summary' => 0, 'private' => 0]];
+        $data = json_decode(trim($json), true);
+        if (!is_array($data) || $data === [] || array_keys($data) !== range(0, count($data) - 1)) {
+            $out['errors'][] = 'That is not a JSON list of entries (it should start with [ and hold objects with category, title, body, visibility).';
+
+            return $out;
+        }
+        if (count($data) > self::MAX_ENTRIES) {
+            $out['errors'][] = 'Too many entries (' . count($data) . '; the limit is ' . self::MAX_ENTRIES . ').';
+
+            return $out;
+        }
+        foreach ($data as $i => $e) {
+            $n = $i + 1;
+            if (!is_array($e)) {
+                $out['errors'][] = "Entry {$n} is not an object.";
+                continue;
+            }
+            $title = trim((string) ($e['title'] ?? ''));
+            $body  = trim((string) ($e['body'] ?? ''));
+            if ($title === '' || $body === '') {
+                $out['errors'][] = "Entry {$n} needs a title and a body.";
+                continue;
+            }
+            if (mb_strlen($body) > self::MAX_BODY) {
+                $out['errors'][] = "Entry {$n} (\"" . mb_substr($title, 0, 40) . "\") is longer than " . self::MAX_BODY . ' characters — split it in two.';
+                continue;
+            }
+            $vis = self::visibility((string) ($e['visibility'] ?? 'private'));
+            $out['counts'][$vis]++;
+            $out['entries'][] = [
+                'category' => trim((string) ($e['category'] ?? '')) ?: 'general', 'title' => $title, 'body' => $body,
+                'summary' => isset($e['summary']) && trim((string) $e['summary']) !== '' ? trim((string) $e['summary']) : null,
+                'visibility' => $vis, 'lang' => substr((string) ($e['lang'] ?? 'en'), 0, 2) ?: 'en', 'sort' => (int) ($e['sort'] ?? $i),
+            ];
+            if ($vis === 'summary' && $out['entries'][count($out['entries']) - 1]['summary'] === null) {
+                $out['errors'][] = "Entry {$n} (\"" . mb_substr($title, 0, 40) . "\") is summary-only but has no summary, so the assistant would say nothing about it.";
+            }
+        }
+
+        return $out;
+    }
+
+    /** Loads clean entries: "replace" swaps the user's whole catalogue, "add" appends. @param list<array<string, mixed>> $entries @return int how many were written */
+    public function import(int $userId, array $entries, string $mode = 'replace'): int
+    {
+        if ($mode === 'add') {
+            $sort = (int) $this->db->query('SELECT COALESCE(MAX(sort), 0) FROM about_entries WHERE user_id = ' . (int) $userId)->fetchColumn();
+            foreach ($entries as $i => $e) {
+                $this->add($userId, (string) $e['category'], (string) $e['title'], (string) $e['body'], $e['summary'] ?? null, (string) $e['visibility'], (string) ($e['lang'] ?? 'en'), $sort + 1 + $i);
+            }
+
+            return count($entries);
+        }
+
+        return $this->replaceAll($userId, $entries);
+    }
+
+    /** Every entry in the import format — the backup file. @return list<array<string, mixed>> */
+    public function export(int $userId): array
+    {
+        return array_map(static fn (array $r): array => array_filter([
+            'category' => $r['category'], 'title' => $r['title'], 'body' => $r['body'], 'summary' => $r['summary'], 'visibility' => $r['visibility'], 'lang' => $r['lang'],
+        ], static fn ($v): bool => $v !== null), $this->all($userId));
+    }
+
     /**
      * What the assistant may know, per entry: public ones with their body, summary-only ones with ONLY the summary. Private entries are not selected.
      *

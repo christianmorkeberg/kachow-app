@@ -227,7 +227,7 @@ final class ToolRegistry
         // The recruiter chat's owner tools (links, caps, conversations): owner/admin only inside each tool.
         $recruiterLinks = new \App\Recruiter\RecruiterLinks();
         $registry->register(new CreateRecruiterLink($users, $recruiterLinks, new \App\Recruiter\AboutEntries(), static fn (): \App\Assistant\GeminiClient => \App\Assistant\GeminiClient::fromEnv()));
-        $registry->register(new ListRecruiterLinks($users, $recruiterLinks));
+        $registry->register(new ListRecruiterLinks($users, $recruiterLinks, new \App\Recruiter\AboutEntries()));
         $registry->register(new UpdateRecruiterLink($users, $recruiterLinks));
         $registry->register(new GetRecruiterConversation($users, $recruiterLinks));
         $registry->register(new ListAboutEntries($users, new \App\Recruiter\AboutEntries()));

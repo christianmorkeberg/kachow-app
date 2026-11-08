@@ -12,6 +12,7 @@ use App\Recruiter\LeadDelivery;
 use App\Recruiter\RecruiterChat;
 use App\Recruiter\RecruiterLinks;
 use App\Recruiter\RecruiterPrompt;
+use App\Recruiter\RecruiterCard;
 use App\Data\Users;
 use App\Tools\CreateRecruiterLink;
 use App\Tools\GetRecruiterConversation;
@@ -228,6 +229,35 @@ $ue->execute(['id' => $thesisId, 'visibility' => 'public'], 1);
 $added = $ue->execute(['category' => 'work', 'title' => 'New fact', 'body' => 'Something new.', 'visibility' => 'public'], 1);
 check('add a new entry (default private; public when asked) and delete one', ($added['added'] ?? false) === true && count($entries->visible(1)) === 4 && $ue->execute(['id' => $added['id'], 'action' => 'delete'], 1)['deleted'] === true && count($entries->visible(1)) === 3);
 check('adding needs category, title and body; an unknown id is not found', isset($ue->execute(['title' => 'x'], 1)['error']) && isset($ue->execute(['id' => 99999, 'visibility' => 'public'], 1)['error']));
+
+echo "9) import / export / the card\n";
+$good = json_encode([
+    ['category' => 'work', 'title' => 'One', 'body' => 'Body one', 'visibility' => 'public'],
+    ['category' => 'work', 'title' => 'Two', 'body' => 'Body two', 'summary' => 'Short two', 'visibility' => 'summary'],
+    ['category' => 'personal', 'title' => 'Three', 'body' => 'Body three', 'visibility' => 'private'],
+    ['title' => 'No category, no visibility', 'body' => 'x'],
+]);
+$pi = AboutEntries::parseImport($good);
+check('a valid import is cleaned: counts, default category "general", missing visibility = PRIVATE', count($pi['entries']) === 4 && $pi['counts'] === ['public' => 1, 'summary' => 1, 'private' => 2] && $pi['entries'][3]['category'] === 'general' && $pi['entries'][3]['visibility'] === 'private' && $pi['errors'] === []);
+check('not JSON / not a list / empty / an object are refused with a plain message', AboutEntries::parseImport('hello')['entries'] === [] && AboutEntries::parseImport('{"a":1}')['errors'] !== [] && AboutEntries::parseImport('[]')['errors'] !== []);
+$bad = AboutEntries::parseImport(json_encode([['title' => 'No body', 'body' => ''], ['title' => 'Long', 'body' => str_repeat('x', 8001)], 'str', ['title' => 'Ok', 'body' => 'fine', 'visibility' => 'public']]));
+check('bad entries are reported by number and skipped; the good one survives', count($bad['entries']) === 1 && count($bad['errors']) === 3 && str_contains($bad['errors'][0], 'Entry 1'), json_encode($bad['errors']));
+$sumNo = AboutEntries::parseImport(json_encode([['title' => 'S', 'body' => 'b', 'visibility' => 'summary']]));
+check('a summary-only entry without a summary is flagged (it would say nothing)', count($sumNo['entries']) === 1 && str_contains($sumNo['errors'][0], 'no summary'));
+check('over 300 entries is refused', AboutEntries::parseImport(json_encode(array_fill(0, 301, ['title' => 't', 'body' => 'b'])))['entries'] === []);
+$before = count($entries->all(1));
+check('add mode appends and keeps what was there', $entries->import(1, $pi['entries'], 'add') === 4 && count($entries->all(1)) === $before + 4);
+check('replace mode swaps everything', $entries->import(1, $pi['entries'], 'replace') === 4 && count($entries->all(1)) === 4);
+$ex = $entries->export(1);
+check('export is in the import format and a re-import gives the same facts (a round trip)', count($ex) === 4 && AboutEntries::parseImport(json_encode($ex))['counts'] === $pi['counts'] && $ex[1]['summary'] === 'Short two' && !array_key_exists('summary', $ex[0]));
+check('import for one user never touches another user\'s facts', $entries->import(2, $pi['entries'], 'replace') === 4 && count($entries->all(1)) === 4 && count($entries->all(2)) === 4);
+$card = RecruiterCard::build(1, $links, $entries, 'example.test');
+check('the card: links with urls, left messages with unread/delivered, fact counts, each entry with its visibility', $card['kind'] === 'recruiter' && count($card['links']) >= 2 && str_contains($card['links'][0]['url'], 'https://example.test/meet/') && $card['facts'] === ['public' => 1, 'summary' => 1, 'private' => 2, 'total' => 4] && count($card['entries']) === 4 && $card['entries'][1]['has_summary'] === true);
+check('left messages on the card carry delivery state', isset($card['leads'][0]['delivered']) && isset($card['leads'][0]['unread']));
+$lr = (new ListRecruiterLinks($users, $links, $entries))->execute([], 1);
+check('list_recruiter_links also renders the card', ($lr['_render']['kind'] ?? '') === 'recruiter');
+$entries->setVisibility(1, (int) $entries->all(1)[0]['id'], 'private');
+check('set_visibility (the card\'s dropdown) changes what the assistant can read', $entries->search(1, 'Body one') === [] || count($entries->visible(1)) === 1);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
