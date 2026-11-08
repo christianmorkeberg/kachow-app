@@ -1,5 +1,5 @@
 -- Questions the recruiter assistant could not answer from the facts (the lookup found nothing), so the owner can see what to add next. Part of the chat data:
--- deleted with the chat log after 14 days. Run once on the server DB (kachowdk_ai):  kdb < migrations/2026-11-09_recruiter_gaps.sql
+-- deleted with the chat log after 14 days. Run once on the server DB (kachowdk_ai):  kdb < migrations/2026-11-08_recruiter_gaps.sql
 -- Until it is run the chat works as before; it just does not record these.
 CREATE TABLE recruiter_gaps (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
