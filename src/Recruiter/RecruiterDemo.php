@@ -26,6 +26,12 @@ final class RecruiterDemo
                 'caption' => ['en' => 'Scheduled routines and what each run actually did: which tools it called and whether they worked. Routines learn which generic tools they need, so later runs are faster and cheaper.',
                               'da' => 'Planlagte rutiner og hvad hver kørsel faktisk gjorde: hvilke værktøjer den brugte, og om de virkede. Rutiner lærer, hvilke generiske værktøjer de skal bruge, så senere kørsler er hurtigere og billigere.'],
             ],
+            'mileage' => [
+                'image'   => '/assets/demo/mileage.png',
+                'title'   => ['en' => 'Location → an automatic driving log', 'da' => 'Lokation → en automatisk kørebog'],
+                'caption' => ['en' => 'Kachow reads the phone\'s location privately, notices drives between known places and suggests the driving-log entries — one tap logs one, with business and commute trips treated differently for tax. Raw location points are deleted after 60 days.',
+                              'da' => 'Kachow læser telefonens lokation privat, opdager ture mellem kendte steder og foreslår kørebogsposterne — ét tryk registrerer dem, med erhverv og pendling behandlet forskelligt skattemæssigt. Rå lokationspunkter slettes efter 60 dage.'],
+            ],
             'shopping' => [
                 'image'   => '/assets/demo/shopping.png',
                 'title'   => ['en' => 'Everyday cards', 'da' => 'Hverdagskort'],

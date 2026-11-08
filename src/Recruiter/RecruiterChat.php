@@ -149,7 +149,7 @@ final class RecruiterChat
         if ($name === 'show_demo') {
             $ids = RecruiterDemo::ids((string) ($args['topic'] ?? ''));
             if ($ids === null) {
-                return ['shown' => false, 'error' => 'Unknown topic. Use tour, home, routines, shopping or books.'];
+                return ['shown' => false, 'error' => 'Unknown topic. Use tour, home, routines, mileage, shopping or books.'];
             }
             $this->demo = array_values(array_unique(array_merge($this->demo, $ids)));
 

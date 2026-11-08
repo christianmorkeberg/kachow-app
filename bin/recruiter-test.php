@@ -290,7 +290,7 @@ $r = chat([call('get_about_owner', ['topic' => 'nothing']), text('No idea.', 10)
 check('before the migration is run the chat works as before (the gap is simply not recorded)', $r['error'] === null && $l2->gaps(1) === []);
 $seen = [];
 $r = chat([call('show_demo', ['topic' => 'tour']), text('Here is Kachow in action.', 60)], $links, $entries, $seen)->reply($links->byId((int) $link['id']), 'Show me Kachow in action');
-check('show_demo: the reply carries the screenshots to show (the whole tour, in order)', $r['demo'] === array_keys(RecruiterDemo::slides()) && count($r['demo']) === 4, json_encode($r['demo']));
+check('show_demo: the reply carries the screenshots to show (the whole tour, in order)', $r['demo'] === array_keys(RecruiterDemo::slides()) && count($r['demo']) === 5, json_encode($r['demo']));
 check('the model is told they are shown and that the data is fictional', str_contains(json_encode($seen[1]['contents'] ?? []), 'fictional demo data'));
 $r = chat([call('show_demo', ['topic' => 'home']), text('Home card.', 30)], $links, $entries, $seen)->reply($links->byId((int) $link['id']), 'show the home card');
 check('one topic = one screenshot', $r['demo'] === ['home']);
