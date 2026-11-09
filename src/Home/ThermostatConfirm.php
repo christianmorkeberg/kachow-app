@@ -172,6 +172,11 @@ final class ThermostatConfirm
     /** @param array<string, mixed> $batch */
     public function announce(array $batch): void
     {
+        // Asked by voice and everything arrived: the user was told "okay" out loud and the Home card shows the status — no second confirmation by push. Anything
+        // that did NOT arrive is always announced.
+        if (!empty($batch['voice']) && array_filter((array) ($batch['items'] ?? []), static fn (array $i): bool => empty($i['confirmed'])) === []) {
+            return;
+        }
         ($this->deliver)(self::text($batch), isset($batch['conversation_id']) ? (int) $batch['conversation_id'] : null);
     }
 

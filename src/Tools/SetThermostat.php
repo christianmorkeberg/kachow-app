@@ -136,7 +136,7 @@ final class SetThermostat implements Tool
         $hook    = $service->hookActive($userId);
         $alive   = $hook || AfterReply::enabled() || $service->watcherAlive($userId);
         $ctx = AfterReply::context();
-        (new PendingSets($this->state))->add($userId, ['id' => $id, 'name' => $name, 'target' => $target], isset($ctx['conversation_id']) ? (int) $ctx['conversation_id'] : null, (bool) ($ctx['danish'] ?? false));
+        (new PendingSets($this->state))->add($userId, ['id' => $id, 'name' => $name, 'target' => $target], isset($ctx['conversation_id']) ? (int) $ctx['conversation_id'] : null, (bool) ($ctx['danish'] ?? false), null, \App\Support\CallOrigin::isVoice());
         if (AfterReply::enabled()) {
             $home  = $this->home;
             $set   = $this->settings;

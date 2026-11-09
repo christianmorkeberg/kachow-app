@@ -229,5 +229,20 @@ check('…a failure is still there after 30 minutes and gone after 61', isset($v
 $valves->mark(1, 203, 'bogus', 16.0, 1000);
 check('an unknown state is never stored', !isset($valves->all(1, 1001)[203]));
 
+
+echo "voice) a batch asked by voice is not announced again when everything arrived — but a failure always is\n";
+$db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock;
+foreach ([200, 201] as $id) { $pending->add(1, ['id' => $id, 'name' => $id === 200 ? 'Stue' : 'Badeværelse', 'target' => 16.0], null, false, $clock, true); }
+watcher($pending, [200 => $t0 + 15, 201 => $t0 + 30], $log, $clock)->run();
+check('all confirmed by voice: silent (no push, no chat message)', $log === [], json_encode($log));
+$db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock;
+foreach ([200, 201] as $id) { $pending->add(1, ['id' => $id, 'name' => $id === 200 ? 'Stue' : 'Badeværelse', 'target' => 16.0], null, false, $clock, true); }
+watcher($pending, [200 => $t0 + 15, 201 => -1], $log, $clock)->run();
+check('one valve never confirmed by voice: the user is still told', count($log) === 1 && str_contains($log[0][0], 'Badeværelse'), json_encode($log));
+$db->exec('DELETE FROM home_state'); $log = []; $clock = 1000; $t0 = $clock;
+foreach ([200, 201] as $id) { $pending->add(1, ['id' => $id, 'name' => $id === 200 ? 'Stue' : 'Badeværelse', 'target' => 16.0], 9, false, $clock); }
+watcher($pending, [200 => $t0 + 15, 201 => $t0 + 30], $log, $clock)->run();
+check('the same by chat/text still announces the success', count($log) === 1, json_encode($log));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

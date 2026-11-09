@@ -30,12 +30,15 @@ final class PendingSets
      *
      * @param array{id:int, name:string, target:float} $item
      */
-    public function add(int $userId, array $item, ?int $conversationId, bool $danish, ?int $now = null): void
+    public function add(int $userId, array $item, ?int $conversationId, bool $danish, ?int $now = null, bool $voice = false): void
     {
         $now ??= time();
         $e     = $this->state->get($userId, self::KIND);
         $batch = $e !== null && $now - (int) ($e['data']['at'] ?? 0) <= self::MAX_AGE_S ? $e['data'] : ['at' => $now, 'conversation_id' => $conversationId, 'danish' => $danish, 'items' => []];
         $batch['items'] = array_values(array_filter($batch['items'], static fn (array $i): bool => (int) $i['id'] !== $item['id']));
+        if ($voice) {
+            $batch['voice'] = true;   // asked by voice: a fully confirmed batch is not announced again (see ThermostatConfirm::announce)
+        }
         $batch['items'][] = ['id' => $item['id'], 'name' => $item['name'], 'target' => $item['target'], 'confirmed' => false, 'sent_at' => $now, 'resends' => 0];
         if ($conversationId !== null) {
             $batch['conversation_id'] = $conversationId;

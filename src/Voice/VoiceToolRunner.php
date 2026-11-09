@@ -59,6 +59,12 @@ final class VoiceToolRunner
             } else {
                 $result = $this->registry->dispatch($name, $args, $userId, 'voice');
                 $card   = isset($result['_render']) && is_array($result['_render']) ? $result['_render'] : null;
+                if ($name === 'set_thermostat' && ($result['set'] ?? null) === 'sent') {
+                    // By voice one short "okay" is the whole answer: the radiators confirm in the background and a success is not announced again (failures are).
+                    $result['note'] = 'Sent to the valve. Say ONE very short confirmation, once — if several radiators were asked, only after the last — and nothing more about it afterwards: '
+                        . 'do not announce later confirmations, do not repeat it, do not say "by the way". If a valve fails to confirm, the user is told separately.';
+                    unset($result['will_notify']);
+                }
             }
         } catch (Throwable $e) {
             return ['ok' => false, 'result' => ['error' => 'The tool failed.'], 'card' => null, 'ms' => $ms(), 'error' => get_class($e) . ': ' . $e->getMessage(), 'fault' => true, 'summary' => self::describe($name, $args, false, $this->homeName)];
