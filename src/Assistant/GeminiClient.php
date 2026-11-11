@@ -38,12 +38,15 @@ final class GeminiClient
         // budgets in favor of a coarse level ("minimal"/"low"/"medium"/"high").
         private ?int $thinkingBudget = null,
         private ?string $thinkingLevel = null,
+        // Called after every answered call with (purpose, model, usage tokens): fromEnv() wires it to the usage log; tests leave it out.
+        private $usageSink = null,
+        private string $purpose = 'chat',
     ) {
         $this->models = self::normalizeModels($models);
         $this->transport = $transport ?? [$this, 'curlTransport'];
     }
 
-    public static function fromEnv(?callable $transport = null): self
+    public static function fromEnv(?callable $transport = null, string $purpose = 'chat'): self
     {
         $key = $_ENV['GEMINI_API_KEY'] ?? '';
         if ($key === '') {
@@ -61,7 +64,11 @@ final class GeminiClient
             ? (string) $_ENV['GEMINI_THINKING_LEVEL']
             : null;
 
-        return new self($key, $models, $transport, $budget, $level);
+        $sink = static function (string $purpose, string $model, array $u): void {
+            (new \App\Data\UsageLog())->record($purpose, $model, $u);   // best effort: never breaks a call
+        };
+
+        return new self($key, $models, $transport, $budget, $level, $sink, $purpose);
     }
 
     /**
@@ -98,6 +105,7 @@ final class GeminiClient
         ?string $functionCallingMode = null,
         bool $googleSearch = false,
         bool $codeExecution = false,
+        ?string $purpose = null,
     ): array {
         $model ??= $this->models[0];
 
@@ -178,6 +186,7 @@ final class GeminiClient
         if (!is_array($decoded)) {
             throw new RuntimeException('Gemini API returned invalid JSON.');
         }
+        $this->noteUsage($decoded, $purpose ?? $this->purpose, $model);
 
         return $decoded;
     }
@@ -388,6 +397,50 @@ final class GeminiClient
         curl_close($ch);
 
         return [$status, (string) $body];
+    }
+
+    /** The token counts a response reports (usageMetadata), as plain ints. @return array{prompt:int, cached:int, output:int, thoughts:int, tool:int} */
+    public static function usageFrom(array $response): array
+    {
+        $m = is_array($response['usageMetadata'] ?? null) ? $response['usageMetadata'] : [];
+
+        return [
+            'prompt'   => (int) ($m['promptTokenCount'] ?? 0),
+            'cached'   => (int) ($m['cachedContentTokenCount'] ?? 0),
+            'output'   => (int) ($m['candidatesTokenCount'] ?? 0),
+            'thoughts' => (int) ($m['thoughtsTokenCount'] ?? 0),
+            'tool'     => (int) ($m['toolUsePromptTokenCount'] ?? 0),
+        ];
+    }
+
+    /** @var array{calls:int, prompt:int, cached:int, output:int, thoughts:int, tool:int} What every call since resetTurnUsage() reported (one chat turn can make several). */
+    private static array $turnUsage = ['calls' => 0, 'prompt' => 0, 'cached' => 0, 'output' => 0, 'thoughts' => 0, 'tool' => 0];
+
+    public static function resetTurnUsage(): void
+    {
+        self::$turnUsage = ['calls' => 0, 'prompt' => 0, 'cached' => 0, 'output' => 0, 'thoughts' => 0, 'tool' => 0];
+    }
+
+    /** @return array{calls:int, prompt:int, cached:int, output:int, thoughts:int, tool:int} */
+    public static function turnUsage(): array
+    {
+        return self::$turnUsage;
+    }
+
+    private function noteUsage(array $response, string $purpose, string $model): void
+    {
+        $u = self::usageFrom($response);
+        self::$turnUsage['calls']++;
+        foreach ($u as $k => $v) {
+            self::$turnUsage[$k] += $v;
+        }
+        if ($this->usageSink !== null) {
+            try {
+                ($this->usageSink)($purpose, $model, $u);
+            } catch (\Throwable $e) {
+                error_log('Gemini usage sink: ' . $e->getMessage());
+            }
+        }
     }
 
     /** @var array{conn:int, tls:int, think:int, total:int}|null Timing of the last cURL call. */

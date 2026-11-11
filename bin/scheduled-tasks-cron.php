@@ -136,6 +136,7 @@ $tasks     = new ScheduledTasks();
 $notifier  = Notifier::fromEnv();
 if (random_int(1, 500) === 1) {
     (new \App\Diagnostics\ToolCallLog())->prune(180);   // keep ~6 months of the tool-call log
+    (new \App\Data\UsageLog())->purge(400);              // and ~13 months of the Gemini usage log (it is small; this only stops it growing for ever)
 }
 $utc       = new DateTimeZone('UTC');
 
@@ -174,7 +175,7 @@ try {
         new BookkeepingAudit(),
         Discogs::fromEnv()
     );
-    $gemini = GeminiClient::fromEnv();
+    $gemini = GeminiClient::fromEnv(null, 'scheduled');
     $loop   = new AssistantLoop(
         $gemini,
         $registry,

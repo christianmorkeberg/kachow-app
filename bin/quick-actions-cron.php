@@ -27,7 +27,7 @@ use App\Data\QuickActions;
 use App\Data\Users;
 
 try {
-    $gemini = GeminiClient::fromEnv();
+    $gemini = GeminiClient::fromEnv(null, 'quick_actions');
 } catch (\Throwable $e) {
     fwrite(STDERR, "quick-actions-cron: Gemini not configured; nothing to do.\n");
     exit(0);

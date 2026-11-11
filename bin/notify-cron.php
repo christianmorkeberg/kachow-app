@@ -421,7 +421,7 @@ try {
             if (!$prefs->isEnabled($uid, NotificationTypes::IMPORTANT_EMAIL) || !$mail->hasAccounts($uid)) {
                 continue;
             }
-            $gem ??= \App\Assistant\GeminiClient::fromEnv();
+            $gem ??= \App\Assistant\GeminiClient::fromEnv(null, 'notify');
             $ask = static fn (string $prompt): string => \App\Assistant\GeminiClient::extractText(
                 $gem->generate([['role' => 'user', 'parts' => [['text' => $prompt]]]], [], null, null, ['responseMimeType' => 'application/json'], 25000)
             );

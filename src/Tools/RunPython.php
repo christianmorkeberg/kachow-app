@@ -74,6 +74,7 @@ final class RunPython implements Tool
                 null,
                 false,
                 true,
+                'run_python',
             );
         } catch (\Throwable $e) {
             error_log('run_python: ' . $e->getMessage());

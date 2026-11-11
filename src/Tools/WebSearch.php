@@ -73,6 +73,8 @@ final class WebSearch implements Tool
                 25000,
                 null,
                 true,
+                false,
+                'web_search',
             );
         } catch (\Throwable $e) {
             error_log('web_search: ' . $e->getMessage());

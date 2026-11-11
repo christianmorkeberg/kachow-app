@@ -742,6 +742,8 @@ final class AssistantLoop
         $geminiMs    = 0.0;
         $geminiCalls = 0;
         $toolMs      = 0.0;
+        GeminiClient::resetTurnUsage();                  // the tokens of THIS turn (all its calls, web search and code runs included) for the diagnostics
+        \App\Data\UsageLog::forUser($userId);          // and whose they are, in the usage log
 
         // Always-on diagnostics for this turn (surfaced in developer mode + reports).
         // Thought-summary capture is extra (token cost), so it's behind a runtime flag.
@@ -1100,6 +1102,7 @@ final class AssistantLoop
             'app_ms'       => (int) round(max(0, $totalMs - $geminiMs - $toolMs)),
             'req_kb'       => $reqKb,
             'net_last'     => GeminiClient::lastCallTiming(), // conn/tls/think of the last call
+            'tokens'       => GeminiClient::turnUsage(),      // what the turn's Gemini calls reported (prompt / cached / output / thinking / tool-use)
         ];
         if (is_array($this->lastDiagnostics)) {
             $this->lastDiagnostics['timing'] = $timing;

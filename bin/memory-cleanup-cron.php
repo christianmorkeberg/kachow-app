@@ -52,7 +52,7 @@ if (!$dry && !$flags->isOn('memory_condense', false)) {
 }
 
 try {
-    $gemini = GeminiClient::fromEnv();
+    $gemini = GeminiClient::fromEnv(null, 'memory');
 } catch (\Throwable $e) {
     fwrite(STDERR, "memory-cleanup: Gemini not configured; nothing to do.\n");
     exit(0);
