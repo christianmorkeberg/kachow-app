@@ -56,5 +56,10 @@ check('location / automatic words → location', UserSettings::normalizeWorkCloc
 check('manual / chat / shortcut → shortcut (the stored value)', UserSettings::normalizeWorkClock('manual') === 'shortcut' && UserSettings::normalizeWorkClock('chat') === 'shortcut' && UserSettings::normalizeWorkClock('shortcut') === 'shortcut');
 check('anything else is refused', UserSettings::normalizeWorkClock('sometimes') === null);
 
+echo "4) the Accounts panel data\n";
+$acc = \App\Support\SettingsPanels::accounts(true, [['id' => 3, 'provider' => 'gmail', 'email' => 'a@example.com', 'display_name' => 'A', 'status' => 'active']]);
+check('calendar status and mailboxes, without extra fields', $acc === ['calendar' => ['connected' => true], 'email' => [['id' => 3, 'provider' => 'gmail', 'email' => 'a@example.com']]], json_encode($acc));
+check('no mailbox is an empty list', \App\Support\SettingsPanels::accounts(false, [])['email'] === []);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
