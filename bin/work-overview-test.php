@@ -58,6 +58,15 @@ $session(1, $mon->modify('-7 days'), '08:00', '12:00', 'Office');
 $session(1, $mon->modify('-6 days'), '09:00', '15:00', 'Client');
 $session(2, $mon, '09:00', '10:00', 'Elsewhere');   // another user: must never show up
 
+echo "0) who is on the clock (the card's Clock in / Clock out button)\n";
+$c0 = $events->overview(1, ['period' => 'today']);
+check('nobody open: the card says so', ($c0['clock']['open'] ?? null) === [], json_encode($c0['clock'] ?? null));
+$ins->execute([1, 'in', (new DateTimeImmutable('now', $utc))->modify('-1 hour')->format('Y-m-d H:i:s'), 'Office']);
+$c0 = $events->overview(1, ['period' => 'week']);
+check('an open session shows its workplace and local start time, whatever period is shown', count($c0['clock']['open']) === 1 && $c0['clock']['open'][0]['place'] === 'Office' && preg_match('/^\d{2}:\d{2}$/', $c0['clock']['open'][0]['since']) === 1, json_encode($c0['clock']));
+check('another user\'s open session is not mine', ($events->overview(2, ['period' => 'today'])['clock']['open'] ?? null) === []);
+$db->exec("DELETE FROM work_events WHERE user_id = 1 AND kind = 'in' AND location = 'Office' AND occurred_at >= datetime('now', '-3 hours')");
+
 echo "1) one day: totals and lines, no bars\n";
 $c = $events->overview(1, ['period' => 'today']);
 check('a work_hours card in "today" mode', $c['kind'] === 'work_hours' && $c['mode'] === 'today' && $c['title'] === 'Today');

@@ -286,11 +286,11 @@ final class WorkEvents
     public function openSessions(int $userId): array
     {
         $stmt = $this->db->prepare(
-            "SELECT id, kind, location, occurred_at FROM work_events
-             WHERE user_id = :u AND occurred_at >= (NOW() - INTERVAL 60 DAY)
-             ORDER BY occurred_at ASC, id ASC"
+            'SELECT id, kind, location, occurred_at FROM work_events
+             WHERE user_id = :u AND occurred_at >= :since
+             ORDER BY occurred_at ASC, id ASC'
         );
-        $stmt->execute([':u' => $userId]);
+        $stmt->execute([':u' => $userId, ':since' => gmdate('Y-m-d H:i:s', time() - 60 * 86400)]);   // computed here, so it is not MySQL-only SQL
 
         $latest = [];
         foreach ($stmt->fetchAll() as $r) {
