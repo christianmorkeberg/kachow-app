@@ -69,7 +69,7 @@ check('topic_matched null when no topic', $r['topic_matched'], null);
 
 echo "2) sources are the live maintained ones (no separate doc)\n";
 check('areas_overview is the AssistantLoop const', $r['areas_overview'], AssistantLoop::CAPABILITIES);
-check('operating_rules is the AssistantLoop const', $r['operating_rules'], AssistantLoop::DEFAULT_SYSTEM_INSTRUCTION);
+check('operating_rules is the AssistantLoop const', $r['operating_rules'], \App\Assistant\PromptRules::all());
 
 echo "3) topic narrows to that area's tools\n";
 $r = $explain->execute(['topic' => 'email'], 1);

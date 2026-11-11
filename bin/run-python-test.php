@@ -71,7 +71,7 @@ check('a failing call says so and forbids a made-up figure', isset($e['error']) 
 echo "4) wiring\n";
 check('the tool is named run_python and takes task + data', $tool->name() === 'run_python' && array_keys($tool->parameters()['properties']) === ['task', 'data']);
 check('it is routed by keywords (solnedgang / sunset reach the compute group)', in_array('compute', ToolSelector::matchGroups('hvornår er solnedgang i Aarhus næste fredag'), true) && in_array('compute', ToolSelector::matchGroups('what time is sunset next Friday'), true));
-check('the system rule asks before noting a dev idea', str_contains((new ReflectionClassConstant(AssistantLoop::class, 'GAP_RULE'))->getValue(), 'ask') && str_contains((new ReflectionClassConstant(AssistantLoop::class, 'GAP_RULE'))->getValue(), 'Only call note_dev_idea after they say yes'));
+check('the system rule asks before noting a dev idea', str_contains(\App\Assistant\PromptRules::CORE, 'ask once whether they want it noted as a dev idea') && str_contains(\App\Assistant\PromptRules::CORE, 'call note_dev_idea only after a yes'));
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

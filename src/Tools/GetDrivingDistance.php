@@ -30,7 +30,8 @@ final class GetDrivingDistance implements Tool
         return 'Looks up the driving distance between two addresses and returns one-way and round-trip km. '
             . 'Use for "how far is it from home to X", "hvor langt er der til …", or to get the km before '
             . 'logging a driving day. "home"/"hjem" (or an empty from) uses the user\'s saved home address. '
-            . 'Give real addresses or place names (e.g. "Middelfart station", "Frederiksborgvej 399, Roskilde").';
+            . 'Give real addresses or place names (e.g. "Middelfart station", "Frederiksborgvej 399, Roskilde").'
+            . ' Distances for the driving log must be EXACT (SKAT): take them from this tool or from the km the user states — never estimate a route yourself, and never say you looked one up unless this returned it.';
     }
 
     public function parameters(): array

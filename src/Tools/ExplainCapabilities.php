@@ -92,7 +92,7 @@ final class ExplainCapabilities implements Tool
             'areas_overview'  => AssistantLoop::CAPABILITIES,
             'tool_count'      => count($tools),
             'tools'           => $tools,
-            'operating_rules' => AssistantLoop::DEFAULT_SYSTEM_INSTRUCTION,
+            'operating_rules' => \App\Assistant\PromptRules::all(),
             'note'            => 'This is assembled live from the assistant\'s actual tools and operating '
                 . 'rules — it is exhaustive and current. Answer the user\'s specific question from it, in '
                 . 'their own language; explain in plain terms, do not paste this raw or quote the internal '
