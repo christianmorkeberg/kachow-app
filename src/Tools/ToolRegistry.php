@@ -184,6 +184,7 @@ final class ToolRegistry
         $registry->register(new RemoveFromShoppingList($connections, $shoppingLists));
         $registry->register(new ClearCheckedItems($connections, $shoppingLists));
         $registry->register(new DeleteShoppingList($connections, $shoppingLists));
+        $registry->register(new RenameShoppingList($connections, $shoppingLists));
         $registry->register(new SetListGrouping($connections, $shoppingLists));
         // DMI with automatic Open-Meteo failover (rate limits / non-DK locations).
         $weatherService = new WeatherService($weather, new OpenMeteo());
@@ -236,26 +237,27 @@ final class ToolRegistry
         $registry->register(new SetDevIdeaStatus($devIdeas, $users));
         $registry->register(new UpdateDevIdea($devIdeas, $users));
         $registry->register(new RemoveDevIdea($devIdeas, $users));
+        $mileage     = new Mileage($userSettings);
+        $books       = new Books($income, $receipts, $ownerDraws, $userSettings, $mileage);   // the one money dashboard: the money tools show it instead of cards of their own
         $registry->register(new AddExpense($receipts));
         $registry->register(new UpdateReceipt($receipts));
         $registry->register(new DeleteReceipt($receipts, $receiptStorage));
-        $registry->register(new GetExpenses($receipts));
+        $registry->register(new GetExpenses($receipts, $books));
         $registry->register(new ExportExpensesCsv($receipts));
         $registry->register(new MarkExpenseReimbursed($receipts, $bookAudit));
         $registry->register(new ListUdlaeg($receipts));
         $registry->register(new AddIncome($income, $bookAudit));
         $registry->register(new UpdateIncome($income, $bookAudit));
-        $registry->register(new GetIncome($income));
+        $registry->register(new GetIncome($income, $books));
         $registry->register(new MarkInvoicePaid($income, $bookAudit));
-        $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit));
-        $registry->register(new GetOwnerDraws($ownerDraws));
-        $mileage     = new Mileage($userSettings);
+        $registry->register(new AddOwnerDraw($ownerDraws, $bookAudit, $books));
+        $registry->register(new GetOwnerDraws($ownerDraws, $books));
         $mapDistance = new MapDistance();
         $registry->register(new SavePlace($places, $locationPoints, $mapDistance));
         $registry->register(new ListPlaces($places, $locationPoints));
         $registry->register(new UpdatePlace($places, $locationPoints, $mapDistance));
         $registry->register(new DeletePlace($places));
-        $registry->register(new GetBooks(new Books($income, $receipts, $ownerDraws, $userSettings, $mileage)));
+        $registry->register(new GetBooks($books));
         $registry->register(new GetMoms(new Moms($income, $receipts)));
         $cashEntries = new CashEntries();
         $cash        = new Cash($income, $receipts, $ownerDraws, $cashEntries, $userSettings, $mileage);

@@ -14,7 +14,7 @@ use DateTimeZone;
  */
 final class GetExpenses implements Tool
 {
-    public function __construct(private Receipts $receipts)
+    public function __construct(private Receipts $receipts, private ?\App\Data\Books $books = null)
     {
     }
 
@@ -81,7 +81,10 @@ final class GetExpenses implements Tool
                 'currency' => $i['currency'],
                 'category' => $i['category'],
             ], $s['items']),
-            '_render'     => $card,
+            // Unfiltered, the Books card (its expenses module) is the view; a filtered list (category / paid privately) stays the drill-down Expenses card.
+            '_render'     => ($this->books !== null && $category === null && $private === '')
+                ? $this->books->overviewForPeriod($userId, (string) ($arguments['period'] ?? 'this_month'), (isset($arguments['from']) && (string) $arguments['from'] !== '') || (isset($arguments['to']) && (string) $arguments['to'] !== ''))
+                : $card,
         ];
     }
 

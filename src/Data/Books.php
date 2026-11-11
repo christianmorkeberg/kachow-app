@@ -70,6 +70,25 @@ final class Books
     }
 
     /**
+     * The overview card for a period WORD as the money tools use them (this_month … all) — what get_income / get_expenses / get_owner_draws show instead of a card of
+     * their own, because the Books card already has the income, expense and draw modules. A custom from/to range has no matching granularity: it shows "all".
+     *
+     * @return array<string, mixed>
+     */
+    public function overviewForPeriod(int $userId, string $period, bool $custom = false): array
+    {
+        $map = [
+            'this_month'   => ['month', 0],   'last_month'   => ['month', -1],
+            'this_quarter' => ['quarter', 0], 'last_quarter' => ['quarter', -1],
+            'this_year'    => ['year', 0],    'last_year'    => ['year', -1],
+            'all'          => ['all', 0],
+        ];
+        [$gran, $offset] = $custom ? ['all', 0] : ($map[$period] ?? ['quarter', 0]);
+
+        return $this->overview($userId, $gran, $offset);
+    }
+
+    /**
      * The full cockpit card (kind: bookkeeping) for a granularity + offset.
      *
      * @return array<string, mixed>

@@ -14,7 +14,7 @@ use App\Tools\GetExpenses;
  */
 final class GetIncome implements Tool
 {
-    public function __construct(private Income $income)
+    public function __construct(private Income $income, private ?\App\Data\Books $books = null)
     {
     }
 
@@ -62,7 +62,9 @@ final class GetIncome implements Tool
         );
 
         $s    = $this->income->summary($userId, $from, $to);
-        $card = $this->income->summaryCard($userId, $from, $to, $label);
+        // The Books card already holds the income module: it is shown instead of a card of its own.
+        $custom = (isset($arguments['from']) && (string) $arguments['from'] !== '') || (isset($arguments['to']) && (string) $arguments['to'] !== '');
+        $card   = $this->books?->overviewForPeriod($userId, (string) ($arguments['period'] ?? 'this_quarter'), $custom);
         // Drafts are deliberately outside the booked totals, but the assistant still has to SEE
         // them: without this, an entry it had just created read back as "not there" and it created
         // a duplicate for the same invoice (report #31).
@@ -95,7 +97,7 @@ final class GetIncome implements Tool
                 ? 'No unbooked drafts in this period.'
                 : 'NOT counted in the totals above — unbooked drafts. Correct one with update_income '
                     . '(use its id); the user books it with Confirm on the card.',
-            '_render' => $card,
+            '_render' => $card,   // null without Books: the model answers in words
         ];
     }
 }

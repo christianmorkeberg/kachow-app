@@ -17,6 +17,7 @@ final class AddOwnerDraw implements Tool
     public function __construct(
         private OwnerDraws $draws,
         private BookkeepingAudit $audit,
+        private ?\App\Data\Books $books = null,
     ) {
     }
 
@@ -78,7 +79,7 @@ final class AddOwnerDraw implements Tool
             'recorded' => true,
             'id'       => $id,
             'note'     => 'Recorded as a private drawing (hævning) — not an expense, so it does not affect profit or moms.',
-            '_render'  => $this->draws->card($userId, $from, $to, $title),
+            '_render'  => $this->books?->overviewForPeriod($userId, 'this_month'),   // the Books card shows the running total in its draws module
         ];
     }
 }

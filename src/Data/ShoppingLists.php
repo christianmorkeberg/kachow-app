@@ -159,6 +159,88 @@ final class ShoppingLists
         return ['error' => "There's no shopping list called \"{$name}\"."];
     }
 
+    /**
+     * The Lists card (kind = lists): every list of the household with how much is left on it — the overview the card picker opens, where lists are created,
+     * renamed and deleted (the list itself is the shopping_list card).
+     *
+     * @return array{kind:string, title:string, lists:array<int, array{id:int, name:string, is_default:bool, total:int, remaining:int}>}
+     */
+    public function overviewCard(int $connectionId): array
+    {
+        return ['kind' => 'lists', 'title' => 'Lists', 'lists' => $this->lists($connectionId)];
+    }
+
+    /**
+     * Renames a list. Returns true, or why not: 'empty' (no name), 'exists' (another list already has that name — also with different case or spacing).
+     */
+    public function rename(int $connectionId, int $listId, string $name): bool|string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return 'empty';
+        }
+        $clash = $this->findByName($connectionId, $name);
+        if ($clash !== null && (int) $clash['id'] !== $listId) {
+            return 'exists';
+        }
+        $stmt = $this->db->prepare('UPDATE shared_lists SET name = :n WHERE id = :id AND connection_id = :cid');
+        $stmt->execute([':n' => mb_substr($name, 0, 120), ':id' => $listId, ':cid' => $connectionId]);
+
+        return true;
+    }
+
+    /** A list of this connection by id, or null (authorises list ids that come from a card). @return array{id:int, name:string, is_default:bool}|null */
+    public function byId(int $connectionId, int $listId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT id, name, is_default FROM shared_lists WHERE id = :id AND connection_id = :cid');
+        $stmt->execute([':id' => $listId, ':cid' => $connectionId]);
+        $r = $stmt->fetch();
+
+        return $r === false ? null : ['id' => (int) $r['id'], 'name' => (string) $r['name'], 'is_default' => (bool) $r['is_default']];
+    }
+
+    /** The list an item sits on, when the user is party to its connection (same authorisation as toggleItem). @return array{list_id:int, connection_id:int, name:string}|null */
+    private function itemList(int $userId, int $itemId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT i.list_id, l.connection_id, l.name
+             FROM shared_list_items i
+             JOIN shared_lists l ON l.id = i.list_id
+             JOIN user_connections c ON c.id = l.connection_id
+             WHERE i.id = :id AND c.status = "accepted" AND (c.requester_id = :u1 OR c.addressee_id = :u2)
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $itemId, ':u1' => $userId, ':u2' => $userId]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : ['list_id' => (int) $row['list_id'], 'connection_id' => (int) $row['connection_id'], 'name' => (string) $row['name']];
+    }
+
+    /** Deletes one item by id from the card. Same return as toggleItem (to rebuild the card), or null. @return array{list_id:int, connection_id:int, name:string}|null */
+    public function deleteItemForUser(int $userId, int $itemId): ?array
+    {
+        $l = $this->itemList($userId, $itemId);
+        if ($l === null) {
+            return null;
+        }
+        $this->db->prepare('DELETE FROM shared_list_items WHERE id = :id')->execute([':id' => $itemId]);
+
+        return $l;
+    }
+
+    /** Changes an item's text from the card. @return array{list_id:int, connection_id:int, name:string}|null null = not found / not allowed / empty text */
+    public function renameItemForUser(int $userId, int $itemId, string $text): ?array
+    {
+        $text = trim($text);
+        $l    = $text === '' ? null : $this->itemList($userId, $itemId);
+        if ($l === null) {
+            return null;
+        }
+        $this->db->prepare('UPDATE shared_list_items SET item = :t WHERE id = :id')->execute([':t' => mb_substr($text, 0, 200), ':id' => $itemId]);
+
+        return $l;
+    }
+
     /** Deletes a list (and its items via FK cascade), scoped to the connection. */
     public function delete(int $connectionId, int $listId): bool
     {

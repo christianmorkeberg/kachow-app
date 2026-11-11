@@ -48,6 +48,6 @@ final class ListShoppingLists implements Tool
 
         $lists = $this->lists->lists((int) $access['connection_id']);
 
-        return ['count' => count($lists), 'lists' => $lists];
+        return ['count' => count($lists), 'lists' => $lists, '_render' => $this->lists->overviewCard((int) $access['connection_id'])];
     }
 }

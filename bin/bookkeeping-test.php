@@ -156,6 +156,15 @@ check('draws total = 15000', money($gd['totals'][0]['total'] ?? 0) === '15000.00
 $g3 = $getIncome->execute(['period' => 'this_year'], $U);
 check('income unchanged by the draw (still 17500)', money($g3['currencies'][0]['total'] ?? 0) === '17500.00');
 
+echo "\n== 5b. the money tools show the Books card, not cards of their own ==\n";
+$withBooks = new Books($income, $receipt, $draws, $settings, $mileage);
+check('get_income opens the Books card', ((new GetIncome($income, $withBooks))->execute(['period' => 'this_year'], $U)['_render']['kind'] ?? '') === 'bookkeeping');
+check('get_owner_draws opens the Books card', ((new GetOwnerDraws($draws, $withBooks))->execute(['period' => 'this_year'], $U)['_render']['kind'] ?? '') === 'bookkeeping');
+check('add_owner_draw opens the Books card', ((new AddOwnerDraw($draws, $audit, $withBooks))->execute(['amount' => 1], 977)['_render']['kind'] ?? '') === 'bookkeeping');
+check('get_expenses (unfiltered) opens the Books card', ((new \App\Tools\GetExpenses($receipt, $withBooks))->execute(['period' => 'this_year'], $U)['_render']['kind'] ?? '') === 'bookkeeping');
+check('get_expenses with a filter keeps the drill-down Expenses card', ((new \App\Tools\GetExpenses($receipt, $withBooks))->execute(['period' => 'this_year', 'paid_privately' => 'owed'], $U)['_render']['kind'] ?? '') === 'expenses');
+check('a custom date range still gives the Books card (all periods)', ((new GetIncome($income, $withBooks))->execute(['from' => '2026-01-01', 'to' => '2026-02-01'], $U)['_render']['kind'] ?? '') === 'bookkeeping');
+
 echo "\n== 6. udlæg: add_expense paid_privately, then reimburse ==\n";
 $addExpense = new AddExpense($receipt);
 $e = $addExpense->execute(['total' => 250, 'vendor' => 'Parking', 'vat' => 50, 'paid_privately' => true], $U);

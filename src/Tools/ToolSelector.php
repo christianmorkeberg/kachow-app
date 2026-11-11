@@ -59,7 +59,7 @@ final class ToolSelector
         ],
         'shopping' => [
             'list_shopping_lists', 'get_shopping_list', 'add_to_shopping_list', 'check_off_item',
-            'uncheck_item', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list',
+            'uncheck_item', 'remove_from_shopping_list', 'clear_checked_items', 'delete_shopping_list', 'rename_shopping_list',
             'set_list_grouping',
         ],
         'home' => [
@@ -200,6 +200,7 @@ final class ToolSelector
             'ønskeliste', 'ønskeseddel', ' gave',
         ],
         'shopping' => [
+            'my lists', 'all my lists', 'rename the list', 'rename list', 'omdøb listen', 'omdøb pakkelisten', 'mine lister', 'alle mine lister',
             'shopping', 'grocer', 'the list', 'our list', 'shared list', 'a list', 'shopping list',
             ' buy ', 'need to buy', 'we need', 'pick up', 'picked up', 'ran out', 'cross off',
             'check off', 'tick off', 'checked off', 'clear the list', 'on the list', 'off the list',

@@ -13,7 +13,7 @@ use App\Tools\GetExpenses;
  */
 final class GetOwnerDraws implements Tool
 {
-    public function __construct(private OwnerDraws $draws)
+    public function __construct(private OwnerDraws $draws, private ?\App\Data\Books $books = null)
     {
     }
 
@@ -62,7 +62,7 @@ final class GetOwnerDraws implements Tool
             'totals'  => $s['totals'],
             'count'   => $s['count'],
             'items'   => $s['items'],
-            '_render' => $this->draws->card($userId, $from, $to, 'Owner draws · ' . $label),
+            '_render' => $this->books?->overviewForPeriod($userId, (string) ($arguments['period'] ?? 'this_year'), isset($arguments['from']) && (string) $arguments['from'] !== '' || isset($arguments['to']) && (string) $arguments['to'] !== ''),   // the Books card has the draws module
         ];
     }
 }
