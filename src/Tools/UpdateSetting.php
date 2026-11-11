@@ -34,9 +34,9 @@ final class UpdateSetting implements Tool
             . '(paper / lavender / blush) choose which look auto uses at night / by day ("use noir at night"); '
             . '"cycle_show_fertile" — "on"/"off". '
             . '"work_clock" — "location" switches the work clock to the automatic location clock (hours written '
-            . 'from stays at work-type places; Shortcut punches ignored from then on), "shortcut" switches back '
+            . 'from stays at work-type places; clocking in/out by chat keeps working), "shortcut" (= manual) switches back '
             . '(use for "switch my work clock to location", Danish "brug lokation til arbejdsuret"). After switching '
-            . 'to location, tell them to turn off the Shortcut automations, that a day they fix by hand is left '
+            . 'to location, tell them that a day they fix by hand is left '
             . 'alone, and that a visit with a tracking gap is skipped and they get a push to fill it in. '
             . '"job_aliases" — expands a short work-log job label to a full name (e.g. the "Arbejde" '
             . 'calendar just says "DSB" but log entries/replies should say "Danske Statsbaner"); one '
@@ -83,13 +83,9 @@ final class UpdateSetting implements Tool
             $value = $clean;
         }
         if ($key === 'work_clock' && $value !== '') {
-            $v = mb_strtolower(trim($value));
-            if (in_array($v, ['location', 'gps', 'auto', 'automatic', 'on', 'lokation', 'automatisk'], true)) {
-                $value = 'location';
-            } elseif (in_array($v, ['shortcut', 'shortcuts', 'ios', 'off', 'manual', 'genvej'], true)) {
-                $value = 'shortcut';
-            } else {
-                return ['error' => 'work_clock must be "location" or "shortcut".'];
+            $value = UserSettings::normalizeWorkClock($value) ?? '';
+            if ($value === '') {
+                return ['error' => 'work_clock must be "location" or "shortcut" (manual).'];
             }
         }
 
@@ -103,7 +99,7 @@ final class UpdateSetting implements Tool
         ];
         // Changing the personality or theme shows the matching card reflecting the change.
         if ($key === 'personality') {
-            $result['_render'] = UserSettings::personalityCard((string) $result['value']);
+            $result['_render'] = $this->settings->settingsCard($userId);   // the Settings card has the personality dial
         } elseif (in_array($key, ['theme', 'theme_dark', 'theme_light'], true)) {
             $result['_render'] = $this->settings->appearance($userId);
         } elseif ($key === 'home_cards') {

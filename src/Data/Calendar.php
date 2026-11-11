@@ -95,65 +95,6 @@ final class Calendar
     }
 
     /**
-     * Builds a renderable agenda card (kind = agenda) from a set of events,
-     * grouped by day and ordered by time. Display-only — calendar events are
-     * read from Google, so there are no tickboxes.
-     *
-     * Times are taken verbatim from each event's own RFC3339 string (which
-     * already carries the event's local offset), so no timezone juggling is
-     * needed: the date is the first 10 chars, the clock time chars 11–15.
-     *
-     * @param array<int, array<string, mixed>> $events as returned by getEvents()
-     * @return array{kind:string, title:string, days:array<int,array{date:string, weekday:string, label:string, events:array<int,array{time:string, all_day:bool, summary:string, location:?string, calendar:?string}>}>}
-     */
-    public function buildCard(array $events, string $title): array
-    {
-        $days = [];
-        foreach ($events as $e) {
-            $start = (string) ($e['start'] ?? '');
-            if ($start === '') {
-                continue;
-            }
-            if ($this->isWeekNumberMarker($e)) {
-                continue; // drop "Week 28 of 2026" / "Uge 28" clutter from subscribed calendars
-            }
-            $dayKey = substr($start, 0, 10);
-            if (!isset($days[$dayKey])) {
-                $ts = strtotime($dayKey) ?: time();
-                $days[$dayKey] = [
-                    'date'    => $dayKey,
-                    'weekday' => date('D', $ts),  // Mon, Tue…
-                    'label'   => date('j M', $ts), // 10 Jul
-                    'events'  => [],
-                ];
-            }
-
-            $allDay = (bool) ($e['allDay'] ?? false);
-            $time   = 'All day';
-            if (!$allDay) {
-                $time = substr($start, 11, 5); // HH:MM
-                $end  = (string) ($e['end'] ?? '');
-                // Append the end time only if the event ends on the same day.
-                if (strlen($end) >= 16 && substr($end, 0, 10) === $dayKey) {
-                    $time .= '–' . substr($end, 11, 5);
-                }
-            }
-
-            $days[$dayKey]['events'][] = [
-                'time'     => $time,
-                'all_day'  => $allDay,
-                'summary'  => (string) ($e['summary'] ?? '(no title)'),
-                'location' => ($e['location'] ?? null) ? (string) $e['location'] : null,
-                'calendar' => ($e['calendar'] ?? null) ? (string) $e['calendar'] : null,
-            ];
-        }
-
-        ksort($days);
-
-        return ['kind' => 'agenda', 'title' => $title, 'days' => array_values($days)];
-    }
-
-    /**
      * The local dates a month grid shows: Monday of the week holding the 1st through Sunday of the
      * week holding the last day (5 or 6 rows). $month is "YYYY-MM".
      *
@@ -171,16 +112,14 @@ final class Calendar
     }
 
     /**
-     * Renderable month card (kind = calendar_month): the events of every day the grid shows,
-     * keyed by local date. A multi-day event appears on each of its days. Display-only, like
-     * the agenda; times come verbatim from each event's own RFC3339 string.
+     * The events of each local day from $gridFrom to $gridTo (inclusive), keyed by date: a multi-day event appears on each of its days ("cont." after the first),
+     * all-day first then by time. Shared by the month grid and the day / 3-day / week views.
      *
      * @param array<int, array<string, mixed>> $events as returned by getEvents()
-     * @return array<string, mixed>
+     * @return array<string, list<array<string, mixed>>>
      */
-    public function buildMonthCard(array $events, string $month): array
+    private function dayMap(array $events, string $gridFrom, string $gridTo): array
     {
-        [$gridFrom, $gridTo] = self::monthGrid($month);
         $days = [];
         foreach ($events as $e) {
             $start = (string) ($e['start'] ?? '');
@@ -225,11 +164,96 @@ final class Calendar
         }
         ksort($days);
 
+        return $days;
+    }
+
+    public const VIEWS = ['day', '3day', 'week', 'month'];
+
+    /**
+     * The local dates (inclusive) a view shows around $anchor ("YYYY-MM-DD"): day = that day, 3day = it and the next two, week = Monday–Sunday of its week, month = the month grid.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function viewRange(string $view, string $anchor): array
+    {
+        $tz = new \DateTimeZone('Europe/Copenhagen');
+        $a  = new \DateTimeImmutable($anchor, $tz);
+
+        return match ($view) {
+            'day'   => [$a->format('Y-m-d'), $a->format('Y-m-d')],
+            '3day'  => [$a->format('Y-m-d'), $a->modify('+2 days')->format('Y-m-d')],
+            'week'  => [$a->modify('-' . ((int) $a->format('N') - 1) . ' days')->format('Y-m-d'), $a->modify('+' . (7 - (int) $a->format('N')) . ' days')->format('Y-m-d')],
+            default => self::monthGrid($a->format('Y-m')),
+        };
+    }
+
+    /** The UTC RFC3339 range to fetch for local dates $from…$to inclusive. @return array{0: string, 1: string} */
+    public static function rangeUtc(string $from, string $to): array
+    {
+        $tz  = new \DateTimeZone('Europe/Copenhagen');
+        $utc = new \DateTimeZone('UTC');
+
+        return [
+            (new \DateTimeImmutable($from, $tz))->setTimezone($utc)->format('Y-m-d\TH:i:s\Z'),
+            (new \DateTimeImmutable($to, $tz))->modify('+1 day')->setTimezone($utc)->format('Y-m-d\TH:i:s\Z'),
+        ];
+    }
+
+    /**
+     * The one calendar card (kind = calendar_month) in any view — day, 3 days, week or month — anchored at a local date. The month view is the month grid card; the others
+     * list the days of the range (empty days included, so "nothing on" is visible). prev / next are the anchors one step away (a month for the month view).
+     *
+     * @param array<int, array<string, mixed>> $events as returned by getEvents() for rangeUtc(viewRange(...))
+     * @return array<string, mixed>
+     */
+    public function buildViewCard(array $events, string $view, string $anchor): array
+    {
+        $view = in_array($view, self::VIEWS, true) ? $view : 'month';
+        $tz   = new \DateTimeZone('Europe/Copenhagen');
+        $a    = new \DateTimeImmutable($anchor, $tz);
+        if ($view === 'month') {
+            return $this->buildMonthCard($events, $a->format('Y-m')) + ['anchor' => $a->format('Y-m-d')];
+        }
+        [$from, $to] = self::viewRange($view, $a->format('Y-m-d'));
+        $days        = $this->dayMap($events, $from, $to);
+        $step        = ['day' => 1, '3day' => 3, 'week' => 7][$view];
+        $f           = new \DateTimeImmutable($from, $tz);
+        $t           = new \DateTimeImmutable($to, $tz);
+        $title       = $view === 'day' ? $f->format('D j M Y') : $f->format('j M') . ' – ' . $t->format('j M Y');
+
+        return [
+            'kind'      => 'calendar_month',
+            'view'      => $view,
+            'anchor'    => $a->format('Y-m-d'),
+            'title'     => $title,
+            'range_from' => $from,
+            'range_to'  => $to,
+            'today'     => (new \DateTimeImmutable('now', $tz))->format('Y-m-d'),
+            'prev'      => $a->modify('-' . $step . ' days')->format('Y-m-d'),
+            'next'      => $a->modify('+' . $step . ' days')->format('Y-m-d'),
+            'days'      => $days === [] ? new \stdClass() : $days,
+        ];
+    }
+
+    /**
+     * Renderable month card (kind = calendar_month): the events of every day the grid shows,
+     * keyed by local date. A multi-day event appears on each of its days. Display-only, like
+     * the agenda; times come verbatim from each event's own RFC3339 string.
+     *
+     * @param array<int, array<string, mixed>> $events as returned by getEvents()
+     * @return array<string, mixed>
+     */
+    public function buildMonthCard(array $events, string $month): array
+    {
+        [$gridFrom, $gridTo] = self::monthGrid($month);
+        $days = $this->dayMap($events, $gridFrom, $gridTo);
+
         $tz = new \DateTimeZone('Europe/Copenhagen');
         $m  = new \DateTimeImmutable($month . '-01', $tz);
 
         return [
             'kind'      => 'calendar_month',
+            'view'      => 'month',
             'month'     => $m->format('Y-m'),
             'title'     => $m->format('F Y'),
             'grid_from' => $gridFrom,

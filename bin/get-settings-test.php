@@ -32,7 +32,7 @@ $tool = new GetSettings(new UserSettings($db));
 $plain = $tool->execute([], 1);
 check('a plain lookup returns the settings and opens no card', isset($plain['settings']) && !isset($plain['_render']));
 $shown = $tool->execute(['show_card' => true], 1);
-check('show_card opens the settings card', ($shown['_render']['kind'] ?? '') === 'personality');
+check('show_card opens the settings card', ($shown['_render']['kind'] ?? '') === 'settings');
 check('"false" as a string does not', !isset($tool->execute(['show_card' => 'false'], 1)['_render']));
 check('the schema offers show_card', isset($tool->parameters()['properties']['show_card']));
 

@@ -20,6 +20,29 @@ final class ProgramCard
      * @param list<array{week:int, year:int, weekday:int, title:?string, note:?string, items:list<array<string, mixed>>}> $days
      * @return array<string, mixed>
      */
+    /** The card when there is no programme yet: the picker opens it and says so ("empty"), instead of failing. @return array<string, mixed> */
+    public static function empty(): array
+    {
+        return ['kind' => 'training_program', 'title' => 'Training programme', 'empty' => true, 'program' => null, 'weeks' => [], 'today' => ['week' => null, 'weekday' => null]];
+    }
+
+    /**
+     * The card for the programme to show by default: the active one (else the newest), or the empty card.
+     *
+     * @param list<array<string, mixed>> $all the user's programmes
+     * @return array<string, mixed>
+     */
+    public static function forUser(\App\Data\TrainingPrograms $programs, int $userId, ?DateTimeImmutable $now = null): array
+    {
+        $all = $programs->all($userId);
+        if ($all === []) {
+            return self::empty();
+        }
+        $p = array_values(array_filter($all, static fn (array $x): bool => $x['status'] === 'active'))[0] ?? $all[0];
+
+        return self::build($p, $programs->days($userId, $p['id']), $now);
+    }
+
     public static function build(array $program, array $days, ?DateTimeImmutable $now = null, string $tz = 'Europe/Copenhagen'): array
     {
         $now   = $now ?? new DateTimeImmutable('now', new DateTimeZone($tz));

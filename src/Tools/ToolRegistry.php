@@ -51,7 +51,6 @@ use App\Data\Users;
 use App\Data\UserSettings;
 use App\Data\Vinyls;
 use App\Data\Wishlist;
-use App\Data\WorkClockShadow;
 use App\Data\WorkEvents;
 use App\Data\WorkLog;
 use App\Data\TrainingPrograms;
@@ -197,7 +196,6 @@ final class ToolRegistry
         $registry->register(new ShowChart());
         $registry->register(new LogWorkEvent($workEvents, static fn (int $u): bool => \App\Support\HomeNow::check(new LocationPoints(), new Places(), $u)));
         $registry->register(new DeleteWorkEvent($workEvents));
-        $registry->register(new GetWorkTrackingSetup($apiTokens));
         $homeOwner = new HomeOwner($apiTokens, $connections);   // whose Pico a user talks to (own, or a shared one)
         $registry->register(new GetHomeAgentSetup($apiTokens, $homeOwner));
         $agentCommands = new AgentCommands();
@@ -219,7 +217,6 @@ final class ToolRegistry
         $registry->register(new GetStays($timeline));
         $registry->register(new GetTrips($timeline));
         $registry->register(new SuggestPlaces($timeline, $places, $locationPoints, new PoiNames()));
-        $registry->register(new GetWorkClock(new WorkClockShadow($timeline, $workEvents, $userSettings)));
         $registry->register(new GetLocationTrackingSetup($apiTokens, $locationPoints));
         $registry->register(new LogWorkTime($workLog, $calendar, $userSettings));
         $registry->register(new GetWorkLog($workLog));

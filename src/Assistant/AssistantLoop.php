@@ -430,7 +430,7 @@ final class AssistantLoop
     }
 
     /** Card kinds that are pointless minimised: the user has to look at / act on them. */
-    private const OPEN_CARD_KINDS = ['receipt', 'income', 'email_draft', 'email', 'appearance', 'personality',
+    private const OPEN_CARD_KINDS = ['receipt', 'income', 'email_draft', 'email', 'appearance', 'settings',
         'feedback', 'chart', 'notice'];
 
     public static function cardModeFor(string $kind, string $userText): string

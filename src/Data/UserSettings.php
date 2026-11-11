@@ -251,9 +251,9 @@ final class UserSettings
         'work_clock' => [
             'default'     => 'shortcut',
             'label'       => 'Work clock source',
-            'description' => 'Where clock-in/out comes from: "shortcut" (the iOS Shortcut punches, default) or '
-                . '"location" (the automatic location clock writes your hours from stays at work places; '
-                . 'Shortcut punches are then ignored so nothing is counted twice).',
+            'description' => 'Work clock: "shortcut" (the stored value for "manual", the default — clock in/out by chat) or '
+                . '"location" (the automatic location clock also writes your hours from stays at work places; '
+                . 'a day fixed by hand is left alone).',
         ],
         'workclock_max_bridge_hours' => [
             'default'     => '3',
@@ -417,15 +417,77 @@ final class UserSettings
         return '2';
     }
 
-    /**
-     * The renderable "personality slider" card payload (kind: personality). The client
-     * draws the slider + bilingual labels/examples; the server just carries the level.
-     *
-     * @return array{kind:string, level:string}
-     */
-    public static function personalityCard(string $level): array
+    /** The Settings card's groups: [id, English label, Danish label, keys]. A setting no group lists lands in "Other", so none can go missing from the card. */
+    public const CARD_GROUPS = [
+        ['assistant', 'Assistant', 'Assistent', ['personality', 'voice_name', 'voice_language', 'voice_model', 'voice_daily_minutes', 'voice_idle_seconds', 'voice_stop_words']],
+        ['company', 'Company & invoices', 'Firma og fakturaer', ['company_name', 'company_cvr', 'company_address', 'company_email', 'company_payment']],
+        ['books', 'Bookkeeping', 'Regnskab', ['tax_reserve_pct', 'cash_opening']],
+        ['mileage', 'Mileage', 'Kørsel', ['home_address', 'mileage_round_trip_km', 'mileage_rate_high', 'mileage_rate_low', 'commute_rate', 'commute_rate_far']],
+        ['work', 'Work', 'Arbejde', ['work_calendar', 'job_aliases', 'work_clock', 'workclock_min_dwell_minutes', 'workclock_max_bridge_hours']],
+        ['location', 'Location tracking', 'Positionssporing', ['location_stay_radius_m', 'location_stay_min_minutes', 'location_max_accuracy_m', 'location_merge_gap_minutes', 'location_max_gap_minutes', 'location_silent_alert_hours']],
+        ['home', 'Home', 'Hjem', ['thermostats', 'thermostat_rooms']],
+        ['personal', 'Personal', 'Personligt', ['cycle_show_fertile']],
+    ];
+
+    /** Settings that have their own card (Appearance, Start cards): the Settings card links to them instead of listing them. */
+    public const CARD_OWN = ['theme', 'theme_dark', 'theme_light', 'home_cards'];
+
+    /** Settings that are long free text (a text area in the card). */
+    private const CARD_LONG = ['company_address', 'company_payment', 'job_aliases', 'voice_stop_words', 'thermostats', 'thermostat_rooms'];
+
+    /** Fixed choices: key → [[value, English, Danish], …]. */
+    private const CARD_CHOICES = [
+        'cycle_show_fertile' => [['off', 'Off', 'Fra'], ['on', 'On', 'Til']],
+        'work_clock'         => [['shortcut', 'By chat (manual)', 'Via chat (manuelt)'], ['location', 'Automatic (location)', 'Automatisk (lokation)']],
+    ];
+
+    /** "location" or "shortcut" (= manual) from a typed or spoken value, or null if it is neither. */
+    public static function normalizeWorkClock(string $value): ?string
     {
-        return ['kind' => 'personality', 'level' => self::normalizePersonality($level)];
+        $v = mb_strtolower(trim($value));
+        if (in_array($v, ['location', 'gps', 'auto', 'automatic', 'on', 'lokation', 'automatisk'], true)) {
+            return 'location';
+        }
+
+        return in_array($v, ['shortcut', 'shortcuts', 'ios', 'off', 'manual', 'genvej', 'chat'], true) ? 'shortcut' : null;
+    }
+
+    /**
+     * The Settings card (kind: settings): every setting with its current value, grouped, with the right kind of field (dial / choice / number / text), so settings are seen and
+     * changed in one place instead of only by asking. Appearance and the start cards have their own cards and are linked from the top.
+     *
+     * @return array<string, mixed>
+     */
+    public function settingsCard(int $userId): array
+    {
+        $byKey = [];
+        foreach ($this->all($userId) as $row) {
+            $byKey[$row['key']] = $row;
+        }
+        $item = function (string $key) use ($byKey): array {
+            $r    = $byKey[$key];
+            $type = $key === 'personality' ? 'dial' : (isset(self::CARD_CHOICES[$key]) ? 'choice' : (in_array($key, self::CARD_LONG, true) ? 'textarea' : (is_numeric($r['default']) ? 'number' : 'text')));
+
+            return [
+                'key' => $key, 'label' => $r['label'], 'description' => $r['description'], 'value' => $r['value'], 'default' => $r['default'], 'is_custom' => $r['is_custom'], 'type' => $type,
+                'choices' => $type === 'choice' ? array_map(static fn (array $c): array => ['value' => $c[0], 'en' => $c[1], 'da' => $c[2]], self::CARD_CHOICES[$key]) : null,
+            ];
+        };
+        $listed = [];
+        $groups = [];
+        foreach (self::CARD_GROUPS as [$id, $en, $da, $keys]) {
+            $keys = array_values(array_filter($keys, static fn (string $k): bool => isset($byKey[$k])));
+            $listed = array_merge($listed, $keys);
+            if ($keys !== []) {
+                $groups[] = ['id' => $id, 'en' => $en, 'da' => $da, 'items' => array_map($item, $keys)];
+            }
+        }
+        $other = array_values(array_filter(array_keys($byKey), static fn (string $k): bool => !in_array($k, $listed, true) && !in_array($k, self::CARD_OWN, true)));
+        if ($other !== []) {
+            $groups[] = ['id' => 'other', 'en' => 'Other', 'da' => 'Andet', 'items' => array_map($item, $other)];
+        }
+
+        return ['kind' => 'settings', 'title' => 'Settings', 'groups' => $groups];
     }
 
     /** The cards the start screen / rail can show (see the home_cards setting). */

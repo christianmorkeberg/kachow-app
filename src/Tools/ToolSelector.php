@@ -101,8 +101,8 @@ final class ToolSelector
             'get_current_weather', 'get_weather_forecast',
         ],
         'worktime' => [
-            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'get_work_tracking_setup',
-            'get_work_clock', 'get_connected_work_hours',
+            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event',
+            'get_connected_work_hours',
         ],
         'worklog' => [
             'log_work_time', 'get_work_log', 'export_work_log',
@@ -299,9 +299,9 @@ final class ToolSelector
             'this month', 'last month', 'per måned', 'per uge', 'denne måned', 'sidste måned', 'timer om',
             // working from home (the morning "Working from home today?" push → clock in)
             'working from home', 'work from home', 'wfh', 'hjemmefra', 'not working today',
-            // automatic (location-derived) work clock in shadow mode vs the punches
-            'automatic clock', 'auto clock', 'auto-clock', 'location clock', 'work clock', 'shadow',
-            'compare my hours', 'auto-stempling', 'automatisk stempling', 'automatisk ur', 'skygge',
+            // the automatic (location-derived) work clock
+            'automatic clock', 'auto clock', 'auto-clock', 'location clock', 'work clock',
+            'auto-stempling', 'automatisk stempling', 'automatisk ur',
             // Danish (arbejd* covers arbejde/arbejdstid/arbejdstimer; stempl* covers stemple/stempling)
             'arbejd', 'på arbejde', 'stempl', 'tidsregistrering', 'mødetid', 'arbejdstid',
         ],

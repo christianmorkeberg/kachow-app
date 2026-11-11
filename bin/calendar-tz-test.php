@@ -27,10 +27,10 @@ $events = [[
     'id' => 'e1', 'summary' => 'Sauna', 'calendar' => 'Venner', 'location' => null, 'allDay' => false,
     'start' => Calendar::localise('2026-11-11T00:00:00+08:00'), 'end' => Calendar::localise('2026-11-11T02:00:00+08:00'),
 ]];
-$card = $cal->buildCard($events, 'Agenda');
-check('Tuesday 17:00–19:00, not Wednesday 00:00–02:00', $card['days'][0]['date'] === '2026-11-10' && $card['days'][0]['events'][0]['time'] === '17:00–19:00', json_encode($card['days']));
-$wrong = $cal->buildCard([['summary' => 'Sauna', 'allDay' => false, 'start' => '2026-11-11T00:00:00+08:00', 'end' => '2026-11-11T02:00:00+08:00']], 'x');
-check('(what the raw string gave before: the bug)', $wrong['days'][0]['date'] === '2026-11-11' && $wrong['days'][0]['events'][0]['time'] === '00:00–02:00');
+$card = $cal->buildViewCard($events, 'day', '2026-11-10');
+check('Tuesday 17:00–19:00, not Wednesday 00:00–02:00', isset($card['days']['2026-11-10']) && $card['days']['2026-11-10'][0]['time'] === '17:00–19:00', json_encode($card['days']));
+$wrong = $cal->buildViewCard([['summary' => 'Sauna', 'allDay' => false, 'start' => '2026-11-11T00:00:00+08:00', 'end' => '2026-11-11T02:00:00+08:00']], 'day', '2026-11-11');
+check('(what the raw string gave before: the bug)', isset($wrong['days']['2026-11-11']) && $wrong['days']['2026-11-11'][0]['time'] === '00:00–02:00');
 
 echo "3) offsets\n";
 check('Z and ±hh:mm / ±hhmm count as an offset', Calendar::hasOffset('2026-12-26T12:00:00Z') && Calendar::hasOffset('2026-12-26T12:00:00+01:00') && Calendar::hasOffset('2026-12-26T12:00:00-0600'));

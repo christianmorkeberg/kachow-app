@@ -36,7 +36,7 @@ final class GetSettings implements Tool
             'type'       => 'object',
             'properties' => [
                 'show_card' => ['type' => 'boolean', 'description' => 'True only when the user asked to see/open their settings: shows the settings card.'],
-                'card'      => ['type' => 'string', 'enum' => ['personality', 'home_cards'], 'description' => 'Which card to show with show_card: "home_cards" when they want to set / choose their START or DEFAULT cards (opens a picker — do not ask them to type card names); otherwise "personality" (default).'],
+                'card'      => ['type' => 'string', 'enum' => ['settings', 'home_cards'], 'description' => 'Which card to show with show_card: "home_cards" when they want to set / choose their START or DEFAULT cards (opens a picker — do not ask them to type card names); otherwise "personality" (default).'],
             ],
             'required'   => [],
         ];
@@ -48,10 +48,10 @@ final class GetSettings implements Tool
         // The settings card (the personality slider, tap to change the tone) opens only when asked for: a lookup made to answer
         // something else must not throw a card onto the screen (reports #45, #47, #49).
         if (filter_var($arguments['show_card'] ?? false, FILTER_VALIDATE_BOOL)) {
-            $out['note']    = 'The app displays a personality slider card. Give a brief spoken summary of the settings — do not re-list every setting as text.';
+            $out['note']    = 'The app displays the Settings card (every setting, grouped, editable). Give a brief spoken summary of the settings — do not re-list every setting as text.';
             $out['_render'] = ($arguments['card'] ?? '') === 'home_cards'
                 ? UserSettings::homeCardsCard($this->settings->get($userId, 'home_cards') ?? '')
-                : UserSettings::personalityCard($this->settings->get($userId, 'personality') ?? '2');
+                : $this->settings->settingsCard($userId);
         }
 
         return $out;

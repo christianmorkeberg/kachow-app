@@ -45,7 +45,7 @@ final class GetTrainingProgram implements Tool
     {
         $all = $this->programs->all($userId);
         if ($all === []) {
-            return ['programs' => [], 'note' => 'They have no training programme saved. If they have one as a note (or you remember one), offer to save it with save_training_program.'];
+            return ['programs' => [], '_render' => ProgramCard::empty(), 'note' => 'They have no training programme saved. If they have one as a note (or you remember one), offer to save it with save_training_program.'];
         }
         $q = trim((string) ($arguments['program'] ?? ''));
         $p = $q === '' ? (array_values(array_filter($all, static fn (array $x): bool => $x['status'] === 'active'))[0] ?? $all[0]) : $this->programs->find($userId, $q);

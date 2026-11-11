@@ -57,33 +57,27 @@ final class GetCalendarEvents implements Tool
 
         $events = $this->calendar->getEvents($userId, $from, $to);
 
+        // The card is the Calendar card in the view that fits the range (a day, three days, a week, else the month) — not a card of its own. If that view is wider
+        // than the range asked for, it fetches its own days.
+        $tz      = new \DateTimeZone(Calendar::DISPLAY_TZ);
+        $start   = new \DateTimeImmutable($from);
+        $days    = max(1, (int) ceil(((new \DateTimeImmutable($to))->getTimestamp() - $start->getTimestamp()) / 86400));
+        $view    = $days <= 1 ? 'day' : ($days <= 3 ? '3day' : ($days <= 7 ? 'week' : 'month'));
+        $anchor  = $start->setTimezone($tz)->format('Y-m-d');
+        [$vf, $vt] = Calendar::viewRange($view, $anchor);
+        [$uf, $ut] = Calendar::rangeUtc($vf, $vt);
+        $viewEvents = ($uf === $from && $ut === $to) ? $events : $this->calendar->getEvents($userId, $uf, $ut);
+
         // The app renders these as an interactive agenda card (see _render); the
         // model gets the events too so it can answer specific questions (e.g.
         // "am I free Friday?"), but it should summarise rather than re-list them.
         return [
             'count'   => count($events),
             'events'  => $events,
-            'note'    => 'The app already shows these events as an agenda card. Use them to answer the '
+            'note'    => 'The app already shows these events in the Calendar card (day / 3-day / week / month view). Use them to answer the '
                 . 'user\'s question (e.g. "am I free Friday?") or give a brief summary — do NOT re-list '
                 . 'every event line by line as text.',
-            '_render' => $this->calendar->buildCard($events, $this->titleForRange($from, $to)),
+            '_render' => $this->calendar->buildViewCard($viewEvents, $view, $anchor),
         ];
-    }
-
-    /** A short human label for the range, e.g. "Fri 10 Jul" or "10 Jul – 16 Jul". */
-    private function titleForRange(string $from, string $to): string
-    {
-        $start = strtotime($from) ?: time();
-        // The range end is exclusive, so the last covered day is one second before it.
-        $endTs = (strtotime($to) ?: time()) - 1;
-        if ($endTs < $start) {
-            $endTs = $start;
-        }
-
-        if (date('Y-m-d', $start) === date('Y-m-d', $endTs)) {
-            return date('D j M', $start); // single day → "Fri 10 Jul"
-        }
-
-        return date('j M', $start) . ' – ' . date('j M', $endTs);
     }
 }
