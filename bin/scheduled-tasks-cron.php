@@ -137,6 +137,7 @@ $notifier  = Notifier::fromEnv();
 if (random_int(1, 500) === 1) {
     (new \App\Diagnostics\ToolCallLog())->prune(180);   // keep ~6 months of the tool-call log
     (new \App\Data\UsageLog())->purge(400);              // and ~13 months of the Gemini usage log (it is small; this only stops it growing for ever)
+    (new \App\Diagnostics\ToolShadow())->purge(180);       // and ~6 months of the tool-targeting shadow
 }
 $utc       = new DateTimeZone('UTC');
 

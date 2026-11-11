@@ -560,6 +560,24 @@ final class ToolSelector
     }
 
     /**
+     * The tool names of these routing groups (unknown groups are ignored), for the tool-targeting shadow (ToolRanker).
+     *
+     * @param list<string> $groups
+     * @return list<string>
+     */
+    public static function toolsFor(array $groups): array
+    {
+        $out = [];
+        foreach ($groups as $g) {
+            foreach (self::GROUPS[$g] ?? [] as $tool) {
+                $out[$tool] = true;
+            }
+        }
+
+        return array_keys($out);
+    }
+
+    /**
      * Returns the subset of $declarations relevant to $message (or all of them if
      * nothing matched).
      *

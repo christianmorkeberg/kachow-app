@@ -516,6 +516,12 @@ final class AssistantLoop
         if ($hasImage) {
             $ruleGroups = array_values(array_unique(array_merge($ruleGroups, PromptRules::IMAGE_GROUPS)));
         }
+        // Tool targeting, SHADOW mode (ToolRanker): with the full list on the table, work out — BEFORE any tool runs, so this turn's calls cannot rank
+        // themselves — which tools a targeted list would have held; after the turn, recordShadow() checks the tools really called against it. Changes nothing.
+        $this->shadowPlan = null;
+        if ($wideTools && !$hasImage && $this->toolSubset === null) {
+            $this->shadowPlan = $this->planShadow($userId, $ruleGroups);
+        }
         // Home devices the assistant already knows by name (saved list + this conversation's lookups).
         $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent, ToolMemory::homeActive($history))));
         // The radiators too (names + ids, fixed list, no call to the home agent): commands like "set all to 20" then skip the lookup round.
@@ -892,8 +898,57 @@ final class AssistantLoop
      * (external APIs), and everything else (buildContents, DB, our code). The last
      * Gemini call's network split (conn/tls/think) shows distance-to-Google vs model.
      */
+    /** @var array{user:int, plan:array<string, mixed>, ranks:array<string, int>}|null this turn's would-be targeted tool list (shadow mode) */
+    private ?array $shadowPlan = null;
+
+    /**
+     * The targeted tool list this turn would have had (see ToolRanker). Best effort: null when the shadow tables are not there yet or anything fails.
+     *
+     * @param list<string> $ruleGroups
+     * @return array{user:int, plan:array<string, mixed>, ranks:array<string, int>}|null
+     */
+    private function planShadow(int $userId, array $ruleGroups): ?array
+    {
+        try {
+            $now   = time();
+            $sizes = [];
+            foreach ($this->tools->declarations() as $d) {
+                $name = (string) ($d['name'] ?? '');
+                if ($name !== '' && !in_array($name, ToolRanker::IGNORED, true)) {
+                    $sizes[$name] = strlen((string) json_encode($d, JSON_UNESCAPED_UNICODE));
+                }
+            }
+            $shadow = new \App\Diagnostics\ToolShadow();
+            $ranks  = ToolRanker::ranks(ToolRanker::scores($shadow->callsFor($userId, $now), $now));
+            $plan   = ToolRanker::plan($sizes, ToolSelector::toolsFor($ruleGroups), $ranks, $shadow->firstSeen(array_keys($sizes), $now), $now);
+
+            return ['user' => $userId, 'plan' => $plan, 'ranks' => $ranks];
+        } catch (Throwable $e) {
+            error_log('tool shadow plan: ' . $e->getMessage());
+
+            return null;
+        }
+    }
+
+    /** After the turn: were the tools the model called in the would-be list? One row per turn (shadow mode). */
+    private function recordShadow(): void
+    {
+        $s = $this->shadowPlan;
+        $this->shadowPlan = null;
+        if ($s === null) {
+            return;
+        }
+        try {
+            $called = ToolRanker::evaluate($s['plan'], $s['ranks'], array_map(static fn (array $c): string => (string) $c['name'], $this->lastCalls));
+            (new \App\Diagnostics\ToolShadow())->record($s['user'], (int) $s['plan']['total'], $s['plan']['sizes'], $called);
+        } catch (Throwable $e) {
+            error_log('tool shadow record: ' . $e->getMessage());
+        }
+    }
+
     private function recordTiming(float $tStart, float $geminiMs, int $geminiCalls, float $toolMs, int $reqKb): void
     {
+        $this->recordShadow();
         $totalMs = (microtime(true) - $tStart) * 1000;
         $timing  = [
             'total_ms'     => (int) round($totalMs),
