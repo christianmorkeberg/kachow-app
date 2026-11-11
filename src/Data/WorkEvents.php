@@ -485,6 +485,8 @@ final class WorkEvents
             'total'       => $totalLabel,
             'total_minutes' => $totalMinutes,
             'ongoing'     => $ongoing,
+            // Where the user is on the clock right now (whatever period is shown): the card's Clock in / Clock out button reads it.
+            'clock'       => ['open' => array_map(fn (array $o): array => ['place' => $o['place'], 'since' => $this->toLocal($o['occurred_at'])->format('H:i')], $this->openSessions($userId))],
             'multi_place' => $multiPlace,
             'places'      => $multiPlace
                 ? array_map(static fn (array $p): array => ['place' => $p['place'], 'total' => $p['total'], 'minutes' => $p['minutes']], $places)
