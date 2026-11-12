@@ -210,6 +210,28 @@ final class WorkLog
     }
 
     /**
+     * The work log of one calendar week (Monday–Sunday), `$offset` weeks from this one — what the card pages through. The entries are all jobs;
+     * the card filters by job on the client, so `by_job` is the week's full list.
+     *
+     * @return array<string, mixed>
+     */
+    public function weekCard(int $userId, int $offset = 0): array
+    {
+        $offset = max(-520, min(0, $offset));
+        $mon    = (new DateTimeImmutable('monday this week', new DateTimeZone(self::LOCAL_TZ)))->modify(($offset * 7) . ' days');
+        $sun    = $mon->modify('+6 days');
+        $card   = $this->card($userId, $mon->format('Y-m-d'), $sun->format('Y-m-d'), '');
+        $card['weekly'] = true;
+        $card['offset'] = $offset;
+        $card['from']   = $mon->format('Y-m-d');
+        $card['to']     = $sun->format('Y-m-d');
+        $card['week']   = (int) $mon->format('W');
+        $card['title']  = $offset === 0 ? 'This week' : ($offset === -1 ? 'Last week' : 'Week ' . $mon->format('W'));
+
+        return $card;
+    }
+
+    /**
      * Resolve a named period to [from, to, label] local dates.
      *
      * @return array{0:string, 1:string, 2:string}

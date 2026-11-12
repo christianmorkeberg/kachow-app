@@ -119,5 +119,17 @@ $tool->execute(['description' => 'Another day.', 'job' => 'DSB', 'date' => '2026
 $rows = $log->listForUser($U, '2026-10-15', '2026-10-15');
 check('job stays "DSB" with no alias configured', count($rows) === 1 && $rows[0]['job'] === 'DSB', json_encode($rows));
 
+echo "10) weekCard pages by week, all jobs listed; the tool says so when a filtered job has nothing\n";
+$mon = (new DateTimeImmutable('monday this week', new DateTimeZone('Europe/Copenhagen')));
+$log->add($U, $mon->format('Y-m-d'), 'DSB', 'This week at DSB.');
+$log->add($U, $mon->modify('-7 days')->format('Y-m-d'), 'DTU', 'Last week at DTU.');
+$w0 = $log->weekCard($U, 0);
+$w1 = $log->weekCard($U, -1);
+check('this week: weekly card, DSB only', $w0['weekly'] === true && $w0['offset'] === 0 && array_column($w0['by_job'], 'job') === ['DSB'], json_encode($w0['by_job']));
+check('last week: DTU entry, titled Last week', $w1['title'] === 'Last week' && array_column($w1['items'], 'job') === ['DTU'], json_encode($w1['items']));
+check('future offsets clamp to this week', $log->weekCard($U, 3)['offset'] === 0);
+$res = (new \App\Tools\GetWorkLog($log))->execute(['period' => 'this_week', 'job' => 'DTU'], $U);
+check('empty filtered job gets an explicit note', str_contains($res['note'], 'Nothing is logged for "DTU"'), $res['note']);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
