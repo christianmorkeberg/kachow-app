@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Data;
 
 use App\Database;
+use App\Support\SetPlan;
 use DateTimeImmutable;
 use PDO;
 
@@ -21,10 +22,26 @@ final class TrainingPrograms
     public const MAX_DAYS_PER_CALL = 60;
 
     private PDO $db;
+    private ?bool $pairCols = null;
 
     public function __construct(?PDO $db = null)
     {
         $this->db = $db ?? Database::get();
+    }
+
+    /** Whether the shared-training migration has run (connection_id / audience / percent / set_plan exist): before it, everything works as it always did. */
+    private function migrated(): bool
+    {
+        if ($this->pairCols === null) {
+            try {
+                $this->db->query('SELECT connection_id FROM training_programs LIMIT 0');
+                $this->pairCols = true;
+            } catch (\Throwable $e) {
+                $this->pairCols = false;
+            }
+        }
+
+        return $this->pairCols;
     }
 
     private static function now(): string
@@ -88,14 +105,17 @@ final class TrainingPrograms
      */
     public function all(int $userId): array
     {
+        $shared = $this->migrated()
+            ? ' OR p.connection_id IN (SELECT c.id FROM user_connections c WHERE c.status = \'accepted\' AND (c.requester_id = :u2 OR c.addressee_id = :u3))'
+            : '';
         $stmt = $this->db->prepare(
-            'SELECT p.id, p.user_id, p.name, p.status, p.week_mode, p.start_date, p.repeat_weeks, (p.source_note IS NOT NULL) AS has_source,
+            'SELECT p.*, (p.source_note IS NOT NULL) AS has_source,
                     (SELECT COUNT(*) FROM training_program_days d WHERE d.program_id = p.id) AS day_count,
                     (SELECT MIN(week_no) FROM training_program_days d WHERE d.program_id = p.id) AS first_week,
                     (SELECT MAX(week_no) FROM training_program_days d WHERE d.program_id = p.id) AS last_week
-             FROM training_programs p WHERE p.user_id = :u ORDER BY p.id DESC'
+             FROM training_programs p WHERE p.user_id = :u' . $shared . ' ORDER BY p.id DESC'
         );
-        $stmt->execute([':u' => $userId]);
+        $stmt->execute($shared !== '' ? [':u' => $userId, ':u2' => $userId, ':u3' => $userId] : [':u' => $userId]);
 
         return array_map([self::class, 'programRow'], $stmt->fetchAll());
     }
@@ -140,15 +160,17 @@ final class TrainingPrograms
             $set[] = 'repeat_weeks = :rw';
             $p[':rw'] = $f['repeat_weeks'] !== null && (int) $f['repeat_weeks'] > 0 ? min(52, (int) $f['repeat_weeks']) : null;
         }
-        $this->db->prepare('UPDATE training_programs SET ' . implode(', ', $set) . ' WHERE id = :id AND user_id = :u')->execute($p);
+        unset($p[':u']);
+        $this->db->prepare('UPDATE training_programs SET ' . implode(', ', $set) . ' WHERE id = :id')->execute($p);   // authorised by get() above: either person on a shared programme may edit it
 
         return true;
     }
 
     public function delete(int $userId, int $id): bool
     {
-        if ($this->get($userId, $id) === null) {
-            return false;
+        $p = $this->get($userId, $id);
+        if ($p === null || $p['user_id'] !== $userId) {
+            return false;   // only the person who made a programme deletes it (the other one can edit, not remove)
         }
         // children first (SQLite tests have no cascade); MySQL cascades the same way
         $days = $this->db->prepare('SELECT id FROM training_program_days WHERE program_id = :p');
@@ -196,12 +218,18 @@ final class TrainingPrograms
             if ($name === '' || $pos >= self::MAX_ITEMS_PER_DAY) {
                 continue;
             }
-            $this->db->prepare('INSERT INTO training_program_items (day_id, position, exercise, sets, reps, weight, note) VALUES (:d, :pos, :e, :s, :r, :w, :n)')->execute([
-                ':d' => $dayId, ':pos' => ++$pos, ':e' => $name,
-                ':s' => self::posInt($ex['sets'] ?? null, 99), ':r' => self::posInt($ex['reps'] ?? null, 999),
-                ':w' => isset($ex['weight']) && is_numeric($ex['weight']) && (float) $ex['weight'] >= 0 && (float) $ex['weight'] <= 1000 ? (float) $ex['weight'] : null,
+            $t    = SetPlan::normalize($ex);
+            $args = [
+                ':d' => $dayId, ':pos' => ++$pos, ':e' => $name, ':s' => $t['sets'], ':r' => $t['reps'], ':w' => $t['weight'],
                 ':n' => isset($ex['note']) && trim((string) $ex['note']) !== '' ? mb_substr(trim((string) $ex['note']), 0, 255) : null,
-            ]);
+            ];
+            if ($this->migrated()) {
+                $this->db->prepare('INSERT INTO training_program_items (day_id, position, exercise, sets, reps, weight, percent, set_plan, note) VALUES (:d, :pos, :e, :s, :r, :w, :pc, :sp, :n)')->execute(
+                    $args + [':pc' => $t['percent'], ':sp' => $t['set_plan'] !== null ? json_encode($t['set_plan']) : null]
+                );
+            } else {
+                $this->db->prepare('INSERT INTO training_program_items (day_id, position, exercise, sets, reps, weight, note) VALUES (:d, :pos, :e, :s, :r, :w, :n)')->execute($args);
+            }
         }
         $this->db->prepare('UPDATE training_programs SET updated_at = :now WHERE id = :id')->execute([':now' => self::now(), ':id' => $programId]);
 
@@ -249,7 +277,7 @@ final class TrainingPrograms
         if ($this->get($userId, $programId) === null) {
             return [];
         }
-        $sql = 'SELECT id, week_no, year, weekday, title, note FROM training_program_days WHERE program_id = :p';
+        $sql = 'SELECT * FROM training_program_days WHERE program_id = :p';
         $p   = [':p' => $programId];
         if ($week !== null) {
             $sql .= ' AND week_no = :w';
@@ -270,7 +298,7 @@ final class TrainingPrograms
      *
      * @return array{program_id:int, program:string, week:int, weekday:int, title:?string, note:?string, items:list<array<string, mixed>>, label:string}|null
      */
-    public function dayFor(int $userId, string $date): ?array
+    public function dayFor(int $userId, string $date, bool $forUserOnly = true): ?array
     {
         $d = new DateTimeImmutable($date);
         foreach ($this->all($userId) as $p) {
@@ -283,7 +311,7 @@ final class TrainingPrograms
             }
             $weekday = (int) $d->format('N');
             $stmt = $this->db->prepare(
-                'SELECT id, week_no, year, weekday, title, note FROM training_program_days
+                'SELECT * FROM training_program_days
                  WHERE program_id = :p AND week_no = :w AND weekday = :d AND year IN (0, :y) ORDER BY year DESC LIMIT 1'
             );
             $stmt->execute([':p' => $p['id'], ':w' => $week, ':d' => $weekday, ':y' => $p['week_mode'] === 'calendar' ? (int) $d->format('o') : 0]);
@@ -292,10 +320,14 @@ final class TrainingPrograms
                 continue;
             }
             $day = $this->dayRow($row);
+            if ($forUserOnly && $day['audience'] !== null && $day['audience'] !== $userId) {
+                continue;   // a day that is only the other person's does not become MY plan
+            }
 
             return [
                 'program_id' => $p['id'], 'program' => $p['name'], 'week' => $week, 'weekday' => $weekday, 'title' => $day['title'], 'note' => $day['note'],
                 'items' => $day['items'], 'label' => $p['name'] . ($p['week_mode'] === 'calendar' ? ' · uge ' . $week : ' · week ' . $week),
+                'audience' => $day['audience'], 'year' => $p['week_mode'] === 'calendar' ? (int) $d->format('o') : 0, 'programme' => $p,
             ];
         }
 
@@ -324,20 +356,97 @@ final class TrainingPrograms
         return $idx;
     }
 
+    // ---------- sharing ----------
+
+    /**
+     * Shares a programme with a connected person (the pair becomes the programme's other owner-in-practice: both see it and either can edit; only the maker deletes it).
+     * $onlyMeWeekdays: weekdays (1–7) that are only for the person sharing — every other day is for both; null leaves the days as they are.
+     */
+    public function share(int $userId, int $programId, int $connectionId, ?array $onlyMeWeekdays = null): bool
+    {
+        $p = $this->get($userId, $programId);
+        if ($p === null || $p['user_id'] !== $userId || !$this->migrated()) {
+            return false;
+        }
+        $this->db->prepare('UPDATE training_programs SET connection_id = :c, updated_at = :now WHERE id = :id')->execute([':c' => $connectionId, ':now' => self::now(), ':id' => $programId]);
+        if ($onlyMeWeekdays !== null) {
+            foreach ($this->db->query('SELECT id, weekday FROM training_program_days WHERE program_id = ' . (int) $programId)->fetchAll() as $d) {
+                $this->db->prepare('UPDATE training_program_days SET audience_user_id = :a WHERE id = :id')
+                    ->execute([':a' => in_array((int) $d['weekday'], $onlyMeWeekdays, true) ? $userId : null, ':id' => $d['id']]);
+            }
+        }
+
+        return true;
+    }
+
+    /** Stops sharing: the programme is the maker's alone again (the days' audiences are cleared — they only mean something with two people). */
+    public function unshare(int $userId, int $programId): bool
+    {
+        $p = $this->get($userId, $programId);
+        if ($p === null || $p['user_id'] !== $userId || !$this->migrated()) {
+            return false;
+        }
+        $this->db->prepare('UPDATE training_programs SET connection_id = NULL, updated_at = :now WHERE id = :id')->execute([':now' => self::now(), ':id' => $programId]);
+        $this->db->prepare('UPDATE training_program_days SET audience_user_id = NULL WHERE program_id = :p')->execute([':p' => $programId]);
+
+        return true;
+    }
+
+    /** Who a day is for: null = everyone on the programme, else that one person (who must be on it). */
+    public function setDayAudience(int $userId, int $programId, int $week, int $year, int $weekday, ?int $audienceUserId): bool
+    {
+        $p = $this->get($userId, $programId);
+        if ($p === null || !$this->migrated() || ($audienceUserId !== null && !in_array($audienceUserId, $this->participants($p), true))) {
+            return false;
+        }
+        $stmt = $this->db->prepare('UPDATE training_program_days SET audience_user_id = :a WHERE program_id = :p AND week_no = :w AND weekday = :d AND year IN (0, :y)');
+        $stmt->execute([':a' => $audienceUserId, ':p' => $programId, ':w' => $week, ':d' => $weekday, ':y' => $year]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * The people on a programme: its maker, and the other person of the pair when it is shared (both must still be connected).
+     *
+     * @param array<string, mixed> $program a programRow
+     * @return list<int>
+     */
+    public function participants(array $program): array
+    {
+        $out = [(int) $program['user_id']];
+        if (($program['connection_id'] ?? null) !== null) {
+            $st = $this->db->prepare('SELECT requester_id, addressee_id FROM user_connections WHERE id = :c AND status = \'accepted\'');
+            $st->execute([':c' => $program['connection_id']]);
+            $c = $st->fetch();
+            if ($c !== false) {
+                foreach ([(int) $c['requester_id'], (int) $c['addressee_id']] as $id) {
+                    if (!in_array($id, $out, true)) {
+                        $out[] = $id;
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
     // ---------- helpers ----------
 
-    /** @param array<string, mixed> $d @return array{week:int, year:int, weekday:int, title:?string, note:?string, items:list<array<string, mixed>>} */
+    /** @param array<string, mixed> $d @return array{week:int, year:int, weekday:int, audience:?int, title:?string, note:?string, items:list<array<string, mixed>>} */
     private function dayRow(array $d): array
     {
-        $items = $this->db->prepare('SELECT exercise, sets, reps, weight, note FROM training_program_items WHERE day_id = :d ORDER BY position ASC, id ASC');
+        $items = $this->db->prepare('SELECT * FROM training_program_items WHERE day_id = :d ORDER BY position ASC, id ASC');
         $items->execute([':d' => $d['id']]);
 
         return [
             'week' => (int) $d['week_no'], 'year' => (int) $d['year'], 'weekday' => (int) $d['weekday'],
+            'audience' => isset($d['audience_user_id']) && $d['audience_user_id'] !== null ? (int) $d['audience_user_id'] : null,
             'title' => $d['title'] !== null ? (string) $d['title'] : null, 'note' => $d['note'] !== null ? (string) $d['note'] : null,
             'items' => array_map(static fn (array $i): array => [
                 'exercise' => (string) $i['exercise'], 'sets' => $i['sets'] !== null ? (int) $i['sets'] : null, 'reps' => $i['reps'] !== null ? (int) $i['reps'] : null,
                 'weight' => $i['weight'] !== null ? (float) $i['weight'] : null, 'note' => $i['note'] !== null ? (string) $i['note'] : null,
+                'percent' => isset($i['percent']) && $i['percent'] !== null ? (float) $i['percent'] : null,
+                'set_plan' => isset($i['set_plan']) && $i['set_plan'] !== null && is_array($sp = json_decode((string) $i['set_plan'], true)) ? $sp : null,
             ], $items->fetchAll()),
         ];
     }
@@ -349,7 +458,8 @@ final class TrainingPrograms
             'id' => (int) $r['id'], 'name' => (string) $r['name'], 'status' => (string) $r['status'], 'week_mode' => (string) $r['week_mode'],
             'start_date' => $r['start_date'] !== null ? (string) $r['start_date'] : null, 'repeat_weeks' => $r['repeat_weeks'] !== null ? (int) $r['repeat_weeks'] : null,
             'days' => (int) ($r['day_count'] ?? 0), 'first_week' => $r['first_week'] !== null ? (int) $r['first_week'] : null, 'last_week' => $r['last_week'] !== null ? (int) $r['last_week'] : null,
-            'has_source' => (bool) ($r['has_source'] ?? false),
+            'has_source' => (bool) ($r['has_source'] ?? false), 'user_id' => (int) $r['user_id'],
+            'connection_id' => isset($r['connection_id']) && $r['connection_id'] !== null ? (int) $r['connection_id'] : null,
         ];
     }
 

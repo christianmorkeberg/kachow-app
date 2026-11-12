@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Tools;
 
 use App\Data\TrainingPrograms;
+use App\Data\Users;
+use App\Support\ProgramAudience;
 use App\Support\ProgramInput;
 
 /**
@@ -13,7 +15,7 @@ use App\Support\ProgramInput;
  */
 final class AddProgramDays implements Tool
 {
-    public function __construct(private TrainingPrograms $programs)
+    public function __construct(private TrainingPrograms $programs, private ?Users $users = null)
     {
     }
 
@@ -26,8 +28,9 @@ final class AddProgramDays implements Tool
     {
         return 'Adds (or replaces) days in a training programme. `program` is its name or id (from save_training_program). Each day: `week` (the calendar week '
             . 'number, e.g. 43, or 1, 2, 3 for a relative programme), `weekday` (1=Monday … 7=Sunday, or "onsdag"/"wednesday"), optional `title` ("Pull + legs") and '
-            . '`exercises`: each with `exercise` (the name as the user wrote it) and, where the note gives them, `sets`, `reps`, `weight` (kg) — numbers only; anything '
-            . 'else ("8–10", "to failure", "or pull-ups", "heavy") goes in `note`. Keep the user\'s exact numbers; never fill in or average. Do one or two '
+            . '`exercises`: each with `exercise` (the name as the user wrote it) and, where the note gives them, `sets`, `reps`, `weight` (kg) or `percent` (a percentage '
+            . 'of the person\'s own training max: "3 × 5 at 75%" is sets 3, reps 5, percent 75) — numbers only; when the sets DIFFER ("50, 60, 70%", "5/3/1") send `set_plan`, one entry per set '
+            . '{reps, percent or weight}, instead of sets/reps/percent; anything else ("8–10", "to failure", "or pull-ups", "heavy") goes in `note`. Keep the user\'s exact numbers; never fill in or average. Do one or two '
             . 'weeks per call (at most ' . TrainingPrograms::MAX_DAYS_PER_CALL . ' days). A day sent again replaces that day. For a calendar programme the year defaults to the '
             . 'current one (next year for a week well in the past); pass `year` only if the note says. When done, show the result with get_training_program.';
     }
@@ -37,6 +40,10 @@ final class AddProgramDays implements Tool
         $exercise = ['type' => 'object', 'properties' => [
             'exercise' => ['type' => 'string'], 'sets' => ['type' => 'integer'], 'reps' => ['type' => 'integer'],
             'weight' => ['type' => 'number', 'description' => 'kg'], 'note' => ['type' => 'string'],
+            'percent' => ['type' => 'number', 'description' => 'Percent of the person\'s training max, for every set.'],
+            'set_plan' => ['type' => 'array', 'description' => 'Per-set targets when the sets differ, e.g. 50 / 60 / 70 %.', 'items' => ['type' => 'object', 'properties' => [
+                'reps' => ['type' => 'integer'], 'percent' => ['type' => 'number'], 'weight' => ['type' => 'number'],
+            ]]],
         ], 'required' => ['exercise']];
 
         return [
@@ -49,6 +56,7 @@ final class AddProgramDays implements Tool
                     'weekday'   => ['type' => 'string', 'description' => '1–7 or a weekday name.'],
                     'title'     => ['type' => 'string'],
                     'note'      => ['type' => 'string'],
+                    'for'       => ['type' => 'string', 'description' => 'Only on a SHARED programme: who the day is for — "both" (default), "me" (only the person you are talking to) or the other person\'s name.'],
                     'exercises' => ['type' => 'array', 'items' => $exercise],
                 ], 'required' => ['week', 'weekday', 'exercises']]],
             ],
@@ -92,6 +100,14 @@ final class AddProgramDays implements Tool
                 $skipped[] = 'week ' . $week . ' day ' . $weekday . ': could not be saved';
                 continue;
             }
+            if (isset($d['for']) && $p['connection_id'] !== null) {
+                $aud = ProgramAudience::resolve((string) $d['for'], $userId, $this->peopleOn($p));
+                if ($aud === false) {
+                    $skipped[] = 'week ' . $week . ' day ' . $weekday . ': saved for both — "for" must be both, me, or the other person\'s name';
+                } else {
+                    $this->programs->setDayAudience($userId, $p['id'], $week, $year, $weekday, $aud);
+                }
+            }
             $saved++;
             $exercises += $r['items'];
             if ($r['replaced']) {
@@ -105,5 +121,17 @@ final class AddProgramDays implements Tool
             'skipped' => $skipped, 'programme_now' => ['days' => $now['days'] ?? 0, 'weeks' => ($now['first_week'] ?? null) !== null ? $now['first_week'] . '–' . $now['last_week'] : null],
             'note' => $skipped === [] ? 'Saved. Continue with the next week, or show it with get_training_program.' : 'Some days were skipped (see skipped) — fix those and send them again.',
         ];
+    }
+
+    /** The people on a shared programme, by user id, with the names the speaker may use for them. @param array<string, mixed> $program @return array<int, array{name:?string, email:?string}> */
+    private function peopleOn(array $program): array
+    {
+        $out = [];
+        foreach ($this->programs->participants($program) as $id) {
+            $u = $this->users?->findById($id);
+            $out[$id] = ['name' => $u['name'] ?? null, 'email' => $u['email'] ?? null];
+        }
+
+        return $out;
     }
 }

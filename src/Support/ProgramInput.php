@@ -68,6 +68,11 @@ final class ProgramInput
      */
     public static function itemLabel(array $i): string
     {
+        if (($i['percent'] ?? null) !== null || is_array($i['set_plan'] ?? null)) {
+            $line = $i['exercise'] . ' ' . SetPlan::label($i);
+
+            return ($i['note'] ?? null) !== null && $i['note'] !== '' ? $line . ' — ' . $i['note'] : $line;
+        }
         $bits = [];
         if ($i['sets'] !== null && $i['reps'] !== null) {
             $bits[] = $i['sets'] . '×' . $i['reps'];

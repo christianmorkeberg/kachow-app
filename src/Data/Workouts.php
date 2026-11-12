@@ -85,6 +85,103 @@ final class Workouts
         }
     }
 
+    private ?bool $sessionCols = null;
+
+    /** Whether the shared-training migration has added session_id / set_no / planned_* to workouts (before it, sets are logged without them). */
+    public function hasSessionColumns(): bool
+    {
+        if ($this->sessionCols === null) {
+            try {
+                $this->db->query('SELECT session_id, set_no, planned_percent, planned_weight FROM workouts LIMIT 0');
+                $this->sessionCols = true;
+            } catch (Throwable $e) {
+                $this->sessionCols = false;
+            }
+        }
+
+        return $this->sessionCols;
+    }
+
+    /**
+     * One set from the Train card: tied to a training session and its place in it (set_no), with what was PLANNED next to what was done. Without the migration it is
+     * logged as a plain set. @param array{weight:?float, reps:?int, notes:?string, session_id:int, set_no:int, planned_percent:?float, planned_weight:?float} $set
+     */
+    public function logPlannedSet(int $userId, string $exercise, array $set, ?string $loggedAt = null): int
+    {
+        if (!$this->hasSessionColumns()) {
+            return $this->logSets($userId, $exercise, [['weight' => $set['weight'], 'reps' => $set['reps'], 'notes' => $set['notes'] ?? null]], $loggedAt)[0];
+        }
+        $this->db->prepare(
+            'INSERT INTO workouts (user_id, exercise, weight, reps, notes, logged_at, session_id, set_no, planned_percent, planned_weight)
+             VALUES (:u, :e, :w, :r, :n, :at, :s, :no, :pp, :pw)'
+        )->execute([
+            ':u' => $userId, ':e' => $exercise, ':w' => $set['weight'], ':r' => $set['reps'], ':n' => $set['notes'] ?? null, ':at' => $loggedAt ?? date('Y-m-d H:i:s'),
+            ':s' => $set['session_id'], ':no' => $set['set_no'], ':pp' => $set['planned_percent'], ':pw' => $set['planned_weight'],
+        ]);
+
+        return (int) $this->db->lastInsertId();
+    }
+
+    /**
+     * The sets of one training session for one person: id, exercise, set_no, weight, reps, notes — in the order they were done.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function sessionSets(int $userId, int $sessionId): array
+    {
+        if (!$this->hasSessionColumns()) {
+            return [];
+        }
+        $st = $this->db->prepare('SELECT id, exercise, set_no, weight, reps, notes, planned_percent, planned_weight, logged_at FROM workouts WHERE user_id = :u AND session_id = :s ORDER BY id ASC');
+        $st->execute([':u' => $userId, ':s' => $sessionId]);
+
+        return $st->fetchAll();
+    }
+
+    /** One set of a session (for undoing a tick), or null. @return array<string, mixed>|null */
+    public function sessionSet(int $userId, int $id): ?array
+    {
+        if (!$this->hasSessionColumns()) {
+            return null;
+        }
+        $st = $this->db->prepare('SELECT id, exercise, session_id, set_no FROM workouts WHERE user_id = :u AND id = :id AND session_id IS NOT NULL');
+        $st->execute([':u' => $userId, ':id' => $id]);
+        $r = $st->fetch();
+
+        return $r === false ? null : $r;
+    }
+
+    /**
+     * The most recent earlier outing with this exercise, for the Train card's "last time": the last set's weight and reps, the date, and the newest comment (the app's own
+     * "From plan" / "logged by …" marks are not comments). Null when there is no earlier set.
+     *
+     * @return array{weight:?float, reps:?int, date:string, note:?string}|null
+     */
+    public function lastTime(int $userId, string $exercise, string $beforeDate): ?array
+    {
+        $st = $this->db->prepare('SELECT weight, reps, notes, logged_at FROM workouts WHERE user_id = :u AND exercise = :e AND logged_at < :d ORDER BY logged_at DESC, id DESC LIMIT 40');
+        $st->execute([':u' => $userId, ':e' => $exercise, ':d' => $beforeDate . ' 00:00:00']);
+        $rows = $st->fetchAll();
+        if ($rows === []) {
+            return null;
+        }
+        $day  = substr((string) $rows[0]['logged_at'], 0, 10);
+        $note = null;
+        foreach ($rows as $r) {
+            $n = trim((string) preg_replace('/\s*·?\s*logged by .*$/u', '', (string) ($r['notes'] ?? '')));
+            if ($n !== '' && strcasecmp($n, 'From plan') !== 0) {
+                $note = $n;
+                break;
+            }
+        }
+
+        return [
+            'weight' => $rows[0]['weight'] !== null ? (float) $rows[0]['weight'] : null,
+            'reps'   => $rows[0]['reps'] !== null ? (int) $rows[0]['reps'] : null,
+            'date'   => $day, 'note' => $note,
+        ];
+    }
+
     /**
      * The heaviest weight ever logged for an exercise (user-scoped), or null if it has
      * never been logged with a weight. Used to detect a new personal best on logging.

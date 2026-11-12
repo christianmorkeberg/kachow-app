@@ -28,7 +28,7 @@ check('a programme is created active, with its note kept', $T->get(1, $id)['stat
 $r = $T->upsertDay(1, $id, 43, 2026, 3, 'Pull + legs', $wed);
 check('a day is stored; blank exercises are dropped, junk numbers become null', $r === ['items' => 4, 'replaced' => false]);
 $days = $T->days(1, $id);
-check('…with order, targets and notes', count($days) === 1 && $days[0]['items'][0] === ['exercise' => 'Deadlift', 'sets' => 1, 'reps' => 4, 'weight' => 117.0, 'note' => null] && $days[0]['items'][2]['note'] === 'alt: pull-ups' && $days[0]['items'][3]['weight'] === null && $days[0]['items'][3]['reps'] === 12);
+check('…with order, targets and notes', count($days) === 1 && $days[0]['items'][0] === ['exercise' => 'Deadlift', 'sets' => 1, 'reps' => 4, 'weight' => 117.0, 'note' => null, 'percent' => null, 'set_plan' => null] && $days[0]['items'][2]['note'] === 'alt: pull-ups' && $days[0]['items'][3]['weight'] === null && $days[0]['items'][3]['reps'] === 12);
 check('setting the same day again replaces its exercises', $T->upsertDay(1, $id, 43, 2026, 3, 'Pull', [['exercise' => 'Row']]) === ['items' => 1, 'replaced' => true] && count($T->days(1, $id)[0]['items']) === 1);
 $T->upsertDay(1, $id, 43, 2026, 3, 'Pull + legs', $wed);
 $T->upsertDay(1, $id, 44, 2026, 1, 'Push', [['exercise' => 'Bench press', 'sets' => 5, 'reps' => 5, 'weight' => 80]]);

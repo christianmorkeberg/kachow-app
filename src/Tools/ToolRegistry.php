@@ -140,9 +140,10 @@ final class ToolRegistry
         $registry->register(new GetWeekPlan($workoutPlans, $planner));
         // Training programmes: a multi-week plan as data; a programme day becomes the day's plan when asked for (ProgramPlanner).
         $registry->register(new SaveTrainingProgram($programs));
-        $registry->register(new AddProgramDays($programs));
-        $registry->register(new GetTrainingProgram($programs));
+        $registry->register(new AddProgramDays($programs, $users));
+        $registry->register(new GetTrainingProgram($programs, $users));
         $registry->register(new UpdateTrainingProgram($programs));
+        $registry->register(new ShareTrainingProgram($programs, $connections));
         $registry->register(new RemoveProgramDays($programs));
         $registry->register(new DeleteTrainingProgram($programs));
         $registry->register(new FindProgramInMemory($memories, $instructions, $programs));

@@ -13,7 +13,7 @@ use App\Support\ProgramInput;
  */
 final class GetTrainingProgram implements Tool
 {
-    public function __construct(private TrainingPrograms $programs)
+    public function __construct(private TrainingPrograms $programs, private ?\App\Data\Users $users = null)
     {
     }
 
@@ -58,7 +58,7 @@ final class GetTrainingProgram implements Tool
             'programs'  => array_map(static fn (array $x): array => ['id' => $x['id'], 'name' => $x['name'], 'status' => $x['status'], 'days' => $x['days'],
                 'weeks' => $x['first_week'] !== null ? $x['first_week'] . '–' . $x['last_week'] : null, 'week_mode' => $x['week_mode']], $all),
             'shown'     => $p['name'],
-            '_render'   => ProgramCard::build($p, $days),
+            '_render'   => ProgramCard::build($p, $days, null, 'Europe/Copenhagen', ProgramCard::people($this->programs, $p, $this->users), $userId),
             'note'      => 'The card shows the programme — do NOT re-list it. Ask the user to check it; changes are made by sending the changed day again (add_program_days).',
         ];
         if ($week !== null) {
