@@ -222,6 +222,9 @@ final class WorkLog
         $sun    = $mon->modify('+6 days');
         $card   = $this->card($userId, $mon->format('Y-m-d'), $sun->format('Y-m-d'), '');
         $card['weekly'] = true;
+        $stmt = $this->db->prepare('SELECT DISTINCT job FROM work_log WHERE user_id = :u ORDER BY job');
+        $stmt->execute([':u' => $userId]);
+        $card['jobs']   = array_map('strval', array_column($stmt->fetchAll(), 'job'));   // every job ever logged: the filter chips, even for a week with entries in one only
         $card['offset'] = $offset;
         $card['from']   = $mon->format('Y-m-d');
         $card['to']     = $sun->format('Y-m-d');

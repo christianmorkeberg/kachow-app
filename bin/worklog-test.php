@@ -131,5 +131,8 @@ check('future offsets clamp to this week', $log->weekCard($U, 3)['offset'] === 0
 $res = (new \App\Tools\GetWorkLog($log))->execute(['period' => 'this_week', 'job' => 'DTU'], $U);
 check('empty filtered job gets an explicit note', str_contains($res['note'], 'Nothing is logged for "DTU"'), $res['note']);
 
+$res = (new \App\Tools\GetWorkLog($log))->execute(['period' => 'this_week'], $U);
+check('tool: this week renders the paging card with every job as a chip', ($res['_render']['weekly'] ?? false) === true && in_array('DTU', $res['_render']['jobs'] ?? [], true) && in_array('DSB', $res['_render']['jobs'] ?? [], true), json_encode($res['_render']['jobs'] ?? null));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

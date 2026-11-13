@@ -68,7 +68,10 @@ final class GetWorkLog implements Tool
             'note'    => ($job !== null && $summary['count'] === 0 ? 'Nothing is logged for "' . $job . '" in this period — say so; do not list other jobs\' entries. ' : '')
                 . 'This is what the user DID at work (tasks), not hours. If they asked how much/'
                 . 'how long they worked, use get_work_hours or get_work_summary instead.',
-            '_render' => $this->log->card($userId, $from, $to, $title, $job),
+            // This/last week with no narrowing: the paging card (arrows + job filter) instead of a fixed snapshot.
+            '_render' => $job === null && empty($arguments['from']) && in_array($arguments['period'] ?? 'this_week', ['this_week', 'last_week'], true)
+                ? $this->log->weekCard($userId, ($arguments['period'] ?? 'this_week') === 'last_week' ? -1 : 0)
+                : $this->log->card($userId, $from, $to, $title, $job),
         ];
     }
 }
