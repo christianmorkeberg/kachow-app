@@ -219,9 +219,13 @@ $execute = static function (array $task) use ($registry, $notifier, $tasks, $con
             $title = $task['label'] . ' — done';
             $body  = 'Ran ' . $res['done'] . ' recorded step' . ($res['done'] === 1 ? '' : 's') . ($res['undo'] !== [] ? '. Say “undo that” to put it back.' : '.');
             $conversations->addMessage($task['conversation_id'], 'user', $task['instruction']);
-            $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
-            $note = $registry->dispatch('notify_me', ['title' => $title, 'body' => $body], $userId);
-            $conversations->addMessage($task['conversation_id'], 'tool', (string) json_encode($note, JSON_UNESCAPED_UNICODE), 'notify_me');
+            // Only a routine set to tell you every time pushes (and flags the run as unseen). Otherwise the run is just kept: the routine's
+            // card shows "Ran quietly" with this text, and the conversation holds it, but nothing buzzes.
+            if (!empty($task['notify_always'])) {
+                $registry->register(new NotifyMe($notifier, $tasks, $task['id'], $task['conversation_id']));
+                $note = $registry->dispatch('notify_me', ['title' => $title, 'body' => $body], $userId);
+                $conversations->addMessage($task['conversation_id'], 'tool', (string) json_encode($note, JSON_UNESCAPED_UNICODE), 'notify_me');
+            }
             $conversations->addMessage($task['conversation_id'], 'assistant', $body);
             $tasks->recordRun($task['id'], true, $body);
 
