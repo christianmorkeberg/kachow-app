@@ -121,7 +121,7 @@ final class ToolSelector
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'list_udlaeg', 'get_books', 'get_moms',
-            'get_cash', 'record_cash_movement', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item', 'attach_export_to_entry',
+            'get_cash', 'record_cash_movement', 'update_cash_movement', 'delete_cash_movement', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item', 'attach_export_to_entry',
             'get_invoice_overview', 'get_moms_by_quarter', 'get_budget', 'get_loan_pack',
             'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'update_trip', 'delete_trip', 'get_driving_distance',
         ],

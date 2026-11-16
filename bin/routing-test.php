@@ -214,6 +214,8 @@ $cases = [
     ['msg' => 'how much am I free to spend?', 'expect' => 'bookkeeping'],
     ['msg' => 'I paid 3450 kr moms to SKAT today', 'expect' => 'bookkeeping'],
     ['msg' => 'log a bank fee of 50 kr', 'expect' => 'bookkeeping'],
+    ['msg' => 'delete that moms payment, I entered it twice', 'expect' => 'bookkeeping'],
+    ['msg' => 'slet den dobbelte momsbetaling', 'expect' => 'bookkeeping'],
     ['msg' => 'hvor meget står der på kontoen?', 'expect' => 'bookkeeping'],
     ['msg' => 'hvor meget kan jeg bruge?', 'expect' => 'bookkeeping'],
     ['msg' => 'jeg betalte 3450 i moms', 'expect' => 'bookkeeping'],

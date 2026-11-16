@@ -261,6 +261,8 @@ final class ToolRegistry
         $cash        = new Cash($income, $receipts, $ownerDraws, $cashEntries, $userSettings, $mileage);
         $registry->register(new GetCash($cash));
         $registry->register(new RecordCashMovement($cashEntries, $cash));
+        $registry->register(new UpdateCashMovement($cashEntries, $cash));
+        $registry->register(new DeleteCashMovement($cashEntries, $cash));
         $ledger       = new Ledger();
         $balanceItems = new BalanceItems();
         $registry->register(new GetLedger($ledger));

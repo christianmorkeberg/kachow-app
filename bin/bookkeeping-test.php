@@ -31,6 +31,8 @@ use App\Data\ProfitLoss;
 use App\Data\Receipts;
 use App\Data\UserSettings;
 use App\Tools\AddExpense;
+use App\Tools\DeleteCashMovement;
+use App\Tools\UpdateCashMovement;
 use App\Tools\AddIncome;
 use App\Tools\AddOwnerDraw;
 use App\Tools\GetIncome;
@@ -454,6 +456,27 @@ check('the card now offers the invoice', ($card31['has_image'] ?? false) === tru
 check('attachFile refuses another user\'s entry', $income->attachFile(99, $id31, 'x', 'application/pdf') === false);
 check('and the amounts are untouched by attaching',
     money($card31['ex']) === '45487.00', money($card31['ex']));
+
+echo "\n== 17. Correct / delete a recorded cash movement (idea #80), user U4 and a stranger ==\n";
+$U4 = 4; $U5 = 5;
+$dupId = $cashEntries->add($U4, 'out', 3450.0, 'moms', 'Q3 moms');
+$dup2  = $cashEntries->add($U4, 'out', 3450.0, 'moms', 'Q3 moms (twice by mistake)');
+$cashObj4 = new Cash($income, $receipt, $draws, $cashEntries, $settings, $mileage);
+$updTool = new UpdateCashMovement($cashEntries, $cashObj4);
+$delTool = new DeleteCashMovement($cashEntries, $cashObj4);
+$expBefore = money($cashObj4->position($U4)['expected']);
+$r = $updTool->execute(['id' => $dupId, 'amount' => 3540, 'date' => '2026-11-01', 'note' => 'Q3 moms, corrected'], $U4);
+check('update changes the given fields', $r['updated'] === true && money($r['now']['amount']) === '3540.00' && $r['now']['date'] === '2026-11-01' && $r['now']['note'] === 'Q3 moms, corrected' && $r['now']['category'] === 'moms', json_encode($r['now'] ?? $r));
+check('update keeps what was not given (direction)', $r['now']['direction'] === 'out');
+check('expected moves by the amount difference (−90)', money($cashObj4->position($U4)['expected']) === money((float) $expBefore - 90), money($cashObj4->position($U4)['expected']));
+$bad = $updTool->execute(['id' => $dupId, 'amount' => 100], $U5);
+check('another user cannot correct it', $bad['updated'] === false && money($cashEntries->get($U4, $dupId)['amount']) === '3540.00');
+$bad = $delTool->execute(['id' => $dup2], $U5);
+check('another user cannot delete it', $bad['deleted'] === false && $cashEntries->get($U4, $dup2) !== null);
+$d = $delTool->execute(['id' => $dup2], $U4);
+check('delete removes it and says what went', $d['deleted'] === true && money($d['removed']['amount']) === '3450.00' && $cashEntries->get($U4, $dup2) === null, json_encode($d['removed'] ?? $d));
+check('expected is back up by the deleted 3450', money($cashObj4->position($U4)['expected']) === money((float) $expBefore - 90 + 3450), money($cashObj4->position($U4)['expected']));
+check('an unknown id is an error, not a crash', $delTool->execute(['id' => 999999], $U4)['deleted'] === false && $delTool->execute([], $U4)['deleted'] === false);
 
 echo "\n---------------------------------------\n";
 echo "Bookkeeping test: {$pass} passed, {$fail} failed.\n";

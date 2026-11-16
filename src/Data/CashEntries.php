@@ -67,6 +67,63 @@ final class CashEntries
         return (int) $this->db->lastInsertId();
     }
 
+    /** One movement, owner-scoped (null when it is not theirs / does not exist). @return array{id:int, date:string, direction:string, amount:float, category:string, note:string}|null */
+    public function get(int $userId, int $id): ?array
+    {
+        $stmt = $this->db->prepare('SELECT id, occurred_at, direction, amount, category, note FROM cash_entries WHERE id = :id AND user_id = :u');
+        $stmt->execute([':id' => $id, ':u' => $userId]);
+        $r = $stmt->fetch();
+        if (!$r) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $r['id'], 'date' => (string) $r['occurred_at'], 'direction' => (string) $r['direction'],
+            'amount' => round((float) $r['amount'], 2), 'category' => (string) $r['category'], 'note' => $r['note'] !== null ? (string) $r['note'] : '',
+        ];
+    }
+
+    /**
+     * Corrects a movement: only the fields given change. Returns the movement as it is now, or null when it is not theirs.
+     *
+     * @param array<string, mixed> $fields direction, amount, category, note, date
+     * @return array{id:int, date:string, direction:string, amount:float, category:string, note:string}|null
+     */
+    public function update(int $userId, int $id, array $fields): ?array
+    {
+        $cur = $this->get($userId, $id);
+        if ($cur === null) {
+            return null;
+        }
+        $set = [];
+        $par = [':id' => $id, ':u' => $userId];
+        if (isset($fields['direction']) && in_array($fields['direction'], ['in', 'out'], true)) {
+            $set[] = 'direction = :dir';
+            $par[':dir'] = $fields['direction'];
+        }
+        if (isset($fields['amount']) && is_numeric($fields['amount']) && (float) $fields['amount'] > 0) {
+            $set[] = 'amount = :a';
+            $par[':a'] = round(abs((float) $fields['amount']), 2);
+        }
+        if (isset($fields['category']) && trim((string) $fields['category']) !== '') {
+            $set[] = 'category = :c';
+            $par[':c'] = self::normalizeCategory((string) $fields['category']);
+        }
+        if (array_key_exists('note', $fields) && $fields['note'] !== null) {
+            $set[] = 'note = :n';
+            $par[':n'] = mb_substr(trim((string) $fields['note']), 0, 255);
+        }
+        if (isset($fields['date']) && trim((string) $fields['date']) !== '' && ($t = strtotime((string) $fields['date'])) !== false) {
+            $set[] = 'occurred_at = :d';
+            $par[':d'] = date('Y-m-d', $t);
+        }
+        if ($set !== []) {
+            $this->db->prepare('UPDATE cash_entries SET ' . implode(', ', $set) . ' WHERE id = :id AND user_id = :u')->execute($par);
+        }
+
+        return $this->get($userId, $id);
+    }
+
     /** Deletes a movement, owner-scoped. Returns true if a row was removed. */
     public function delete(int $userId, int $id): bool
     {
