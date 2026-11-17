@@ -114,6 +114,6 @@ final class CreateWorkoutPlan implements Tool
     {
         $s = is_string($raw) ? trim($raw) : '';
 
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $s) === 1 ? $s : date('Y-m-d');
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $s) === 1 ? $s : \App\Support\LocalTime::today();
     }
 }

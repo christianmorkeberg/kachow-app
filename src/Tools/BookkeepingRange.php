@@ -23,7 +23,7 @@ final class BookkeepingRange
         }
         $period = (string) ($a['period'] ?? 'this_year');
         if ($period === 'last_year' && empty($a['from']) && empty($a['to'])) {
-            $y = (int) date('Y') - 1;
+            $y = \App\Support\LocalTime::year() - 1;
 
             return [$y . '-01-01', $y . '-12-31', (string) $y];
         }

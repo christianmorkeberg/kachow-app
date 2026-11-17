@@ -116,7 +116,8 @@ final class OpenMeteo
 
         // Skip past hours so "hourly" starts around now (the series begins at midnight).
         $startIdx = 0;
-        $nowLocal = (new DateTimeImmutable('now'))->format('Y-m-d\TH:i');
+        $place    = new \DateTimeZone(is_string($data['timezone'] ?? null) && @timezone_open($data['timezone']) !== false ? $data['timezone'] : \App\Support\LocalTime::TZ);   // the forecast's own wall clock (timezone=auto)
+        $nowLocal = (new DateTimeImmutable('now', $place))->format('Y-m-d\TH:i');
         foreach ($steps as $i => $s) {
             if (substr($s['iso'], 0, 13) >= substr($nowLocal, 0, 13)) {
                 $startIdx = $i;
@@ -141,7 +142,7 @@ final class OpenMeteo
         foreach ($steps as $s) {
             $byDay[substr($s['iso'], 0, 10)][] = $s;
         }
-        $today = (new DateTimeImmutable('now'))->format('Y-m-d');
+        $today = (new DateTimeImmutable('now', $place))->format('Y-m-d');
         $daily = [];
         foreach ($byDay as $date => $rows) {
             if ($date < $today) {

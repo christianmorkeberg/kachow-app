@@ -76,7 +76,7 @@ final class ListDevIdeas implements Tool
         $withDetails = $ids !== [];
         $ideas = array_map(static function (array $i) use ($isAdmin, $userId, $withDetails): array {
             $ts  = strtotime($i['created_at']);
-            $row = ['id' => $i['id'], 'idea' => $i['idea'], 'status' => $i['status'], 'noted' => $ts !== false ? date('j M', $ts) : ''];
+            $row = ['id' => $i['id'], 'idea' => $i['idea'], 'status' => $i['status'], 'noted' => $ts !== false ? (new \DateTimeImmutable('@' . $ts))->setTimezone(\App\Support\LocalTime::zone())->format('j M') : ''];
             if ($i['priority'] === 'high') {
                 $row['priority'] = 'high';
             }

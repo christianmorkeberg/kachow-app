@@ -48,7 +48,7 @@ final class SetBalanceItem implements Tool
             return ['error' => 'label and a positive amount are required'];
         }
         $asOf = (string) ($arguments['as_of'] ?? '');
-        $asOf = preg_match('/^\d{4}-\d{2}-\d{2}$/', $asOf) === 1 ? $asOf : date('Y-m-d');
+        $asOf = preg_match('/^\d{4}-\d{2}-\d{2}$/', $asOf) === 1 ? $asOf : \App\Support\LocalTime::today();
         $this->items->set($userId, (string) ($arguments['kind'] ?? 'asset'), $label, (float) $arguments['amount'], $asOf, isset($arguments['note']) ? (string) $arguments['note'] : null);
 
         return ['saved' => true, 'kind' => $arguments['kind'] ?? 'asset', 'label' => $label, 'amount' => (float) $arguments['amount'], 'as_of' => $asOf];

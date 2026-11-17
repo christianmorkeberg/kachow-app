@@ -135,7 +135,7 @@ final class ListFeedback implements Tool
 
             $out[] = [
                 'id'              => (int) $r['id'],
-                'when'            => (string) $r['created_at'],
+                'when'            => \App\Support\LocalTime::label((string) $r['created_at'], 'D j M Y H:i') ?? '',
                 'status'          => (string) $r['status'],
                 'from'            => (string) ($r['reporter_name'] ?: $r['reporter_email']),
                 'note'            => $r['note'] !== null ? (string) $r['note'] : null,

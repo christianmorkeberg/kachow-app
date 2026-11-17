@@ -32,7 +32,7 @@ final class GetMomsByQuarter implements Tool
     public function execute(array $arguments, int $userId): array
     {
         $year = (int) ($arguments['year'] ?? 0);
-        $year = $year >= 2000 && $year <= 2100 ? $year : (int) date('Y');
+        $year = $year >= 2000 && $year <= 2100 ? $year : \App\Support\LocalTime::year();
 
         return ['aar' => $year, 'kvartaler' => $this->reports->momsQuarters($userId, $year)];
     }

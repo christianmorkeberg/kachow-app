@@ -38,7 +38,7 @@ final class UpdateWorkout implements Tool
                 'weight'    => ['type' => 'number', 'description' => 'New weight in kg.'],
                 'reps'      => ['type' => 'integer', 'description' => 'New rep count.'],
                 'notes'     => ['type' => 'string', 'description' => 'New note for the set.'],
-                'logged_at' => ['type' => 'string', 'description' => 'New timestamp, "YYYY-MM-DD HH:MM:SS" UTC.'],
+                'logged_at' => ['type' => 'string', 'description' => 'New time as the user\'s LOCAL "YYYY-MM-DD HH:MM" (do NOT convert to UTC).'],
             ],
             'required' => ['id'],
         ];
@@ -65,7 +65,11 @@ final class UpdateWorkout implements Tool
             $fields['notes'] = $arguments['notes'] !== '' ? (string) $arguments['notes'] : null;
         }
         if (isset($arguments['logged_at']) && $arguments['logged_at'] !== '') {
-            $fields['logged_at'] = (string) $arguments['logged_at'];
+            $utc = \App\Support\LocalTime::toUtc((string) $arguments['logged_at']);
+            if ($utc === null) {
+                return ['error' => 'I could not read that time. Give it like "2026-11-17 18:30".'];
+            }
+            $fields['logged_at'] = $utc;
         }
 
         if ($fields === []) {

@@ -67,7 +67,7 @@ final class RunPython implements Tool
             $response = $this->gemini->generate(
                 [['role' => 'user', 'parts' => [['text' => $prompt]]]],
                 [],
-                sprintf(self::SYSTEM, gmdate('Y-m-d')),
+                sprintf(self::SYSTEM, \App\Support\LocalTime::today()),
                 $models[0] ?? null,
                 null,
                 40000,

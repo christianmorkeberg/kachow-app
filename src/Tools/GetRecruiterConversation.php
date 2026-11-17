@@ -40,6 +40,6 @@ final class GetRecruiterConversation implements Tool
             return ['error' => 'No such recruiter link.'];
         }
 
-        return ['link' => $link['label'], 'messages' => array_map(static fn (array $m): array => ['who' => $m['role'] === 'user' ? 'recruiter' : 'assistant', 'at' => $m['created_at'], 'text' => $m['content']], $this->links->messages((int) $link['id'], 100))];
+        return ['link' => $link['label'], 'messages' => array_map(static fn (array $m): array => ['who' => $m['role'] === 'user' ? 'recruiter' : 'assistant', 'at' => \App\Support\LocalTime::label((string) $m['created_at']), 'text' => $m['content']], $this->links->messages((int) $link['id'], 100))];
     }
 }

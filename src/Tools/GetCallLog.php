@@ -58,6 +58,6 @@ final class GetCallLog implements Tool
         }
         unset($r);
 
-        return ['calls' => $rows, 'count' => count($rows), 'note' => 'Times are UTC. Arguments/results exist only for calls made after the raw log was switched on.'];
+        return ['calls' => $rows, 'count' => count($rows), 'note' => 'Times are the user\'s local time (Copenhagen) — say them as they are, never convert. Arguments/results exist only for calls made after the raw log was switched on.'];
     }
 }

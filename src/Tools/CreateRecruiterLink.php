@@ -76,7 +76,7 @@ final class CreateRecruiterLink implements Tool
             'url'            => 'https://' . ($_SERVER['HTTP_HOST'] ?? 'assistant.kachow.dk') . '/meet/' . $link['token'],
             'message_cap'    => (int) $link['message_cap'],
             'token_cap'      => (int) $link['token_cap'],
-            'expires_at'     => $link['expires_at'],
+            'expires_at'     => \App\Support\LocalTime::label($link['expires_at']),
             'match_notes'    => $notes,
             'note'           => 'Give the owner the url to paste into the application' . ($notes !== null ? ', and show them the match notes to review (they can change them with update_recruiter_link).' : '.')
                 . ' The link works until revoked or expired; the owner gets a push when it is first opened.',

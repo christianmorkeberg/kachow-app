@@ -42,8 +42,8 @@ final class ListRecruiterLinks implements Tool
         foreach ($this->links->list($userId) as $l) {
             $out[] = [
                 'id' => (int) $l['id'], 'label' => $l['label'], 'company' => $l['company'], 'role' => $l['role_title'], 'state' => RecruiterLinks::state($l),
-                'url' => 'https://' . $host . '/meet/' . $l['token'], 'opened' => (int) $l['open_count'], 'first_opened_at' => $l['first_opened_at'], 'last_opened_at' => $l['last_opened_at'],
-                'messages' => (int) $l['messages_used'] . '/' . (int) $l['message_cap'], 'tokens' => (int) $l['tokens_used'] . '/' . (int) $l['token_cap'], 'expires_at' => $l['expires_at'],
+                'url' => 'https://' . $host . '/meet/' . $l['token'], 'opened' => (int) $l['open_count'], 'first_opened_at' => \App\Support\LocalTime::label($l['first_opened_at']), 'last_opened_at' => \App\Support\LocalTime::label($l['last_opened_at']),
+                'messages' => (int) $l['messages_used'] . '/' . (int) $l['message_cap'], 'tokens' => (int) $l['tokens_used'] . '/' . (int) $l['token_cap'], 'expires_at' => \App\Support\LocalTime::label($l['expires_at']),
             ];
         }
         $res = ['count' => count($out), 'links' => $out];

@@ -67,7 +67,7 @@ final class WebSearch implements Tool
             $response = $this->gemini->generate(
                 [['role' => 'user', 'parts' => [['text' => $query]]]],
                 [],
-                self::SYSTEM . ' Today is ' . gmdate('Y-m-d') . '.',
+                self::SYSTEM . ' Today is ' . \App\Support\LocalTime::today() . '.',
                 $models[0] ?? null,
                 null,
                 25000,

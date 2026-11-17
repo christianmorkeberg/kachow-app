@@ -117,7 +117,7 @@ final class ToolCallLog
         }
 
         return array_map(static fn (array $r): array => [
-            'id' => (int) $r['id'], 'at_utc' => (string) $r['created_at'], 'source' => (string) $r['source'], 'tool' => (string) $r['tool'], 'ok' => (int) $r['ok'] === 1,
+            'id' => (int) $r['id'], 'at' => \App\Support\LocalTime::label((string) $r['created_at'], 'D j M Y H:i:s'), 'source' => (string) $r['source'], 'tool' => (string) $r['tool'], 'ok' => (int) $r['ok'] === 1,
             'error' => $r['error'], 'args' => isset($r['args_json']) ? json_decode((string) $r['args_json'], true) ?? $r['args_json'] : null,
             'result' => isset($r['result_json']) ? (json_decode((string) $r['result_json'], true) ?? $r['result_json']) : null,
         ], $st->fetchAll());

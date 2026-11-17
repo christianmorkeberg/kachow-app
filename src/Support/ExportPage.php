@@ -18,7 +18,7 @@ final class ExportPage
     public static function render(array $built, array $spec, string $format, string $personName = ''): array
     {
         $lang   = ($spec['lang'] ?? 'da') === 'en' ? 'en' : 'da';
-        $stamp  = date('Y-m-d');
+        $stamp  = \App\Support\LocalTime::today();
         $title  = trim((string) ($spec['title'] ?? ''));
         $base   = preg_replace('/[^a-z0-9_-]+/i', '', (string) ($spec['source'] ?? 'export')) ?: 'export';
         $extra  = is_array($built['meta'] ?? null) ? $built['meta'] : [];   // e.g. the period of a ledger; the user's own header lines come after

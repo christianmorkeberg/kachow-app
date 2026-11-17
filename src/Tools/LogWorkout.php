@@ -65,7 +65,7 @@ final class LogWorkout implements Tool
                 ],
                 'logged_at' => [
                     'type'        => 'string',
-                    'description' => 'When the workout was done, as "YYYY-MM-DD HH:MM:SS" in UTC. '
+                    'description' => 'When the workout was done, as the user\'s LOCAL time "YYYY-MM-DD HH:MM" (do NOT convert to UTC). '
                         . 'Defaults to now if omitted.',
                 ],
             ],
@@ -78,7 +78,7 @@ final class LogWorkout implements Tool
         $exercise = trim((string) ($arguments['exercise'] ?? ''));
         $rawSets  = $arguments['sets'] ?? [];
         $loggedAt = isset($arguments['logged_at']) && $arguments['logged_at'] !== ''
-            ? (string) $arguments['logged_at']
+            ? \App\Support\LocalTime::toUtc((string) $arguments['logged_at'])
             : null;
 
         if ($exercise === '' || !is_array($rawSets) || $rawSets === []) {

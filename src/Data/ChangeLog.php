@@ -79,7 +79,7 @@ final class ChangeLog
         foreach ($st->fetchAll() as $r) {
             $out[] = [
                 'id' => (int) $r['id'], 'entity' => (string) $r['entity'], 'action' => (string) $r['action'], 'summary' => (string) $r['summary'],
-                'restored' => $r['restored_at'] !== null, 'when' => (string) $r['created_at'],
+                'restored' => $r['restored_at'] !== null, 'when' => \App\Support\LocalTime::label((string) $r['created_at'], 'D j M Y H:i'),
             ];
         }
 

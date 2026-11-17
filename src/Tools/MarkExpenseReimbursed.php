@@ -60,7 +60,7 @@ final class MarkExpenseReimbursed implements Tool
         $date = isset($arguments['date']) && trim((string) $arguments['date']) !== ''
             ? (string) $arguments['date'] : null;
         $this->receipts->markReimbursed($userId, $id, $date);
-        $this->audit->log($userId, 'expense', $id, 'reimburse', ['reimbursed_at' => $date ?? date('Y-m-d')]);
+        $this->audit->log($userId, 'expense', $id, 'reimburse', ['reimbursed_at' => $date ?? \App\Support\LocalTime::today()]);
 
         $fresh = $this->receipts->get($userId, $id);
 
