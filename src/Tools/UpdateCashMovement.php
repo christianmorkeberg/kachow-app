@@ -6,11 +6,12 @@ namespace App\Tools;
 
 use App\Data\Cash;
 use App\Data\CashEntries;
+use App\Data\ChangeLog;
 
 /** Tool: correct a recorded bank movement (amount, date, direction, category, note) — only what is given changes. */
 final class UpdateCashMovement implements Tool
 {
-    public function __construct(private CashEntries $entries, private Cash $cash)
+    public function __construct(private CashEntries $entries, private Cash $cash, private ?ChangeLog $log = null)
     {
     }
 
@@ -49,8 +50,9 @@ final class UpdateCashMovement implements Tool
             return ['updated' => false, 'error' => 'No such cash movement (check the id with get_cash).'];
         }
         $now  = $this->entries->update($userId, $id, $arguments);
+        $logId = $this->log?->record($userId, 'cash_movement', $id, 'update', 'Changed ' . $was['category'] . ' ' . $was['date'] . ': ' . $was['amount'] . ' → ' . ($now['amount'] ?? '?') . ' kr', $was, $now, $this->name());
         $card = $this->cash->position($userId);
 
-        return ['updated' => true, 'was' => $was, 'now' => $now, 'expected' => $card['expected'], 'free_to_spend' => $card['free_to_spend'], '_render' => $card];
+        return ['updated' => true, 'change_id' => $logId, 'was' => $was, 'now' => $now, 'expected' => $card['expected'], 'free_to_spend' => $card['free_to_spend'], '_render' => $card];
     }
 }

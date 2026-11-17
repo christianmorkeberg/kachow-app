@@ -196,7 +196,10 @@ final class ToolRegistry
         $registry->register(new GetWorkSummary($workEvents));
         $registry->register(new ShowChart());
         $registry->register(new LogWorkEvent($workEvents, static fn (int $u): bool => \App\Support\HomeNow::check(new LocationPoints(), new Places(), $u)));
-        $registry->register(new DeleteWorkEvent($workEvents));
+        $changeLog = new \App\Data\ChangeLog();
+        $registry->register(new DeleteWorkEvent($workEvents, $changeLog));
+        $registry->register(new UpdateWorkSession($workEvents, $changeLog));
+        $registry->register(new GetChangeLog($changeLog));
         $homeOwner = new HomeOwner($apiTokens, $connections);   // whose Pico a user talks to (own, or a shared one)
         $registry->register(new GetHomeAgentSetup($apiTokens, $homeOwner));
         $agentCommands = new AgentCommands();
@@ -261,8 +264,9 @@ final class ToolRegistry
         $cash        = new Cash($income, $receipts, $ownerDraws, $cashEntries, $userSettings, $mileage);
         $registry->register(new GetCash($cash));
         $registry->register(new RecordCashMovement($cashEntries, $cash));
-        $registry->register(new UpdateCashMovement($cashEntries, $cash));
-        $registry->register(new DeleteCashMovement($cashEntries, $cash));
+        $registry->register(new UpdateCashMovement($cashEntries, $cash, $changeLog));
+        $registry->register(new DeleteCashMovement($cashEntries, $cash, $changeLog));
+        $registry->register(new RestoreChange($changeLog, $workEvents, $cashEntries, $cash));
         $ledger       = new Ledger();
         $balanceItems = new BalanceItems();
         $registry->register(new GetLedger($ledger));

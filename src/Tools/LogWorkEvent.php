@@ -177,6 +177,21 @@ final class LogWorkEvent implements Tool
             }
         }
 
+        // A clock-out with no open session to close (that workplace's last punch before it is already an 'out') is a stray punch: it changes nothing but
+        // reads as "recorded" (report #83). Refuse it and point at the session that is there, so the model corrects THAT one.
+        if ($kind === 'out') {
+            $closed = $this->events->closedSessionBefore($userId, $place, $atUtc ?? gmdate('Y-m-d H:i:s'));
+            if ($closed !== null) {
+                return [
+                    'recorded' => false,
+                    'no_open_session' => true,
+                    'session'  => ['in_id' => $closed['in_id'], 'out_id' => $closed['out_id'], 'place' => $closed['place'], 'date' => $closed['date'], 'in' => $closed['in'], 'out' => $closed['out']],
+                    'message'  => 'Nothing was recorded: there is no open session to clock out of — that day already has a closed session ' . $closed['in'] . '–' . $closed['out']
+                        . '. To change when it ended use update_work_session (event_id ' . $closed['in_id'] . ', end). To add a separate later session record both its start and end (kind="in" with "at" and "out_at").',
+                ];
+            }
+        }
+
         // A clock-in made from chat while location tracking says the user is at a home place is a work-from-home punch: say so in
         // the note (unless they gave one), so the hours can later explain themselves (report #49).
         if ($kind === 'in' && $atUtc === null && ($note === null || trim($note) === '') && $this->atHome !== null && ($this->atHome)($userId)) {

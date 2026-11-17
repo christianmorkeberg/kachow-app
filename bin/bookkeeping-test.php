@@ -82,6 +82,8 @@ $db->exec("CREATE TABLE receipts (
 $db->exec("CREATE TABLE user_settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
     setting_key TEXT NOT NULL, setting_value TEXT NOT NULL)");
+$db->exec('CREATE TABLE change_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, entity TEXT, entity_id INT, action TEXT, summary TEXT, before_json TEXT, after_json TEXT,
+    tool TEXT, conversation_id INT, restored_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)');
 $db->exec("CREATE TABLE cash_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
     occurred_at TEXT NOT NULL, direction TEXT NOT NULL, amount NUMERIC NOT NULL,
@@ -462,8 +464,10 @@ $U4 = 4; $U5 = 5;
 $dupId = $cashEntries->add($U4, 'out', 3450.0, 'moms', 'Q3 moms');
 $dup2  = $cashEntries->add($U4, 'out', 3450.0, 'moms', 'Q3 moms (twice by mistake)');
 $cashObj4 = new Cash($income, $receipt, $draws, $cashEntries, $settings, $mileage);
-$updTool = new UpdateCashMovement($cashEntries, $cashObj4);
-$delTool = new DeleteCashMovement($cashEntries, $cashObj4);
+$chLog   = new \App\Data\ChangeLog($db);
+$updTool = new UpdateCashMovement($cashEntries, $cashObj4, $chLog);
+$delTool = new DeleteCashMovement($cashEntries, $cashObj4, $chLog);
+$restore = new \App\Tools\RestoreChange($chLog, new \App\Data\WorkEvents($db), $cashEntries, $cashObj4);
 $expBefore = money($cashObj4->position($U4)['expected']);
 $r = $updTool->execute(['id' => $dupId, 'amount' => 3540, 'date' => '2026-11-01', 'note' => 'Q3 moms, corrected'], $U4);
 check('update changes the given fields', $r['updated'] === true && money($r['now']['amount']) === '3540.00' && $r['now']['date'] === '2026-11-01' && $r['now']['note'] === 'Q3 moms, corrected' && $r['now']['category'] === 'moms', json_encode($r['now'] ?? $r));
@@ -476,6 +480,11 @@ check('another user cannot delete it', $bad['deleted'] === false && $cashEntries
 $d = $delTool->execute(['id' => $dup2], $U4);
 check('delete removes it and says what went', $d['deleted'] === true && money($d['removed']['amount']) === '3450.00' && $cashEntries->get($U4, $dup2) === null, json_encode($d['removed'] ?? $d));
 check('expected is back up by the deleted 3450', money($cashObj4->position($U4)['expected']) === money((float) $expBefore - 90 + 3450), money($cashObj4->position($U4)['expected']));
+$rb = $restore->execute(['id' => $d['change_id']], $U4);
+$newId = (int) ($cashEntries->recent($U4, 5)[0]['id'] ?? 0);
+check('restore brings the deleted movement back', $rb['restored'] === true && $newId > 0 && money($cashEntries->get($U4, $newId)['amount']) === '3450.00' && $cashEntries->get($U4, $newId)['category'] === 'moms');
+$ru = $restore->execute(['id' => $r['change_id']], $U4);
+check('restore sets a corrected movement back to its old amount and date', $ru['restored'] === true && money($cashEntries->get($U4, $dupId)['amount']) === '3450.00' && $cashEntries->get($U4, $dupId)['date'] !== '2026-11-01', json_encode($cashEntries->get($U4, $dupId)));
 check('an unknown id is an error, not a crash', $delTool->execute(['id' => 999999], $U4)['deleted'] === false && $delTool->execute([], $U4)['deleted'] === false);
 
 echo "\n---------------------------------------\n";

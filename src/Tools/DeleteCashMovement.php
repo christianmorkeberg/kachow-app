@@ -6,6 +6,7 @@ namespace App\Tools;
 
 use App\Data\Cash;
 use App\Data\CashEntries;
+use App\Data\ChangeLog;
 
 /**
  * Tool: remove a wrongly recorded bank movement (a moms payment entered twice, a bank fee that was not one). Only the manual movements of the cash view —
@@ -14,7 +15,7 @@ use App\Data\CashEntries;
  */
 final class DeleteCashMovement implements Tool
 {
-    public function __construct(private CashEntries $entries, private Cash $cash)
+    public function __construct(private CashEntries $entries, private Cash $cash, private ?ChangeLog $log = null)
     {
     }
 
@@ -47,8 +48,9 @@ final class DeleteCashMovement implements Tool
             return ['deleted' => false, 'error' => 'No such cash movement (check the id with get_cash).'];
         }
         $this->entries->delete($userId, $id);
+        $logId = $this->log?->record($userId, 'cash_movement', $id, 'delete', 'Deleted ' . $was['direction'] . ' ' . $was['amount'] . ' kr ' . $was['category'] . ' ' . $was['date'], $was, null, $this->name());
         $card = $this->cash->position($userId);
 
-        return ['deleted' => true, 'removed' => $was, 'expected' => $card['expected'], 'free_to_spend' => $card['free_to_spend'], '_render' => $card];
+        return ['deleted' => true, 'change_id' => $logId, 'removed' => $was, 'expected' => $card['expected'], 'free_to_spend' => $card['free_to_spend'], '_render' => $card];
     }
 }

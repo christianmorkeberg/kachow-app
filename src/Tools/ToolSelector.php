@@ -101,7 +101,7 @@ final class ToolSelector
             'get_current_weather', 'get_weather_forecast',
         ],
         'worktime' => [
-            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event',
+            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'update_work_session', 'get_change_log', 'restore_change',
             'get_connected_work_hours',
         ],
         'worklog' => [
@@ -121,7 +121,7 @@ final class ToolSelector
         'bookkeeping' => [
             'add_income', 'update_income', 'get_income', 'mark_invoice_paid', 'add_owner_draw',
             'get_owner_draws', 'mark_expense_reimbursed', 'list_udlaeg', 'get_books', 'get_moms',
-            'get_cash', 'record_cash_movement', 'update_cash_movement', 'delete_cash_movement', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item', 'attach_export_to_entry',
+            'get_cash', 'record_cash_movement', 'update_cash_movement', 'delete_cash_movement', 'get_change_log', 'restore_change', 'get_profit_loss', 'get_ledger', 'get_trial_balance', 'get_balance_sheet', 'set_balance_item', 'attach_export_to_entry',
             'get_invoice_overview', 'get_moms_by_quarter', 'get_budget', 'get_loan_pack',
             'create_invoice', 'set_company_profile', 'log_trip', 'get_mileage', 'update_trip', 'delete_trip', 'get_driving_distance',
         ],
@@ -293,6 +293,8 @@ final class ToolSelector
             'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time sheet', 'timeseddel', 'timesedler', 'timeliste', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
+            // changing a session / getting back what was deleted (update_work_session, get_change_log, restore_change)
+            'what did you delete', 'what did you change', 'what was deleted', 'bring back', 'bring it back', 'undelete', 'gendan', 'hvad slettede du', 'hvad ændrede du', 'change the end', 'change the start', 'ret udstempling', 'ret indstempling',
             // hours over a period / bar chart + "how much did I work" style totals
             'how much did i work', 'how much have i worked', 'how much i worked', 'did i work', 'how many hours',
             'hours per', 'per day', 'per week', 'per month', 'each day', 'each week', 'each month',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tools;
 
+use App\Data\ChangeLog;
 use App\Data\WorkEvents;
 
 /**
@@ -14,7 +15,7 @@ use App\Data\WorkEvents;
  */
 final class DeleteWorkEvent implements Tool
 {
-    public function __construct(private WorkEvents $events)
+    public function __construct(private WorkEvents $events, private ?ChangeLog $log = null)
     {
     }
 
@@ -27,7 +28,7 @@ final class DeleteWorkEvent implements Tool
     {
         return 'Deletes a wrong work session by an event id from get_work_hours (a session\'s in_id or '
             . 'out_id) — clock-in and clock-out together. Set whole_session=false only to drop one stray '
-            . 'punch. Only remove what the user clearly identified.';
+            . 'punch. Only remove what the user clearly identified. To CHANGE a session\'s times use update_work_session instead (not delete + re-add). The deletion is logged, so restore_change can bring it back.';
     }
 
     public function parameters(): array
@@ -57,6 +58,13 @@ final class DeleteWorkEvent implements Tool
         $session = $whole ? $this->events->sessionOf($userId, $id) : null;
         $ids     = $session !== null ? array_values(array_filter([$session['in_id'], $session['out_id']])) : [$id];
 
+        $rows = [];
+        foreach ($ids as $eid) {
+            $row = $this->events->rawRow($userId, (int) $eid);
+            if ($row !== null) {
+                $rows[] = $row;   // as it was, for the change log
+            }
+        }
         $deleted = [];
         foreach ($ids as $eid) {
             if ($this->events->delete($userId, (int) $eid)) {
@@ -67,7 +75,15 @@ final class DeleteWorkEvent implements Tool
             return ['deleted' => false, 'error' => 'No such event (it may already be gone).'];
         }
 
+        $logId = $this->log?->record(
+            $userId, 'work_session', $session['in_id'] ?? $id, 'delete',
+            $session !== null ? 'Deleted ' . ($session['place'] ?? 'work') . ' session ' . $session['date'] . ' ' . $session['in'] . '–' . ($session['out'] ?? '…')
+                : 'Deleted a ' . $event['kind'] . ' punch ' . $event['local_date'],
+            $rows, null, $this->name()
+        );
+
         return [
+            'change_id' => $logId,
             'deleted'   => true,
             'event_ids' => $deleted,
             'removed'   => $session !== null

@@ -117,6 +117,73 @@ final class WorkEvents
         return $stmt->rowCount() > 0;
     }
 
+    /** One punch with everything needed to put it back (source and note too). @return array{id:int, kind:string, occurred_at:string, location:?string, source:string, note:?string}|null */
+    public function rawRow(int $userId, int $eventId): ?array
+    {
+        $st = $this->db->prepare('SELECT id, kind, occurred_at, location, source, note FROM work_events WHERE id = :id AND user_id = :u');
+        $st->execute([':id' => $eventId, ':u' => $userId]);
+        $r = $st->fetch();
+        if ($r === false) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $r['id'], 'kind' => (string) $r['kind'], 'occurred_at' => (string) $r['occurred_at'],
+            'location' => $r['location'] !== null ? (string) $r['location'] : null, 'source' => (string) $r['source'], 'note' => $r['note'] !== null ? (string) $r['note'] : null,
+        ];
+    }
+
+    /** Puts a deleted punch back exactly as it was (a new id; the pairing is by time and place). Returns the new id. */
+    public function insertRaw(int $userId, array $row): int
+    {
+        $this->db->prepare('INSERT INTO work_events (user_id, kind, occurred_at, location, source, note) VALUES (:u, :k, :at, :loc, :src, :note)')->execute([
+            ':u' => $userId, ':k' => $row['kind'] === 'out' ? 'out' : 'in', ':at' => (string) $row['occurred_at'], ':loc' => $row['location'] ?? null,
+            ':src' => (string) ($row['source'] ?? 'manual'), ':note' => $row['note'] ?? null,
+        ]);
+
+        return (int) $this->db->lastInsertId();
+    }
+
+    /** Moves one punch to another UTC time (a correction, not a new punch). A punch the location clock made counts as fixed by hand for its day. */
+    public function moveEvent(int $userId, int $eventId, string $newUtc): bool
+    {
+        $row = $this->rawRow($userId, $eventId);
+        if ($row === null) {
+            return false;
+        }
+        if ($row['source'] === self::SOURCE_LOCATION) {
+            $this->markManualDay($userId, $this->toLocal($row['occurred_at'])->format('Y-m-d'));
+        }
+        $st = $this->db->prepare('UPDATE work_events SET occurred_at = :at WHERE id = :id AND user_id = :u');
+        $st->execute([':at' => $newUtc, ':id' => $eventId, ':u' => $userId]);
+
+        return true;
+    }
+
+    /**
+     * When a clock-out at $atUtc for this place would have no open session to close: the session that already ended before it (the last punch of that place
+     * before $atUtc is an 'out'), else null. A stray out is never counted, so the caller refuses it and points at the existing session.
+     *
+     * @return array{in_id:int, out_id:?int, place:?string, day:string, date:string, in:string, out:?string, minutes:?int}|null
+     */
+    public function closedSessionBefore(int $userId, ?string $place, string $atUtc): ?array
+    {
+        $at     = new DateTimeImmutable($atUtc, new DateTimeZone('UTC'));
+        $events = $this->eventsBetween($userId, gmdate('Y-m-d H:i:s', $at->getTimestamp() - (self::STALE_OPEN_HOURS + 8) * 3600), gmdate('Y-m-d H:i:s', $at->getTimestamp()));
+        $key    = $this->locKey($place);
+        $last   = null;
+        foreach ($events as $e) {
+            if ($this->locKey($e['location']) === $key || $key === '') {
+                $last = $e;
+            }
+        }
+        if ($last === null || $last['kind'] !== 'out') {
+            return null;
+        }
+
+        return $this->sessionOf($userId, $last['id']);
+    }
+
     /** Removes a punch the location clock itself made (its own correction — not a manual edit). */
     public function removeLocationEvent(int $userId, int $eventId): bool
     {
