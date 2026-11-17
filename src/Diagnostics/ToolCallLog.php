@@ -10,13 +10,16 @@ use Throwable;
 
 /**
  * One row per tool call (see migrations/2026-11-05_tool_call_log.sql), written by ToolRegistry::dispatch() so EVERY entry point is
- * covered — chat, scheduled tasks, routines, voice, live, "Run" offers, exports. Tool name, outcome, duration and where it came
- * from; never arguments or results. A write that fails (table not migrated yet, DB hiccup) is swallowed: logging must never break a tool.
+ * covered — chat, scheduled tasks, routines, voice, live, "Run" offers, exports. Tool name, outcome, duration and where it came from, plus
+ * the RAW arguments and result (migration 2026-11-17_tool_call_raw.sql; trimmed and with secrets masked, see raw()) so a mistake can be
+ * read back. A write that fails (table not migrated yet, DB hiccup) is swallowed: logging must never break a tool.
  */
 final class ToolCallLog
 {
     private ?PDO $db;
     private bool $broken = false;
+    private bool $rawOk = true;   // false once the raw columns turn out to be missing: log without them
+    public const RAW_MAX = 16000;
 
     public function __construct(?PDO $db = null)
     {
@@ -28,22 +31,96 @@ final class ToolCallLog
         return $this->db ??= Database::get();
     }
 
-    public function record(int $userId, string $source, string $tool, bool $ok, int $ms, ?string $error, ?int $taskId = null, ?int $conversationId = null): void
+    /**
+     * A value as it goes into the log: JSON, secrets masked, the heavy bits (rendered cards, base64 blobs) dropped, capped at RAW_MAX characters.
+     *
+     * @param mixed $v
+     */
+    public static function raw(mixed $v): ?string
+    {
+        if ($v === null) {
+            return null;
+        }
+        $clean = static function (mixed $x) use (&$clean): mixed {
+            if (!is_array($x)) {
+                return is_string($x) && strlen($x) > 4000 && preg_match('#^[A-Za-z0-9+/=\s]{3000,}$#', substr($x, 0, 3000)) === 1 ? '[binary omitted]' : $x;
+            }
+            $o = [];
+            foreach ($x as $k => $val) {
+                if ($k === '_render') {
+                    continue;
+                }
+                $o[$k] = is_string($k) && preg_match('/token|secret|password|passwd|api[_-]?key|authorization|credential/i', $k) === 1 ? '[masked]' : $clean($val);
+            }
+
+            return $o;
+        };
+        $json = json_encode($clean($v), JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        if ($json === false) {
+            return null;
+        }
+
+        return mb_strlen($json) > self::RAW_MAX ? mb_substr($json, 0, self::RAW_MAX) . '…[cut]' : $json;
+    }
+
+    /** @param array<string, mixed>|null $args @param array<string, mixed>|null $result */
+    public function record(int $userId, string $source, string $tool, bool $ok, int $ms, ?string $error, ?int $taskId = null, ?int $conversationId = null, ?array $args = null, ?array $result = null): void
     {
         if ($this->broken) {
             return;
         }
+        $base = [
+            ':u' => $userId, ':s' => mb_substr($source, 0, 16), ':t' => $taskId, ':c' => $conversationId, ':tool' => mb_substr($tool, 0, 80),
+            ':ok' => $ok ? 1 : 0, ':ms' => max(0, $ms), ':e' => $error !== null ? mb_substr($error, 0, 200) : null,
+        ];
+        if ($this->rawOk && ($args !== null || $result !== null)) {
+            try {
+                $this->pdo()->prepare(
+                    'INSERT INTO tool_call_log (user_id, source, task_id, conversation_id, tool, ok, ms, error, args_json, result_json) VALUES (:u, :s, :t, :c, :tool, :ok, :ms, :e, :a, :r)'
+                )->execute($base + [':a' => self::raw($args), ':r' => self::raw($result)]);
+
+                return;
+            } catch (Throwable $e) {
+                $this->rawOk = false;   // the raw columns are not there yet: the plain row below
+            }
+        }
         try {
             $this->pdo()->prepare(
                 'INSERT INTO tool_call_log (user_id, source, task_id, conversation_id, tool, ok, ms, error) VALUES (:u, :s, :t, :c, :tool, :ok, :ms, :e)'
-            )->execute([
-                ':u' => $userId, ':s' => mb_substr($source, 0, 16), ':t' => $taskId, ':c' => $conversationId, ':tool' => mb_substr($tool, 0, 80),
-                ':ok' => $ok ? 1 : 0, ':ms' => max(0, $ms), ':e' => $error !== null ? mb_substr($error, 0, 200) : null,
-            ]);
+            )->execute($base);
         } catch (Throwable $e) {
             $this->broken = true;   // not migrated yet / DB down: stop trying for the rest of this process
             error_log('tool_call_log: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * The raw calls of one user, newest first (for get_call_log). Without the raw columns the arguments/results come back empty.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function rawCalls(int $userId, ?string $tool = null, int $days = 7, int $limit = 20): array
+    {
+        $limit = max(1, min(50, $limit));
+        $sql   = 'SELECT id, source, tool, ok, error, created_at, args_json, result_json FROM tool_call_log WHERE user_id = :u AND created_at >= :since'
+            . ($tool !== null ? ' AND tool = :t' : '') . ' ORDER BY id DESC LIMIT ' . $limit;
+        $par   = [':u' => $userId, ':since' => gmdate('Y-m-d H:i:s', time() - max(1, min(180, $days)) * 86400)];
+        if ($tool !== null) {
+            $par[':t'] = $tool;
+        }
+        try {
+            $st = $this->pdo()->prepare($sql);
+            $st->execute($par);
+        } catch (Throwable) {
+            $st = $this->pdo()->prepare(str_replace(', args_json, result_json', '', $sql));   // raw columns not migrated yet
+            $st->execute($par);
+        }
+
+        return array_map(static fn (array $r): array => [
+            'id' => (int) $r['id'], 'at_utc' => (string) $r['created_at'], 'source' => (string) $r['source'], 'tool' => (string) $r['tool'], 'ok' => (int) $r['ok'] === 1,
+            'error' => $r['error'], 'args' => isset($r['args_json']) ? json_decode((string) $r['args_json'], true) ?? $r['args_json'] : null,
+            'result' => isset($r['result_json']) ? (json_decode((string) $r['result_json'], true) ?? $r['result_json']) : null,
+        ], $st->fetchAll());
     }
 
     /**

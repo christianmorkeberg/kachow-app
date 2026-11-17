@@ -158,7 +158,7 @@ final class ToolSelector
         ],
         // Meta "what can you do / how does X work" questions → the capability-reference tool.
         'help' => [
-            'explain_capabilities',
+            'explain_capabilities', 'get_call_log',
         ],
     ];
 
@@ -544,6 +544,8 @@ final class ToolSelector
             'hvem er du', 'hvad er du', 'hvilke funktioner', 'hvad kan appen', 'hvad kan denne app',
             'hvordan virker', 'hvordan fungerer', 'hvordan gør du', 'forklar hvordan',
             'hvad kan jeg bruge', 'hvordan bruger jeg',
+            // the raw log of what the assistant did (get_call_log)
+            'call log', 'tool log', 'the log of', 'what did you do', 'what have you done', 'what did you just do', 'show the log', 'hvad gjorde du', 'hvad har du gjort', 'vis loggen',
         ],
     ];
 

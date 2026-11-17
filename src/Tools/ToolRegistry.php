@@ -200,6 +200,7 @@ final class ToolRegistry
         $registry->register(new DeleteWorkEvent($workEvents, $changeLog));
         $registry->register(new UpdateWorkSession($workEvents, $changeLog));
         $registry->register(new GetChangeLog($changeLog));
+        $registry->register(new GetCallLog(new \App\Diagnostics\ToolCallLog()));
         $homeOwner = new HomeOwner($apiTokens, $connections);   // whose Pico a user talks to (own, or a shared one)
         $registry->register(new GetHomeAgentSetup($apiTokens, $homeOwner));
         $agentCommands = new AgentCommands();
@@ -420,11 +421,11 @@ final class ToolRegistry
         try {
             $result = $tool->execute($arguments, $userId);
         } catch (\Throwable $e) {
-            $this->log($userId, $source, $name, false, $t0, get_class($e) . ': ' . $e->getMessage());
+            $this->log($userId, $source, $name, false, $t0, get_class($e) . ': ' . $e->getMessage(), $arguments);
             throw $e;
         }
         $err = $result['error'] ?? null;
-        $this->log($userId, $source, $name, $err === null, $t0, $err === null ? null : (is_string($err) ? $err : (string) json_encode($err)));
+        $this->log($userId, $source, $name, $err === null, $t0, $err === null ? null : (is_string($err) ? $err : (string) json_encode($err)), $arguments, $name === 'get_call_log' ? ['note' => 'not stored: a read of the log itself'] : $result);
 
         return $result;
     }
@@ -448,11 +449,11 @@ final class ToolRegistry
         $this->callLog = $log;
     }
 
-    private function log(int $userId, ?string $source, string $tool, bool $ok, float $t0, ?string $error): void
+    private function log(int $userId, ?string $source, string $tool, bool $ok, float $t0, ?string $error, ?array $args = null, ?array $result = null): void
     {
         try {
             ($this->callLog ??= new ToolCallLog())->record(
-                $userId, $source ?? $this->source, $tool, $ok, (int) round((microtime(true) - $t0) * 1000), $error, $this->taskId, $this->conversationId
+                $userId, $source ?? $this->source, $tool, $ok, (int) round((microtime(true) - $t0) * 1000), $error, $this->taskId, $this->conversationId, $args, $result
             );
         } catch (\Throwable) {
             // logging never breaks a tool
