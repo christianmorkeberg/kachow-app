@@ -42,6 +42,32 @@ final class WorkSchedule
         return $this->ok;
     }
 
+    /**
+     * The hours as compact JSON, written by hand: json_encode honours the server's serialize_precision and wrote 4.44 as 4.44000000000000039…, which overflowed the
+     * column and was cut mid-number (report #84), leaving a schedule with no hours at all.
+     *
+     * @param array<string, float> $hours
+     */
+    public static function encodeHours(array $hours): string
+    {
+        $parts = [];
+        foreach ($hours as $d => $h) {
+            $parts[] = '"' . (int) $d . '":' . rtrim(rtrim(number_format((float) $h, 2, '.', ''), '0'), '.');
+        }
+
+        return '{' . implode(',', $parts) . '}';
+    }
+
+    /** Removes the schedule that starts on $from for this workplace scope (null = the combined one). */
+    public function removeSchedule(int $userId, string $from, ?string $place = null): bool
+    {
+        $place = $place !== null && trim($place) !== '' ? mb_substr(trim($place), 0, 64) : null;
+        $st = $this->db->prepare('DELETE FROM work_schedule WHERE user_id = :u AND effective_from = :f AND ' . ($place === null ? 'place IS NULL' : 'place = :p'));
+        $st->execute($place === null ? [':u' => $userId, ':f' => $from] : [':u' => $userId, ':f' => $from, ':p' => $place]);
+
+        return $st->rowCount() > 0;
+    }
+
     /** "+3h 12m" / "−0h 40m" */
     public static function signed(int $minutes): string
     {
@@ -63,7 +89,7 @@ final class WorkSchedule
         $this->db->prepare('DELETE FROM work_schedule WHERE user_id = :u AND effective_from = :f AND ' . ($place === null ? 'place IS NULL' : 'place = :p'))
             ->execute($place === null ? [':u' => $userId, ':f' => $from] : [':u' => $userId, ':f' => $from, ':p' => $place]);
         $this->db->prepare('INSERT INTO work_schedule (user_id, effective_from, place, hours, note) VALUES (:u, :f, :p, :h, :n)')
-            ->execute([':u' => $userId, ':f' => $from, ':p' => $place, ':h' => json_encode($clean), ':n' => $note !== null ? mb_substr($note, 0, 255) : null]);
+            ->execute([':u' => $userId, ':f' => $from, ':p' => $place, ':h' => self::encodeHours($clean), ':n' => $note !== null ? mb_substr($note, 0, 255) : null]);
     }
 
     /** @return list<array{id:int, from:string, place:?string, hours:array<string,float>, per_week:float, note:?string}> */
@@ -76,7 +102,10 @@ final class WorkSchedule
         $st->execute([':u' => $userId]);
         $out = [];
         foreach ($st->fetchAll() as $r) {
-            $h     = json_decode((string) $r['hours'], true) ?: [];
+            $h     = json_decode((string) $r['hours'], true);
+            if (!is_array($h) || $h === []) {
+                continue;   // a damaged / empty row must not read as "no hours" next to good ones
+            }
             $out[] = ['id' => (int) $r['id'], 'from' => (string) $r['effective_from'], 'place' => $r['place'] !== null ? (string) $r['place'] : null,
                 'hours' => array_map('floatval', $h), 'per_week' => round(array_sum(array_map('floatval', $h)), 2), 'note' => $r['note'] !== null ? (string) $r['note'] : null];
         }

@@ -34,3 +34,7 @@ $dotenv->load();
 
 // UTC everywhere; the assistant converts to the user's local time as needed.
 date_default_timezone_set('UTC');
+
+// json_encode writes floats with the shortest exact digits (4.44, not 4.44000000000000039…). The server's php.ini had serialize_precision = 17, which bloated every tool result
+// the model reads and overflowed a JSON column (report #84).
+ini_set('serialize_precision', '-1');

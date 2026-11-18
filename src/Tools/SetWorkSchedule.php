@@ -26,6 +26,7 @@ final class SetWorkSchedule implements Tool
         return 'Sets the work schedule used to track being ahead/behind: how many hours the user is meant to work per weekday, from a date. Either `hours_per_week` with the `days` they work '
             . '(split evenly: 37 h over mon–fri = 7.4 h a day), or `daily` with hours per weekday (mon..sun). `from` is the date it starts (the balance counts from the first one, opening balance 0). '
             . 'A later schedule with a new `from` replaces it from that date (a new contract, reduced hours). `place` only if this target belongs to one workplace; omit it for one combined target. '
+            . 'IMPORTANT: targets of different scopes ADD UP (a combined schedule plus a `place` schedule is double) — use ONE scope for the same hours. Remove a wrong one with remove=true. '
             . 'Never assume hours: ask the user if they have not said.';
     }
 
@@ -42,6 +43,7 @@ final class SetWorkSchedule implements Tool
                 'daily'          => ['type' => 'object', 'description' => 'Hours per weekday instead.', 'properties' => array_fill_keys(array_keys(self::DAYS), $day)],
                 'place'          => ['type' => 'string', 'description' => 'Only if the target is for one workplace.'],
                 'note'           => ['type' => 'string'],
+                'remove'         => ['type' => 'boolean', 'description' => 'true = delete the schedule that starts on `from` (for this `place`, or the combined one) instead of saving one.'],
             ],
             'required' => ['from'],
         ];
@@ -56,6 +58,11 @@ final class SetWorkSchedule implements Tool
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) !== 1) {
             return ['saved' => false, 'error' => 'Give the start date as YYYY-MM-DD.'];
         }
+        if (filter_var($arguments['remove'] ?? false, FILTER_VALIDATE_BOOL)) {
+            $gone = $this->schedule->removeSchedule($userId, $from, isset($arguments['place']) ? (string) $arguments['place'] : null);
+
+            return ['removed' => $gone, 'schedules_left' => $this->schedule->schedules($userId)];
+        }
         $hours = [];
         if (is_array($arguments['daily'] ?? null)) {
             foreach ($arguments['daily'] as $k => $h) {
@@ -66,7 +73,7 @@ final class SetWorkSchedule implements Tool
         } elseif (isset($arguments['hours_per_week']) && is_array($arguments['days'] ?? null) && $arguments['days'] !== []) {
             $ds = array_values(array_filter(array_map(static fn ($d): ?int => self::DAYS[strtolower((string) $d)] ?? null, $arguments['days'])));
             foreach ($ds as $d) {
-                $hours[$d] = round((float) $arguments['hours_per_week'] / count($ds), 2);
+                $hours[$d] = round(round((float) $arguments['hours_per_week'], 2) / count($ds), 2);
             }
         }
         if ($hours === []) {
@@ -75,7 +82,11 @@ final class SetWorkSchedule implements Tool
         $place = isset($arguments['place']) ? (string) $arguments['place'] : null;
         $this->schedule->setSchedule($userId, $from, $hours, $place, isset($arguments['note']) ? (string) $arguments['note'] : null);
 
-        return ['saved' => true, 'from' => $from, 'place' => $place, 'hours' => $hours, 'per_week' => round(array_sum($hours), 2),
+        $others = array_values(array_filter($this->schedule->schedules($userId), static fn (array $s): bool => mb_strtolower((string) ($s['place'] ?? '')) !== mb_strtolower(trim((string) $place)) && $s['from'] <= $from));
+        $warn   = $others === [] ? null : 'There is also a schedule with a different scope (' . implode(', ', array_map(static fn (array $s): string => ($s['place'] ?? 'combined') . ' from ' . $s['from'] . ', ' . $s['per_week'] . ' h/week', $others))
+            . '). Targets of different scopes ADD UP: if this replaces it, remove the other with set_work_schedule(from, place, remove=true).';
+
+        return ['saved' => true, 'warning' => $warn, 'from' => $from, 'place' => $place, 'hours' => $hours, 'per_week' => round(array_sum($hours), 2),
             'note' => 'The balance now counts from the first schedule\'s start date with an opening balance of 0. Use get_work_balance to see it.'];
     }
 }

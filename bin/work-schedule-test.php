@@ -108,5 +108,20 @@ $card = $events->overview(1, ['period' => 'today']);
 check('overview has a balance line once a schedule exists', isset($card['balance']['label']) && preg_match('/^[+−]\d+h \d{2}m$/u', $card['balance']['label']) === 1 && $card['balance']['since'] === '2026-11-02', json_encode($card['balance'] ?? null));
 check('a user without a schedule gets none', !isset($events->overview(2, ['period' => 'today'])['balance']));
 
+echo "9) report #84: long float digits must not break the stored hours\n";
+ini_set('serialize_precision', '17');
+$db->exec("DELETE FROM work_schedule WHERE user_id = 3");
+$r = (new SetWorkSchedule($ws))->execute(['from' => '2026-09-01', 'hours_per_week' => 22.2, 'days' => ['mon', 'tue', 'wed', 'thu', 'fri'], 'place' => 'DTU'], 3);
+$raw = (string) $db->query("SELECT hours FROM work_schedule WHERE user_id = 3")->fetchColumn();
+check('stored as compact JSON with 4.44, whatever serialize_precision says', $raw === '{"1":4.44,"2":4.44,"3":4.44,"4":4.44,"5":4.44}', $raw);
+check('and it reads back with real hours', ($ws->schedules(3)[0]['per_week'] ?? 0) === 22.2 && WorkSchedule::targetMinutes($ws->schedules(3), '2026-09-07', 'DTU') === 266, json_encode($ws->schedules(3)));
+$db->exec("INSERT INTO work_schedule (user_id, effective_from, place, hours) VALUES (3, '2026-09-01', 'X', '{\"1\":4.4400000000000003907985')");
+check('a damaged row is skipped, not read as "no hours"', count($ws->schedules(3)) === 1);
+$w = (new SetWorkSchedule($ws))->execute(['from' => '2026-09-01', 'hours_per_week' => 22.2, 'days' => ['mon', 'tue', 'wed', 'thu', 'fri']], 3);
+check('a schedule of another scope gets a warning that targets add up', is_string($w['warning'] ?? null) && str_contains($w['warning'], 'ADD UP'), json_encode($w));
+$rm = (new SetWorkSchedule($ws))->execute(['from' => '2026-09-01', 'place' => 'DTU', 'remove' => true], 3);
+check('remove deletes just that scope', $rm['removed'] === true && count($ws->schedules(3)) === 1 && $ws->schedules(3)[0]['place'] === null);
+ini_restore('serialize_precision');
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
