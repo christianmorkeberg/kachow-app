@@ -42,6 +42,14 @@ final class WorkSchedule
         return $this->ok;
     }
 
+    /** "+3h 12m" / "−0h 40m" */
+    public static function signed(int $minutes): string
+    {
+        $a = abs($minutes);
+
+        return ($minutes < 0 ? '−' : '+') . intdiv($a, 60) . 'h ' . str_pad((string) ($a % 60), 2, '0', STR_PAD_LEFT) . 'm';
+    }
+
     /** @param array<int|string, float|int> $hours ISO weekday (1–7) => hours */
     public function setSchedule(int $userId, string $from, array $hours, ?string $place = null, ?string $note = null): void
     {

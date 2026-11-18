@@ -686,6 +686,16 @@ final class WorkEvents
         }
         $card['sessions_scope'] = ['from' => $scopeFrom, 'to' => $scopeTo];
 
+        // Ahead / behind the work schedule (only when one is set up; never breaks the card).
+        try {
+            $b = (new WorkSchedule($this->db, $this))->balance($userId, null, $place);
+            if (($b['configured'] ?? false) === true) {
+                $card['balance'] = ['minutes' => $b['totals']['balance'], 'label' => WorkSchedule::signed($b['totals']['balance']), 'since' => $b['from']];
+            }
+        } catch (\Throwable) {
+            // not migrated yet / a hiccup: the card simply has no balance line
+        }
+
         return $card;
     }
 

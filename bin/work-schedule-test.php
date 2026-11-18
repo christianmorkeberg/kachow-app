@@ -103,5 +103,10 @@ $sg2 = (new SuggestWorkHolidays($ws2))->execute(['from' => '2026-12-01', 'to' =>
 check('once confirmed (marked) it is no longer suggested', !in_array('2026-12-25', array_column($sg2['public'], 'date'), true));
 check('another user sees no schedule', $ws->balance(2) === ['configured' => false]);
 
+echo "8) the work card carries the balance\n";
+$card = $events->overview(1, ['period' => 'today']);
+check('overview has a balance line once a schedule exists', isset($card['balance']['label']) && preg_match('/^[+−]\d+h \d{2}m$/u', $card['balance']['label']) === 1 && $card['balance']['since'] === '2026-11-02', json_encode($card['balance'] ?? null));
+check('a user without a schedule gets none', !isset($events->overview(2, ['period' => 'today'])['balance']));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
