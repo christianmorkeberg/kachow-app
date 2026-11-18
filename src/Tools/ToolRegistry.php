@@ -200,6 +200,12 @@ final class ToolRegistry
         $registry->register(new DeleteWorkEvent($workEvents, $changeLog));
         $registry->register(new UpdateWorkSession($workEvents, $changeLog));
         $registry->register(new GetChangeLog($changeLog));
+        $workSchedule = new \App\Data\WorkSchedule(null, $workEvents);
+        $registry->register(new SetWorkSchedule($workSchedule));
+        $registry->register(new GetWorkBalance($workSchedule));
+        $registry->register(new AddWorkAbsence($workSchedule));
+        $registry->register(new DeleteWorkAbsence($workSchedule));
+        $registry->register(new SuggestWorkHolidays($workSchedule));
         $registry->register(new GetCallLog(new \App\Diagnostics\ToolCallLog()));
         $homeOwner = new HomeOwner($apiTokens, $connections);   // whose Pico a user talks to (own, or a shared one)
         $registry->register(new GetHomeAgentSetup($apiTokens, $homeOwner));

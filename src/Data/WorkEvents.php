@@ -695,6 +695,51 @@ final class WorkEvents
     }
 
     /**
+     * Worked minutes per LOCAL day over [from, to] (inclusive, 'Y-m-d'): a session is split at local midnights; forgotten clock-outs are skipped; a live session counts
+     * up to now. Optionally only one workplace.
+     *
+     * @return array<string, int> date => minutes (only days with work)
+     */
+    public function minutesPerDay(int $userId, string $from, string $to, ?string $place = null): array
+    {
+        $tz  = new DateTimeZone(self::LOCAL_TZ);
+        $utc = new DateTimeZone('UTC');
+        $fromLocal = new DateTimeImmutable($from . ' 00:00:00', $tz);
+        $toLocal   = (new DateTimeImmutable($to . ' 00:00:00', $tz))->modify('+1 day');
+        $events    = $this->eventsBetween($userId, $fromLocal->modify('-18 hours')->setTimezone($utc)->format('Y-m-d H:i:s'), $toLocal->setTimezone($utc)->format('Y-m-d H:i:s'));
+        $filterKey = ($place !== null && trim($place) !== '') ? $this->locKey($place) : null;
+        $now       = new DateTimeImmutable('now', $utc);
+        $days      = [];
+        foreach ($this->pairByLocation($events) as $s) {
+            if ($filterKey !== null && !$this->placeMatches($s['location'], $filterKey)) {
+                continue;
+            }
+            $in  = new DateTimeImmutable($s['in'], $utc);
+            $end = $s['out'] !== null ? new DateTimeImmutable($s['out'], $utc) : null;
+            if ($end === null) {
+                if (($now->getTimestamp() - $in->getTimestamp()) > self::STALE_OPEN_HOURS * 3600) {
+                    continue;
+                }
+                $end = $now;
+            }
+            $cursor = $in->setTimezone($tz)->setTime(0, 0);
+            while ($cursor->getTimestamp() < $end->getTimestamp()) {
+                $next = $cursor->modify('+1 day');
+                $a = max($in->getTimestamp(), $cursor->getTimestamp(), $fromLocal->getTimestamp());
+                $b = min($end->getTimestamp(), $next->getTimestamp(), $toLocal->getTimestamp());
+                if ($b > $a) {
+                    $k = $cursor->format('Y-m-d');
+                    $days[$k] = ($days[$k] ?? 0) + (int) round(($b - $a) / 60);
+                }
+                $cursor = $next;
+            }
+        }
+        ksort($days);
+
+        return $days;
+    }
+
+    /**
      * Buckets worked minutes over a longer span for the bar chart: daily bars for the
      * current week, weekly bars for 4w/12w, or monthly bars for a year. A session's
      * minutes are split across whichever buckets it overlaps (so a shift crossing a

@@ -101,7 +101,7 @@ final class ToolSelector
             'get_current_weather', 'get_weather_forecast',
         ],
         'worktime' => [
-            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'update_work_session', 'get_change_log', 'restore_change',
+            'get_work_hours', 'get_work_summary', 'log_work_event', 'delete_work_event', 'update_work_session', 'get_change_log', 'restore_change', 'set_work_schedule', 'get_work_balance', 'add_work_absence', 'delete_work_absence', 'suggest_work_holidays',
             'get_connected_work_hours',
         ],
         'worklog' => [
@@ -293,6 +293,8 @@ final class ToolSelector
             'worked ', 'at work', 'left work', 'arrived at work', 'timesheet', 'time sheet', 'timeseddel', 'timesedler', 'timeliste', 'time tracking',
             'on the clock', 'still clocked', 'when did i arrive', 'how long have i worked',
             'punch', 'punched', 'punch in', 'punch out',
+            // schedule, days off, ahead/behind (set_work_schedule, add_work_absence, get_work_balance, suggest_work_holidays)
+            'ahead or behind', 'behind on', 'ahead on', 'flex balance', 'flextid', 'overtid', 'afspadser', 'work schedule', 'my schedule', 'arbejdsplan', 'normtid', 'on holiday', 'my holiday', 'vacation', 'sick day', 'public holiday', 'helligdag', 'ferie', 'feriedag', 'sygedag', 'syg i ', 'holiday days', 'days off',
             // changing a session / getting back what was deleted (update_work_session, get_change_log, restore_change)
             'what did you delete', 'what did you change', 'what was deleted', 'bring back', 'bring it back', 'undelete', 'gendan', 'hvad slettede du', 'hvad ændrede du', 'change the end', 'change the start', 'ret udstempling', 'ret indstempling',
             // hours over a period / bar chart + "how much did I work" style totals
