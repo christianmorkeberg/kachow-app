@@ -87,6 +87,7 @@ final class GetCurrentWeather implements Tool
         $result['_render'] = [
             'kind'    => 'weather',
             'title'   => $place,
+            'refresh_url' => '/api/card.php?for=weather&lat=' . round($lat, 4) . '&lon=' . round($lon, 4) . '&place=' . rawurlencode(mb_substr((string) $place, 0, 60)),   // so the card's ↻ re-reads THIS place
             'current' => array_filter([
                 'temp_c'       => $cur['temp_c'] ?? null,
                 'precip_mm'    => $cur['precip_mm'] ?? null,
