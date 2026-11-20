@@ -156,5 +156,16 @@ $after = $ws->balances(5, null, null, '2026-11-03')[0]['balance'];
 check('before: −8 h (Monday and today unworked); after 3 h today: −5 h — the line moved', $before['totals']['balance'] === -480 && $after['totals']['balance'] === -300, json_encode([$before['totals']['balance'], $after['totals']['balance']]));
 check('today\'s progress is carried separately for the card', $after['today']['worked'] === 180 && $after['today']['target'] === 240);
 
+echo "12) the overview card carries the schedule per range and per bar (week / month / year views)\n";
+$wk = $events->overview(1, ['date' => '2026-11-02', 'to' => '2026-11-08', 'bucket' => 'day']);
+$sc1 = $wk['schedule']['scopes'][0] ?? null;
+check('range totals for the week: worked 924, days off 60, target 2220', $sc1 !== null && $sc1['range']['worked'] === 924 && $sc1['range']['credited'] === 60 && $sc1['range']['target'] === 2220 && $sc1['range']['balance'] === 924 + 60 - 2220, json_encode($sc1['range'] ?? null));
+check('the running balance since the schedule start rides along', isset($sc1['running']['balance']) && $sc1['running']['since'] === '2026-11-02');
+$mon = $wk['bars'][0] ?? [];
+check('each bar has its own worked / target / balance (Monday 480 vs 444 = +36)', ($mon['sch'][0]['worked'] ?? null) === 480 && ($mon['sch'][0]['target'] ?? null) === 444 && ($mon['sch'][0]['balance'] ?? null) === 36, json_encode($mon['sch'] ?? null));
+$yr = $events->overview(1, ['date' => '2026-01-01', 'to' => '2026-12-31', 'bucket' => 'month']);
+check('a calendar-year view has 12 month bars with schedule sums', count($yr['bars'] ?? []) === 12 && isset($yr['bars'][10]['sch'][0]['target']) && $yr['bars'][10]['sch'][0]['worked'] > 0, json_encode($yr['bars'][10] ?? null));
+check('a user without a schedule gets no schedule block', !isset($events->overview(9, ['date' => '2026-11-02', 'to' => '2026-11-08', 'bucket' => 'day'])['schedule']));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

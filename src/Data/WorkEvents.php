@@ -686,6 +686,39 @@ final class WorkEvents
         }
         $card['sessions_scope'] = ['from' => $scopeFrom, 'to' => $scopeTo];
 
+        // The schedule side of the range: per scope the range's worked / days-off / target / balance, the running balance, and the same per bar — so the card can
+        // show a real overview (week, month, year) and not just hours.
+        try {
+            $ws = new WorkSchedule($this->db, $this);
+            $scopes = [];
+            foreach ($ws->balances($userId, null, $place) as $sc) {
+                $days = $ws->dayTable($userId, $fromIso, $toIso, $sc['place'], $sc['place'] === null);
+                $sum  = static function (string $f, string $t) use ($days): array {
+                    $x = ['worked' => 0, 'credited' => 0, 'target' => 0];
+                    foreach ($days as $d => $v) {
+                        if ($d >= $f && $d <= $t) {
+                            $x['worked'] += $v['worked']; $x['credited'] += $v['credited']; $x['target'] += $v['target'];
+                        }
+                    }
+
+                    return $x + ['balance' => $x['worked'] + $x['credited'] - $x['target']];
+                };
+                $scopes[] = ['place' => $sc['place'], 'range' => $sum($fromIso, $toIso), 'running' => ['balance' => $sc['balance']['totals']['balance'], 'since' => $sc['balance']['from']], 'sum' => $sum];
+            }
+            if ($scopes !== []) {
+                if (isset($card['bars'])) {
+                    foreach ($card['bars'] as $i => $bar) {
+                        if (isset($bar['from'], $bar['to'])) {
+                            $card['bars'][$i]['sch'] = array_map(static fn (array $s): array => $s['sum']($bar['from'], $bar['to']), $scopes);
+                        }
+                    }
+                }
+                $card['schedule'] = ['scopes' => array_map(static fn (array $s): array => ['place' => $s['place'], 'range' => $s['range'], 'running' => $s['running']], $scopes)];
+            }
+        } catch (\Throwable) {
+            // not migrated yet: the card is just hours
+        }
+
         // Ahead / behind the work schedule (only when one is set up; never breaks the card).
         try {
             // One line per schedule scope (each workplace that has a schedule; the combined one): never summed, work at a place without a schedule is in none of them.

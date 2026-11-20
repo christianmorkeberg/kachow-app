@@ -290,6 +290,40 @@ final class WorkSchedule
         return $out;
     }
 
+    /**
+     * Per local day in [from, to] for ONE scope (a workplace's own schedule, or the combined one): worked, credited (days off) and target minutes — only days where any
+     * of them is non-zero. The card's bars and tables are sums of these.
+     *
+     * @return array<string, array{worked:int, credited:int, target:int}>
+     */
+    public function dayTable(int $userId, string $from, string $to, ?string $place, bool $combined): array
+    {
+        $all = $this->schedules($userId);
+        $sch = array_values(array_filter($all, static fn (array $s): bool => $combined ? $s['place'] === null : mb_strtolower((string) $s['place']) === mb_strtolower(trim((string) $place))));
+        if ($sch === [] || $from > $to) {
+            return [];
+        }
+        $abs = [];
+        foreach ($this->absences($userId, $from, $to) as $a) {
+            if ($combined ? $a['place'] === null : ($a['place'] === null || mb_strtolower($a['place']) === mb_strtolower((string) $place))) {
+                $abs[$a['date']][] = $a;
+            }
+        }
+        $worked = $this->events->minutesPerDay($userId, $from, $to, $combined ? null : $place);
+        $out = [];
+        for ($d = new DateTimeImmutable($from), $n = 0; $d->format('Y-m-d') <= $to && $n < 800; $d = $d->modify('+1 day'), $n++) {
+            $k = $d->format('Y-m-d');
+            $t = self::targetMinutes($sch, $k, $combined ? null : $place, $combined);
+            $c = $this->credit($abs[$k] ?? [], $t);
+            $w = $worked[$k] ?? 0;
+            if ($t || $c || $w) {
+                $out[$k] = ['worked' => $w, 'credited' => $c, 'target' => $t];
+            }
+        }
+
+        return $out;
+    }
+
     /** @param list<array<string, mixed>> $rows that day's absences @return int minutes credited: a full-day mark credits the day's target (once), a part-day mark its hours */
     private function credit(array $rows, int $targetMinutes): int
     {
