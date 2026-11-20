@@ -21,7 +21,7 @@ final class GetWorkBalance implements Tool
     public function description(): string
     {
         return 'Shows whether the user is ahead or behind their work schedule, PER WORKPLACE that has a schedule (a workplace without one — freelance — is not counted): worked hours there + days off (holiday, sick, public holidays) minus the scheduled hours, from the schedule\'s start date '
-            . '(opening balance 0) up to yesterday, plus today so far and a per-month breakdown. Use for "am I ahead or behind?", "flex balance", "how many hours do I have in plus/minus", "overtid/afspadsering". '
+            . '(opening balance 0) up to and including today (today\'s hours so far against today\'s FULL target, so a part-way day looks behind until the hours are in) and a per-month breakdown. Use for "am I ahead or behind?", "flex balance", "how many hours do I have in plus/minus", "overtid/afspadsering". '
             . 'Also returns the schedule and the coming days off. `since` limits the count to a later start; `place` to one workplace. If nothing is configured, offer to set it up with set_work_schedule.';
     }
 

@@ -55,25 +55,25 @@ $add = new AddWorkAbsence($ws);
 $a = $add->execute(['from' => '2026-11-04', 'to' => '2026-11-08', 'kind' => 'holiday'], 1);   // Wed–Sun
 check('Wed, Thu, Fri marked; Sat and Sun skipped (no scheduled hours)', $a['days_marked'] === 3 && count($a['skipped_no_scheduled_hours']) === 2, json_encode($a));
 
-echo "4) the balance: worked + credited − target, opening balance 0, through yesterday\n";
+echo "4) the balance: worked + credited − target, opening balance 0, through today\n";
 $punch('2026-11-02', '08:00', '16:00');            // Mon 8h
 $punch('2026-11-03', '07:00', '14:24');            // Tue 7h24
 // Wed–Fri holiday (3 × 444 credited)
-$b = $ws->balance(1, null, null, '2026-11-09');   // "today" is the next Monday
+$b = $ws->balance(1, null, null, '2026-11-08');   // "today" is the Sunday (no target): through today = the whole week
 // worked 480+444 = 924; credited 3*444 = 1332; target 5*444 = 2220 → +36
 check('balance = +36 min', $b['totals']['balance'] === 36 && $b['totals']['worked'] === 924 && $b['totals']['credited'] === 1332 && $b['totals']['target'] === 2220, json_encode($b['totals']));
-check('counted from the schedule start through yesterday', $b['from'] === '2026-11-02' && $b['through'] === '2026-11-08');
+check('counted from the schedule start through today', $b['from'] === '2026-11-02' && $b['through'] === '2026-11-08');
 $t = (new GetWorkBalance($ws))->execute([], 1);
 check('the tool answers with a signed label and the schedule', $t['configured'] === true && isset($t['balances'][0]['balance']) && $t['schedule'][0]['per_week'] === 37.0);
 check('signed labels', GetWorkBalance::signed(36) === '+0h 36m' && GetWorkBalance::signed(-492) === '−8h 12m');
 
 echo "5) a part-day absence credits its hours; removing days off changes the balance\n";
 $add->execute(['dates' => ['2026-11-03'], 'kind' => 'sick', 'hours' => 1], 1);
-$b2 = $ws->balance(1, null, null, '2026-11-09');
+$b2 = $ws->balance(1, null, null, '2026-11-08');
 check('Tuesday: worked 444 + 60 credited', $b2['totals']['credited'] === 1332 + 60 && $b2['totals']['balance'] === 96, json_encode($b2['totals']));
 $del = (new DeleteWorkAbsence($ws))->execute(['from' => '2026-11-04', 'to' => '2026-11-06'], 1);
 check('delete removes the days and says which', $del['days_removed'] === 3 && count($ws->absences(1)) === 1);
-$b3 = $ws->balance(1, null, null, '2026-11-09');
+$b3 = $ws->balance(1, null, null, '2026-11-08');
 check('without the holiday the balance is behind', $b3['totals']['balance'] === 96 - 1332, json_encode($b3['totals']));
 
 echo "6) a later schedule replaces from its date; a session over midnight is split\n";
@@ -133,7 +133,7 @@ $p4 = static function (string $day, string $from, string $to, string $place) use
 $p4('2026-11-02', '08:00', '12:00', 'DTU');      // 4 h = on target
 $p4('2026-11-03', '08:00', '11:00', 'DTU');      // 3 h = -1 h
 foreach (['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'] as $d) { $p4($d, '13:00', '21:00', 'DSB'); }   // 40 h at a place with NO schedule
-$sc = $ws->balances(4, null, null, '2026-11-09');
+$sc = $ws->balances(4, null, null, '2026-11-08');
 check('only the workplace with a schedule has a balance', count($sc) === 1 && $sc[0]['place'] === 'DTU', json_encode(array_column($sc, 'place')));
 $t = $sc[0]['balance']['totals'];
 check('DTU: worked 7 h of 20 → −13 h; the 40 h at the unscheduled place are not counted', $t['worked'] === 420 && $t['target'] === 1200 && $t['balance'] === 420 - 1200, json_encode($t));
@@ -141,10 +141,20 @@ $tool = (new GetWorkBalance($ws))->execute([], 4);
 check('the tool answers per workplace and warns not to add them', count($tool['balances']) === 1 && $tool['balances'][0]['workplace'] === 'DTU' && str_contains($tool['note'], 'Never add'), json_encode($tool['balances'] ?? null));
 check('asking for a workplace without a schedule explains instead of guessing', (new GetWorkBalance($ws))->execute(['place' => 'DSB'], 4)['configured'] === false);
 (new SetWorkSchedule($ws))->execute(['from' => '2026-11-02', 'hours_per_week' => 10, 'days' => ['mon', 'tue'], 'place' => null], 4);
-$both = $ws->balances(4, null, null, '2026-11-09');
+$both = $ws->balances(4, null, null, '2026-11-08');
 check('a combined schedule is its own scope, compared with ALL hours, next to DTU\'s', count($both) === 2 && $both[0]['place'] === null && $both[1]['place'] === 'DTU' && $both[0]['balance']['totals']['worked'] === 420 + 2400 && $both[0]['balance']['totals']['target'] === 600, json_encode(array_map(static fn ($x) => [$x['place'], $x['balance']['totals']], $both)));
 $card4 = $events->overview(4, ['period' => 'today']);
 check('the card carries one line per scope', count($card4['balances'] ?? []) === 2);
+
+echo "11) clocking out moves the balance at once (today counts, report: refresh did not change the balance)\n";
+$db->exec('DELETE FROM work_events WHERE user_id = 5'); $db->exec('DELETE FROM work_schedule WHERE user_id = 5'); $db->exec('DELETE FROM work_absences WHERE user_id = 5');
+(new SetWorkSchedule($ws))->execute(['from' => '2026-11-02', 'hours_per_week' => 20, 'days' => ['mon', 'tue', 'wed', 'thu', 'fri'], 'place' => 'DTU'], 5);   // 4 h a day
+$i5 = $db->prepare('INSERT INTO work_events (user_id, kind, occurred_at, location) VALUES (5, ?, ?, ?)');
+$before = $ws->balances(5, null, null, '2026-11-03')[0]['balance'];            // Tuesday, nothing worked yet: Monday's 4 h and today's 4 h are missing
+$i5->execute(['in', LocalTime::toUtc('2026-11-03 08:00'), 'DTU']); $i5->execute(['out', LocalTime::toUtc('2026-11-03 11:00'), 'DTU']);
+$after = $ws->balances(5, null, null, '2026-11-03')[0]['balance'];
+check('before: −8 h (Monday and today unworked); after 3 h today: −5 h — the line moved', $before['totals']['balance'] === -480 && $after['totals']['balance'] === -300, json_encode([$before['totals']['balance'], $after['totals']['balance']]));
+check('today\'s progress is carried separately for the card', $after['today']['worked'] === 180 && $after['today']['target'] === 240);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

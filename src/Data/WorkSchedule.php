@@ -205,7 +205,7 @@ final class WorkSchedule
     }
 
     /**
-     * The balance, counted from `$since` (default: the first schedule's start) up to YESTERDAY, plus today so far. Per local day: worked + credited − target.
+     * The balance, counted from `$since` (default: the first schedule's start) up to and including TODAY (today's hours so far against today's full target, so the balance moves when they clock out). Per local day: worked + credited − target.
      * Opening balance 0 at the start date.
      *
      * @return array<string, mixed>
@@ -223,7 +223,7 @@ final class WorkSchedule
         $today  = $today ?? LocalTime::today();
         $first  = min(array_column($sch, 'from'));
         $from   = $since !== null && $since > $first ? $since : $first;
-        $to     = (new DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
+        $to     = $today;   // today counts too (its hours so far against its full target): clocking out moves the balance at once
         $abs    = [];
         foreach ($this->absences($userId, $from, $today) as $a) {
             if ($combined ? $a['place'] === null : ($place === null || $a['place'] === null || mb_strtolower($a['place']) === mb_strtolower($place))) {

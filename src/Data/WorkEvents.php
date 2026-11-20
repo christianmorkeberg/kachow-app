@@ -691,7 +691,7 @@ final class WorkEvents
             // One line per schedule scope (each workplace that has a schedule; the combined one): never summed, work at a place without a schedule is in none of them.
             $lines = [];
             foreach ((new WorkSchedule($this->db, $this))->balances($userId, null, $place) as $sc) {
-                $lines[] = ['place' => $sc['place'], 'minutes' => $sc['balance']['totals']['balance'], 'label' => WorkSchedule::signed($sc['balance']['totals']['balance']), 'since' => $sc['balance']['from']];
+                $lines[] = ['place' => $sc['place'], 'minutes' => $sc['balance']['totals']['balance'], 'label' => WorkSchedule::signed($sc['balance']['totals']['balance']), 'since' => $sc['balance']['from'], 'today' => $sc['balance']['today']];
             }
             if ($lines !== []) {
                 $card['balances'] = $lines;
