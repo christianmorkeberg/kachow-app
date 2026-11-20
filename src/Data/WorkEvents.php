@@ -688,9 +688,13 @@ final class WorkEvents
 
         // Ahead / behind the work schedule (only when one is set up; never breaks the card).
         try {
-            $b = (new WorkSchedule($this->db, $this))->balance($userId, null, $place);
-            if (($b['configured'] ?? false) === true) {
-                $card['balance'] = ['minutes' => $b['totals']['balance'], 'label' => WorkSchedule::signed($b['totals']['balance']), 'since' => $b['from']];
+            // One line per schedule scope (each workplace that has a schedule; the combined one): never summed, work at a place without a schedule is in none of them.
+            $lines = [];
+            foreach ((new WorkSchedule($this->db, $this))->balances($userId, null, $place) as $sc) {
+                $lines[] = ['place' => $sc['place'], 'minutes' => $sc['balance']['totals']['balance'], 'label' => WorkSchedule::signed($sc['balance']['totals']['balance']), 'since' => $sc['balance']['from']];
+            }
+            if ($lines !== []) {
+                $card['balances'] = $lines;
             }
         } catch (\Throwable) {
             // not migrated yet / a hiccup: the card simply has no balance line

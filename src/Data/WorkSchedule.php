@@ -119,7 +119,7 @@ final class WorkSchedule
      *
      * @param list<array<string, mixed>> $schedules from schedules()
      */
-    public static function targetMinutes(array $schedules, string $date, ?string $place = null): int
+    public static function targetMinutes(array $schedules, string $date, ?string $place = null, bool $combinedOnly = false): int
     {
         $wd = (int) (new DateTimeImmutable($date, new DateTimeZone(LocalTime::TZ)))->format('N');
         $latest = [];
@@ -128,6 +128,9 @@ final class WorkSchedule
                 continue;
             }
             $key = mb_strtolower((string) ($s['place'] ?? ''));
+            if ($combinedOnly && $key !== '') {
+                continue;   // the combined target on its own, not the workplaces' own
+            }
             if ($place !== null && trim($place) !== '' && $key !== mb_strtolower(trim($place))) {
                 continue;
             }
@@ -207,9 +210,13 @@ final class WorkSchedule
      *
      * @return array<string, mixed>
      */
-    public function balance(int $userId, ?string $since = null, ?string $place = null, ?string $today = null): array
+    public function balance(int $userId, ?string $since = null, ?string $place = null, ?string $today = null, bool $combined = false): array
     {
-        $sch = $this->schedules($userId);
+        $all = $this->schedules($userId);
+        // One SCOPE at a time: a workplace's own schedule (compared with the hours worked THERE) or the combined one (compared with all hours). Work at a place with no
+        // schedule (a freelance client, say) counts in no scope but the combined one, so it can never inflate another's balance (report #85).
+        $sch = array_values(array_filter($all, static fn (array $s): bool => $combined ? $s['place'] === null
+            : ($place === null || trim($place) === '' ? true : mb_strtolower((string) $s['place']) === mb_strtolower(trim($place)))));
         if ($sch === []) {
             return ['configured' => false];
         }
@@ -219,16 +226,16 @@ final class WorkSchedule
         $to     = (new DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
         $abs    = [];
         foreach ($this->absences($userId, $from, $today) as $a) {
-            if ($place === null || $a['place'] === null || mb_strtolower($a['place']) === mb_strtolower($place)) {
+            if ($combined ? $a['place'] === null : ($place === null || $a['place'] === null || mb_strtolower($a['place']) === mb_strtolower($place))) {
                 $abs[$a['date']][] = $a;
             }
         }
-        $worked = $from <= $today ? $this->events->minutesPerDay($userId, $from, $today, $place) : [];
+        $worked = $from <= $today ? $this->events->minutesPerDay($userId, $from, $today, $combined ? null : $place) : [];
         $tot = ['worked' => 0, 'credited' => 0, 'target' => 0];
         $byMonth = [];
         for ($d = new DateTimeImmutable($from); $d->format('Y-m-d') <= $to; $d = $d->modify('+1 day')) {
             $k = $d->format('Y-m-d');
-            $t = self::targetMinutes($sch, $k, $place);
+            $t = self::targetMinutes($sch, $k, $combined ? null : $place, $combined);
             $c = $this->credit($abs[$k] ?? [], $t);
             $w = $worked[$k] ?? 0;
             $m = $d->format('Y-m');
@@ -238,7 +245,7 @@ final class WorkSchedule
                 $byMonth[$m][$key] += $v;
             }
         }
-        $todayT = self::targetMinutes($sch, $today, $place);
+        $todayT = self::targetMinutes($sch, $today, $combined ? null : $place, $combined);
         $todayC = $this->credit($abs[$today] ?? [], $todayT);
         $fmtM   = static fn (array $x): array => $x + ['balance' => $x['worked'] + $x['credited'] - $x['target']];
         $months = [];
@@ -255,6 +262,32 @@ final class WorkSchedule
             'months'     => $months,
             'today'      => ['target' => $todayT, 'credited' => $todayC, 'worked' => $worked[$today] ?? 0],
         ];
+    }
+
+    /**
+     * The balance of EACH schedule scope — every workplace that has its own schedule, and the combined one if there is one. Never summed: a workplace without a schedule
+     * is simply not part of any. `$place` limits it to one workplace's scope.
+     *
+     * @return list<array{place:?string, balance:array<string, mixed>}>
+     */
+    public function balances(int $userId, ?string $since = null, ?string $place = null, ?string $today = null): array
+    {
+        $scopes = [];
+        foreach ($this->schedules($userId) as $r) {
+            $scopes[mb_strtolower((string) ($r['place'] ?? ''))] = $r['place'];
+        }
+        $out = [];
+        foreach ($scopes as $key => $name) {
+            if ($place !== null && trim($place) !== '' && $key !== mb_strtolower(trim($place))) {
+                continue;
+            }
+            $b = $this->balance($userId, $since, $name, $today, $name === null);
+            if (($b['configured'] ?? false) === true) {
+                $out[] = ['place' => $name, 'balance' => $b];
+            }
+        }
+
+        return $out;
     }
 
     /** @param list<array<string, mixed>> $rows that day's absences @return int minutes credited: a full-day mark credits the day's target (once), a part-day mark its hours */

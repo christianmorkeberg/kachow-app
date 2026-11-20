@@ -64,7 +64,7 @@ $b = $ws->balance(1, null, null, '2026-11-09');   // "today" is the next Monday
 check('balance = +36 min', $b['totals']['balance'] === 36 && $b['totals']['worked'] === 924 && $b['totals']['credited'] === 1332 && $b['totals']['target'] === 2220, json_encode($b['totals']));
 check('counted from the schedule start through yesterday', $b['from'] === '2026-11-02' && $b['through'] === '2026-11-08');
 $t = (new GetWorkBalance($ws))->execute([], 1);
-check('the tool answers with a signed label and the schedule', $t['configured'] === true && isset($t['balance']) && $t['schedule'][0]['per_week'] === 37.0);
+check('the tool answers with a signed label and the schedule', $t['configured'] === true && isset($t['balances'][0]['balance']) && $t['schedule'][0]['per_week'] === 37.0);
 check('signed labels', GetWorkBalance::signed(36) === '+0h 36m' && GetWorkBalance::signed(-492) === '−8h 12m');
 
 echo "5) a part-day absence credits its hours; removing days off changes the balance\n";
@@ -105,8 +105,8 @@ check('another user sees no schedule', $ws->balance(2) === ['configured' => fals
 
 echo "8) the work card carries the balance\n";
 $card = $events->overview(1, ['period' => 'today']);
-check('overview has a balance line once a schedule exists', isset($card['balance']['label']) && preg_match('/^[+−]\d+h \d{2}m$/u', $card['balance']['label']) === 1 && $card['balance']['since'] === '2026-11-02', json_encode($card['balance'] ?? null));
-check('a user without a schedule gets none', !isset($events->overview(2, ['period' => 'today'])['balance']));
+check('overview has a balance line per scope once a schedule exists', isset($card['balances'][0]['label']) && preg_match('/^[+−]\d+h \d{2}m$/u', $card['balances'][0]['label']) === 1 && $card['balances'][0]['since'] === '2026-11-02', json_encode($card['balances'] ?? null));
+check('a user without a schedule gets none', !isset($events->overview(2, ['period' => 'today'])['balances']));
 
 echo "9) report #84: long float digits must not break the stored hours\n";
 ini_set('serialize_precision', '17');
@@ -122,6 +122,29 @@ check('a schedule of another scope gets a warning that targets add up', is_strin
 $rm = (new SetWorkSchedule($ws))->execute(['from' => '2026-09-01', 'place' => 'DTU', 'remove' => true], 3);
 check('remove deletes just that scope', $rm['removed'] === true && count($ws->schedules(3)) === 1 && $ws->schedules(3)[0]['place'] === null);
 ini_restore('serialize_precision');
+
+echo "10) report #85: balance PER workplace — a workplace without a schedule (freelance) never inflates another's\n";
+$db->exec('DELETE FROM work_events WHERE user_id = 4'); $db->exec('DELETE FROM work_schedule WHERE user_id = 4'); $db->exec('DELETE FROM work_absences WHERE user_id = 4');
+$p4 = static function (string $day, string $from, string $to, string $place) use ($db): void {
+    $i = $db->prepare('INSERT INTO work_events (user_id, kind, occurred_at, location) VALUES (4, ?, ?, ?)');
+    $i->execute(['in', LocalTime::toUtc("$day $from"), $place]); $i->execute(['out', LocalTime::toUtc("$day $to"), $place]);
+};
+(new SetWorkSchedule($ws))->execute(['from' => '2026-11-02', 'hours_per_week' => 20, 'days' => ['mon', 'tue', 'wed', 'thu', 'fri'], 'place' => 'DTU'], 4);   // 4 h a day
+$p4('2026-11-02', '08:00', '12:00', 'DTU');      // 4 h = on target
+$p4('2026-11-03', '08:00', '11:00', 'DTU');      // 3 h = -1 h
+foreach (['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'] as $d) { $p4($d, '13:00', '21:00', 'DSB'); }   // 40 h at a place with NO schedule
+$sc = $ws->balances(4, null, null, '2026-11-09');
+check('only the workplace with a schedule has a balance', count($sc) === 1 && $sc[0]['place'] === 'DTU', json_encode(array_column($sc, 'place')));
+$t = $sc[0]['balance']['totals'];
+check('DTU: worked 7 h of 20 → −13 h; the 40 h at the unscheduled place are not counted', $t['worked'] === 420 && $t['target'] === 1200 && $t['balance'] === 420 - 1200, json_encode($t));
+$tool = (new GetWorkBalance($ws))->execute([], 4);
+check('the tool answers per workplace and warns not to add them', count($tool['balances']) === 1 && $tool['balances'][0]['workplace'] === 'DTU' && str_contains($tool['note'], 'Never add'), json_encode($tool['balances'] ?? null));
+check('asking for a workplace without a schedule explains instead of guessing', (new GetWorkBalance($ws))->execute(['place' => 'DSB'], 4)['configured'] === false);
+(new SetWorkSchedule($ws))->execute(['from' => '2026-11-02', 'hours_per_week' => 10, 'days' => ['mon', 'tue'], 'place' => null], 4);
+$both = $ws->balances(4, null, null, '2026-11-09');
+check('a combined schedule is its own scope, compared with ALL hours, next to DTU\'s', count($both) === 2 && $both[0]['place'] === null && $both[1]['place'] === 'DTU' && $both[0]['balance']['totals']['worked'] === 420 + 2400 && $both[0]['balance']['totals']['target'] === 600, json_encode(array_map(static fn ($x) => [$x['place'], $x['balance']['totals']], $both)));
+$card4 = $events->overview(4, ['period' => 'today']);
+check('the card carries one line per scope', count($card4['balances'] ?? []) === 2);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
