@@ -163,6 +163,11 @@ final class UserSettings
                 . 'Fenrir, Aoede, Leda, Orus, Zephyr).',
         ],
         // The cards the app opens on start and pins in its card rail (see HOME_CARD_KEYS). Empty = the app's own default.
+        'pinned_quick_actions' => [
+            'default'     => '',
+            'label'       => 'Pinned shortcuts',
+            'description' => 'Suggestions pinned to the start screen (newline-separated, up to 4). Set by pressing and holding a suggestion in the app.',
+        ],
         'home_cards' => [
             'default'     => '',
             'label'       => 'Start cards',
@@ -430,7 +435,7 @@ final class UserSettings
     ];
 
     /** Settings that have their own card (Appearance, Start cards): the Settings card links to them instead of listing them. */
-    public const CARD_OWN = ['theme', 'theme_dark', 'theme_light', 'home_cards'];
+    public const CARD_OWN = ['theme', 'theme_dark', 'theme_light', 'home_cards', 'pinned_quick_actions'];
 
     /** Settings that are long free text (a text area in the card). */
     private const CARD_LONG = ['company_address', 'company_payment', 'job_aliases', 'voice_stop_words', 'thermostats', 'thermostat_rooms'];

@@ -50,20 +50,65 @@ class QuickActions
     {
         $out  = [];
         $seen = [];
+        foreach ($this->pinned($userId) as $text) {   // pinned ones always lead and never count against the learned set
+            $seen[self::normalize($text)] = true;
+            $out[] = $text;
+        }
+        $pins = count($out);
         foreach ([$this->cached($userId), self::DEFAULTS] as $source) {
             foreach ($source as $text) {
                 $key = self::normalize($text);
-                if ($key !== '' && !isset($seen[$key]) && count($out) < $max) {
+                if ($key !== '' && !isset($seen[$key]) && count($out) - $pins < $max) {
                     $seen[$key] = true;
                     $out[]      = $text;
                 }
             }
-            if ($out !== []) {
+            if (count($out) > $pins) {
                 break; // one source only — never mix AI chips with the seed set
             }
         }
 
         return $out;
+    }
+
+    public const MAX_PINS = 4;
+    public const MAX_PIN_LEN = 60;
+
+    /** The user's pinned suggestions, in the order they were pinned. @return array<int, string> */
+    public function pinned(int $userId): array
+    {
+        try {
+            $raw = (new UserSettings($this->db))->get($userId, 'pinned_quick_actions');
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode("\n", (string) $raw)), static fn (string $t): bool => $t !== ''));
+    }
+
+    /** Pins a suggestion (a new pin goes last; at most MAX_PINS — the oldest drops). Returns the pins. @return array<int, string> */
+    public function pin(int $userId, string $text): array
+    {
+        $text = mb_substr(trim($text), 0, self::MAX_PIN_LEN);
+        $pins = $this->pinned($userId);
+        if ($text === '' || in_array(self::normalize($text), array_map([self::class, 'normalize'], $pins), true)) {
+            return $pins;
+        }
+        $pins[] = $text;
+        $pins   = array_slice($pins, -self::MAX_PINS);
+        (new UserSettings($this->db))->set($userId, 'pinned_quick_actions', implode("\n", $pins));
+
+        return $pins;
+    }
+
+    /** @return array<int, string> */
+    public function unpin(int $userId, string $text): array
+    {
+        $key  = self::normalize($text);
+        $pins = array_values(array_filter($this->pinned($userId), static fn (string $t): bool => self::normalize($t) !== $key));
+        (new UserSettings($this->db))->set($userId, 'pinned_quick_actions', implode("\n", $pins));
+
+        return $pins;
     }
 
     /**

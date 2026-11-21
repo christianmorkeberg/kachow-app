@@ -85,5 +85,17 @@ echo "5) no AI set yet -> the seed defaults\n";
 $tasks->setFakeCache([]);
 check('defaults returned', $tasks->suggestions(1) === QuickActions::DEFAULTS, json_encode($tasks->suggestions(1)));
 
+echo "6) pinned suggestions lead and do not count against the learned set\n";
+$db->exec("CREATE TABLE user_settings (user_id INTEGER, setting_key TEXT, setting_value TEXT, PRIMARY KEY (user_id, setting_key))");
+$db->exec("INSERT INTO user_settings VALUES (1, 'pinned_quick_actions', 'Turn off all lights\nWhat''s on the shopping list?')");
+$tasks->setFakeCache(['What is the weather?', 'Log a workout…', 'Show my reminders', 'Who is at home?']);
+$got = $tasks->suggestions(1, 3);
+check('the pinned ones come first, in their order', array_slice($got, 0, 2) === ['Turn off all lights', "What's on the shopping list?"], json_encode($got));
+check('then up to $max learned ones (pins do not eat into them)', count($got) === 5 && $got[2] === 'What is the weather?', json_encode($got));
+$tasks->setFakeCache(["what's on the shopping list?", 'Show my reminders']);
+check('a pinned suggestion is not repeated when it is also learned (normalized)', count(array_filter($tasks->suggestions(1, 6), static fn (string $s): bool => stripos($s, 'shopping list') !== false)) === 1);
+check('another user has no pins', $tasks->pinned(2) === [] && $tasks->suggestions(2, 2)[0] !== 'Turn off all lights');
+check('the pins are read back in order', $tasks->pinned(1) === ['Turn off all lights', "What's on the shopping list?"]);
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);
