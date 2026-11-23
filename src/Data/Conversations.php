@@ -148,16 +148,22 @@ final class Conversations
      */
     public function mostRecent(int $userId): ?array
     {
-        $stmt = $this->db->prepare(
-            'SELECT c.id, c.title, TIMESTAMPDIFF(SECOND, MAX(m.created_at), NOW()) AS age_seconds
-             FROM conversations c
-             JOIN messages m ON m.conversation_id = c.id
-             WHERE c.user_id = :u
-             GROUP BY c.id, c.title
-             ORDER BY MAX(m.created_at) DESC, MAX(m.id) DESC
-             LIMIT 1'
-        );
-        $stmt->execute([':u' => $userId]);
+        // The chat to resume is one the USER was in. A scheduled task's / routine's own conversation is written to by the cron (every morning, "nothing to report"),
+        // so it would always look like the freshest chat and the app would open on it instead of a clean one. Its results still reach the user through the "something to see" banner.
+        $sql = 'SELECT c.id, c.title, TIMESTAMPDIFF(SECOND, MAX(m.created_at), NOW()) AS age_seconds
+                FROM conversations c
+                JOIN messages m ON m.conversation_id = c.id
+                WHERE c.user_id = :u%s
+                GROUP BY c.id, c.title
+                ORDER BY MAX(m.created_at) DESC, MAX(m.id) DESC
+                LIMIT 1';
+        try {
+            $stmt = $this->db->prepare(sprintf($sql, ' AND c.id NOT IN (SELECT conversation_id FROM scheduled_tasks WHERE conversation_id IS NOT NULL)'));
+            $stmt->execute([':u' => $userId]);
+        } catch (\Throwable) {
+            $stmt = $this->db->prepare(sprintf($sql, ''));   // no scheduled_tasks table (a bare test DB): as before
+            $stmt->execute([':u' => $userId]);
+        }
         $row = $stmt->fetch();
         if ($row === false) {
             return null;
