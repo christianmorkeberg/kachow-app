@@ -174,6 +174,21 @@ check('a comment sent with a tick is saved with it and shows on the card', $tick
 check('next time it is that weight and that comment (last time = the latest earlier outing)', $T->card(2, '2026-11-18') === $T->card(2, '2026-11-18') && true);
 check('a training max can be set from the card; the weights follow', $T->setMax(2, 1, 'Bench press', 100.0)['ok'] === true && $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['sets'][2]['weight'] === 75.0 && $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['basis'] === 'override');
 
+echo "7b) a weight changed on the card is saved at once, before the set is ticked\n";
+$db->exec('CREATE TABLE training_set_overrides (user_id INT, session_date TEXT, exercise TEXT, set_no INT, weight REAL, reps INT, updated_at TEXT, PRIMARY KEY (user_id, session_date, exercise, set_no))');
+$o = $T->override(2, '2026-11-11', [['person_id' => 1, 'exercise' => 'Bench press', 'set_no' => 3, 'weight' => 85.0, 'reps' => 4]]);
+$cellO = $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['sets'][2];
+check('saved; the card shows it (85 of the max 100 = 85%, 4 reps), marked changed, still not done', $o['ok'] === true && $cellO['weight'] === 85.0 && $cellO['percent'] === 85.0 && $cellO['reps'] === 4 && $cellO['changed'] === true && $cellO['done'] === false, json_encode($cellO));
+check('Astrid\'s lane and the other sets are untouched', $T->card(2, '2026-11-11')['exercises'][0]['lanes'][0]['sets'][2]['changed'] === false && $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['sets'][2]['weight'] === 85.0 && $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['sets'][0]['changed'] === false);
+$T->override(2, '2026-11-11', [['person_id' => 1, 'exercise' => 'Bench press', 'set_no' => 3, 'weight' => 87.5, 'reps' => null]]);
+check('changing it again replaces it (one row per set)', (int) $db->query('SELECT COUNT(*) FROM training_set_overrides')->fetchColumn() === 1 && $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['sets'][2]['weight'] === 87.5);
+$T->tick(2, '2026-11-11', 1, 'Bench press', 3, 87.5, 5, 75.0, 82.5, null);
+check('ticking the set writes the real log row and removes the change', (int) $db->query('SELECT COUNT(*) FROM training_set_overrides')->fetchColumn() === 0 && $T->card(2, '2026-11-11')['exercises'][0]['lanes'][1]['sets'][2]['done'] === true);
+$T->override(2, '2026-11-11', [['person_id' => 1, 'exercise' => 'Squat', 'set_no' => 1, 'weight' => 80.0, 'reps' => 3]]);
+$T->override(2, '2026-11-11', [['person_id' => 1, 'exercise' => 'Squat', 'set_no' => 1, 'weight' => null, 'reps' => null]]);
+check('sending nothing for a set takes the change away again', (int) $db->query('SELECT COUNT(*) FROM training_set_overrides')->fetchColumn() === 0);
+check('a day that is not planned / an exercise that is not on the day is refused', $T->override(2, '2026-11-12', [['person_id' => 1, 'exercise' => 'Bench press', 'set_no' => 1, 'weight' => 50.0]])['ok'] === false && $T->override(2, '2026-11-11', [['person_id' => 1, 'exercise' => 'Curls', 'set_no' => 1, 'weight' => 50.0]])['ok'] === false);
+
 echo "8) permission\n";
 $db->exec("UPDATE user_connections SET addressee_scopes = '' WHERE id = 10");   // Astrid (addressee) no longer shares workouts with Christian
 $cardNoShare = $T->card(1, '2026-11-11');
@@ -185,7 +200,7 @@ check('an exercise that is not on the day is refused', $T->tick(2, '2026-11-11',
 echo "9) stopping sharing\n";
 $db->exec("UPDATE user_connections SET addressee_scopes = 'workouts' WHERE id = 10");
 $stop = $share->execute(['program' => 'Strength', 'stop' => true], 2);
-check('the programme is Astrid\'s alone again, the audiences cleared, Christian\'s logged sets untouched', ($stop['stopped'] ?? false) === true && $P->all(1) === [] && $P->days(2, $pid)[0]['audience'] === null && (int) $db->query('SELECT COUNT(*) FROM workouts WHERE user_id = 1 AND session_id IS NOT NULL')->fetchColumn() === 1);
+check('the programme is Astrid\'s alone again, the audiences cleared, Christian\'s logged sets untouched', ($stop['stopped'] ?? false) === true && $P->all(1) === [] && $P->days(2, $pid)[0]['audience'] === null && (int) $db->query('SELECT COUNT(*) FROM workouts WHERE user_id = 1 AND session_id IS NOT NULL')->fetchColumn() === 2);   // the bench set 1 and the set 3 ticked in 7b
 
 echo "10) the same code before the migration\n";
 $old  = db(false);
@@ -203,6 +218,10 @@ check('the Train card still opens (no ticks possible yet)', $c0['empty'] === fal
 $threw = false;
 try { $T0->tick(2, '2026-11-11', 2, 'Bench press', 1, 50.0, 5, null, null, null); } catch (\RuntimeException $e) { $threw = str_contains($e->getMessage(), 'migration'); }
 check('ticking before the migration gives a clear message', $threw);
+
+$threwO = false;
+try { $T0->override(2, '2026-11-11', [['person_id' => 2, 'exercise' => 'Bench press', 'set_no' => 1, 'weight' => 50.0]]); } catch (\RuntimeException $e) { $threwO = str_contains($e->getMessage(), 'migration'); }
+check('saving a change before its migration says so (the card keeps it in the browser)', $threwO);
 
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

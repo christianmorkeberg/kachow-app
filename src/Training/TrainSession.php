@@ -66,6 +66,7 @@ final class TrainSession
             $sets[$p['id']] = $session !== null ? $this->workouts->sessionSets($p['id'], (int) $session['id']) : [];
         }
 
+        $over = $this->overridesFor(array_column($people, 'id'), $date);   // person|exercise|set => [weight, reps] changed on the card but not ticked yet
         $exercises = [];
         $done = $total = 0;
         foreach ($day['items'] as $item) {
@@ -86,19 +87,24 @@ final class TrainSession
                     $planned = self::plannedWeight($t, $mx['max']);
                     $weight  = $row !== null ? ($row['weight'] !== null ? (float) $row['weight'] : null) : $planned;
                     $ghost   = false;
+                    $ov      = $row === null ? ($over[$p['id'] . '|' . mb_strtolower($mx['exercise']) . '|' . $n] ?? null) : null;
+                    if ($ov !== null && $ov['weight'] !== null) {
+                        $weight = $ov['weight'];   // changed on the card, saved at once
+                    }
                     if ($row === null && $weight === null && $last !== null && $last['weight'] !== null) {
                         $weight = $last['weight'];   // nothing planned: start from what was used last time
                         $ghost  = true;
                     }
                     $cells[] = [
                         'n'          => $n,
-                        'reps'       => $row !== null ? ($row['reps'] !== null ? (int) $row['reps'] : null) : $t['reps'],
+                        'reps'       => $row !== null ? ($row['reps'] !== null ? (int) $row['reps'] : null) : ($ov !== null && $ov['reps'] !== null ? $ov['reps'] : $t['reps']),
                         'target_pct' => $t['percent'],
                         'planned_weight' => $planned,
                         'weight'     => $weight,
                         'percent'    => $weight !== null && $mx['max'] !== null && $mx['max'] > 0 ? round($weight / $mx['max'] * 100, 1) : $t['percent'],
                         'ghost'      => $ghost,
                         'done'       => $row !== null,
+                        'changed'    => $ov !== null,
                         'workout_id' => $row !== null ? (int) $row['id'] : null,
                     ];
                     $total++;
@@ -212,6 +218,7 @@ final class TrainSession
             ]);
         }
         $this->db->prepare('UPDATE training_sessions SET last_tick_at = :t WHERE id = :id')->execute([':t' => gmdate('Y-m-d H:i:s'), ':id' => $session]);
+        $this->clearOverride($personId, $date, $name, $setNo);   // the real row exists now
 
         return ['ok' => true, 'workout_id' => $id];
     }
@@ -262,6 +269,77 @@ final class TrainSession
         }
 
         return $this->maxes->setOverride($personId, $exercise, $max) ? ['ok' => true] : ['ok' => false, 'error' => 'Could not save that max.'];
+    }
+
+    /**
+     * Saves weights / reps changed on the card for sets not ticked yet, at once. Items: person_id, exercise, set_no, weight?, reps?. A null weight AND reps removes the change.
+     *
+     * @param list<array<string, mixed>> $items
+     * @return array{ok:bool, saved?:int, error?:string}
+     */
+    public function override(int $viewerId, string $date, array $items): array
+    {
+        $saved = 0;
+        foreach (array_slice($items, 0, 60) as $it) {
+            $personId = (int) ($it['person_id'] ?? 0);
+            $exercise = (string) ($it['exercise'] ?? '');
+            $setNo    = (int) ($it['set_no'] ?? 0);
+            $weight   = isset($it['weight']) && is_numeric($it['weight']) ? (float) $it['weight'] : null;
+            $reps     = isset($it['reps']) && is_numeric($it['reps']) ? (int) $it['reps'] : null;
+            $ctx = $this->context($viewerId, $date, $personId, $exercise);
+            if (isset($ctx['error'])) {
+                return ['ok' => false, 'error' => $ctx['error']];
+            }
+            if ($setNo < 1 || $setNo > SetPlan::MAX_SETS || ($weight !== null && ($weight < 0 || $weight > 1000)) || ($reps !== null && ($reps < 0 || $reps > 999))) {
+                return ['ok' => false, 'error' => 'That set does not make sense.'];
+            }
+            $name = $this->maxes->forExercise($personId, $exercise)['exercise'];
+            try {
+                if ($weight === null && $reps === null) {
+                    $this->clearOverride($personId, $date, $name, $setNo);
+                } else {
+                    $this->clearOverride($personId, $date, $name, $setNo);   // delete + insert: the same on any database
+                    $this->db->prepare('INSERT INTO training_set_overrides (user_id, session_date, exercise, set_no, weight, reps) VALUES (:u, :d, :e, :n, :w, :r)')
+                        ->execute([':u' => $personId, ':d' => $date, ':e' => mb_strtolower($name), ':n' => $setNo, ':w' => $weight, ':r' => $reps]);
+                }
+                $saved++;
+            } catch (\Throwable $e) {
+                throw new RuntimeException('Saving changes needs the migration 2026-11-23_train_overrides.sql.');
+            }
+        }
+
+        return ['ok' => true, 'saved' => $saved];
+    }
+
+    /** @param list<int> $personIds @return array<string, array{weight:?float, reps:?int}> */
+    private function overridesFor(array $personIds, string $date): array
+    {
+        if ($personIds === []) {
+            return [];
+        }
+        try {
+            $in = implode(',', array_map('intval', $personIds));
+            $st = $this->db->prepare("SELECT user_id, exercise, set_no, weight, reps FROM training_set_overrides WHERE session_date = :d AND user_id IN ($in)");
+            $st->execute([':d' => $date]);
+            $out = [];
+            foreach ($st->fetchAll() as $r) {
+                $out[$r['user_id'] . '|' . mb_strtolower((string) $r['exercise']) . '|' . $r['set_no']] = ['weight' => $r['weight'] !== null ? (float) $r['weight'] : null, 'reps' => $r['reps'] !== null ? (int) $r['reps'] : null];
+            }
+
+            return $out;
+        } catch (\Throwable) {
+            return [];   // before the migration
+        }
+    }
+
+    private function clearOverride(int $personId, string $date, string $exercise, int $setNo): void
+    {
+        try {
+            $this->db->prepare('DELETE FROM training_set_overrides WHERE user_id = :u AND session_date = :d AND exercise = :e AND set_no = :n')
+                ->execute([':u' => $personId, ':d' => $date, ':e' => mb_strtolower($exercise), ':n' => $setNo]);
+        } catch (\Throwable) {
+            // before the migration
+        }
     }
 
     /** Stamps the start of the day's session ("Start training"). Ticking a set starts it too. @return array{ok:bool, error?:string} */
