@@ -22,10 +22,16 @@ final class ToolRanker
     public const WINDOW_DAYS    = 60;
     public const GRACE_DAYS     = 21;
     public const SIZES          = [10, 20, 30, 40];
-    public const CORE           = ['remember_about_me', 'note_dev_idea', 'run_routine', 'explain_capabilities'];
+    /** The shadow's misses at top 30 were all generic tools asked for without a keyword the router knows — settings, export, code, location history, mail — so they are always there. */
+    public const CORE           = ['remember_about_me', 'note_dev_idea', 'run_routine', 'explain_capabilities', 'get_settings', 'update_setting', 'export_data', 'run_python',
+        'get_stays', 'get_location_day', 'get_trips', 'get_emails', 'read_email'];
+    /** How many of the user's most used tools a targeted list holds (the shadow: 6 % of turns missed one, at 60 % less text per call). */
+    public const TARGET_N       = 30;
+    /** The escape hatch of a targeted list: unlocks every tool for the rest of the turn. Not a registry tool — the loop answers it itself. */
+    public const MORE_TOOLS     = 'more_tools';
 
     /** Never judged here: the web tools are opt-in per turn, by their own consent rule. */
-    public const IGNORED = ['web_search', 'fetch_webpage'];
+    public const IGNORED = ['web_search', 'fetch_webpage', 'more_tools'];
 
     /**
      * A score per tool from its calls: each call counts 0.5^(age in days / half-life), calls older than the window not at all. Highest first.
@@ -115,6 +121,38 @@ final class ToolRanker
         }
 
         return $out;
+    }
+
+    /**
+     * The tool names a TARGETED turn sends: matched areas + core + new + the user's top N by rank (only tools that exist).
+     *
+     * @param array{matched: list<string>, new: list<string>, core: list<string>} $plan
+     * @param array<string, int> $ranks
+     * @param list<string>       $existing every current tool name
+     * @return list<string>
+     */
+    public static function targeted(array $plan, array $ranks, array $existing, int $n = self::TARGET_N): array
+    {
+        $have = array_flip($existing);
+        $set  = array_fill_keys(array_merge($plan['matched'], $plan['core'], $plan['new']), true);
+        foreach ($ranks as $tool => $rank) {
+            if ($rank <= $n) {
+                $set[$tool] = true;
+            }
+        }
+
+        return array_values(array_filter(array_keys($set), static fn (string $t): bool => isset($have[$t]) && !in_array($t, self::IGNORED, true)));
+    }
+
+    /** The declaration of the escape hatch. @return array<string, mixed> */
+    public static function moreToolsDeclaration(): array
+    {
+        return [
+            'name'        => self::MORE_TOOLS,
+            'description' => 'Your tool list is a SHORTLIST for this message. If you need a capability that is not in it (a different area of the app: settings, mail, location history, '
+                . 'bookkeeping, training, the home, routines …), call this FIRST — it unlocks every tool for the rest of this turn — instead of saying you cannot do something.',
+            'parameters'  => ['type' => 'object', 'properties' => ['need' => ['type' => 'string', 'description' => 'What you want to do, in a few words.']], 'required' => []],
+        ];
     }
 
     /** Would this called tool have been in the set with a top N of $n? @param array{tool:string, rank:?int, matched:bool, core:bool, new:bool} $c */

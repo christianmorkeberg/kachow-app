@@ -120,5 +120,34 @@ $loopNarrow->handle(9, (new Conversations($db))->start(9), 'hello');
 check('keyword-routed (not wide) turns are not measured', (int) $db->query('SELECT COUNT(*) FROM tool_shadow_log')->fetchColumn() === 1);
 check('the shopping tools are what the matched area gives', in_array('add_to_shopping_list', ToolSelector::toolsFor(['shopping']), true) && ToolSelector::toolsFor(['no_such_group']) === []);
 
+echo "5) targeted mode (flag tool_targeting) and the more_tools escape hatch\n";
+// pure part
+$planT = ['matched' => ['m1'], 'core' => ['c1'], 'new' => ['n1']];
+$ranksT = ['r1' => 1, 'r30' => 30, 'r31' => 31, 'gone' => 2];
+$names = ToolRanker::targeted($planT, $ranksT, ['m1', 'c1', 'n1', 'r1', 'r30', 'r31', 'web_search', 'more_tools']);
+check('targeted = matched + core + new + top N (30), only tools that exist, never the ignored ones', $names === ['m1', 'c1', 'n1', 'r1', 'r30'], json_encode($names));
+check('the shadow\'s misses are core now (settings, export, run_python, location, mail)', count(array_intersect(['get_settings', 'update_setting', 'export_data', 'run_python', 'get_stays', 'get_location_day', 'get_trips', 'get_emails', 'read_email'], ToolRanker::CORE)) === 9);
+check('more_tools is declared and never judged by the shadow', ToolRanker::moreToolsDeclaration()['name'] === 'more_tools' && in_array('more_tools', ToolRanker::IGNORED, true));
+// in the loop: flag on, a message the keyword router does not know → only the core + more_tools; the model asks for more and then gets the whole list
+$db->exec("INSERT OR REPLACE INTO app_flags (flag_key, flag_value) VALUES ('tool_targeting', 'on')");
+$db->exec('DELETE FROM tool_first_seen');   // the first wide turn re-seeds: every tool counts as old (else all would be "new" here)
+$db->exec('DELETE FROM tool_call_log');
+$payloads = [];
+$k = 0;
+$scriptT = [
+    ['candidates' => [['content' => ['role' => 'model', 'parts' => [['functionCall' => ['name' => 'more_tools', 'args' => ['need' => 'the weather']]]]], 'finishReason' => 'STOP']]],
+    ['candidates' => [['content' => ['role' => 'model', 'parts' => [['functionCall' => ['name' => 'get_current_weather', 'args' => []]]]], 'finishReason' => 'STOP']]],
+    ['candidates' => [['content' => ['role' => 'model', 'parts' => [['text' => 'It is mild.']]], 'finishReason' => 'STOP']]],
+];
+$clientT = new GeminiClient('k', ['m1'], function (string $u, array $payload) use (&$k, $scriptT, &$payloads): array { $payloads[] = array_column($payload['tools'][0]['function_declarations'] ?? [], 'name'); return [200, json_encode($scriptT[min($k++, 2)])]; });
+$loopT = new AssistantLoop($clientT, $registry, new Conversations($db), wideTools: true);
+$reply = $loopT->handle(9, (new Conversations($db))->start(9), 'hello there');
+check('round 1 got the SHORTLIST: more_tools, and not the weather tool', in_array('more_tools', $payloads[0] ?? [], true) && !in_array('get_current_weather', $payloads[0] ?? [], true), json_encode($payloads[0] ?? null));
+check('after more_tools the next round has every tool (and no more_tools offer)', in_array('get_current_weather', $payloads[1] ?? [], true) && in_array('add_to_shopping_list', $payloads[1] ?? [], true) && !in_array('more_tools', $payloads[1] ?? [], true), json_encode($payloads[1] ?? null));
+check('the turn finishes normally, and the diagnostics say what was needed', $reply === 'It is mild.' && (($loopT->lastDiagnostics()['more_tools'] ?? '') === 'the weather'), $reply . ' / ' . json_encode($loopT->lastDiagnostics()['more_tools'] ?? null));
+$called2 = json_decode((string) $db->query('SELECT called FROM tool_shadow_log ORDER BY id DESC LIMIT 1')->fetchColumn(), true) ?: [];
+check('the shadow does not judge more_tools itself', !in_array('more_tools', array_column($called2, 'tool'), true));
+$db->exec("INSERT OR REPLACE INTO app_flags (flag_key, flag_value) VALUES ('tool_targeting', 'off')");
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

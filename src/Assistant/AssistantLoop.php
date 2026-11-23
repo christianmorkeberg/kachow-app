@@ -519,8 +519,19 @@ final class AssistantLoop
         // Tool targeting, SHADOW mode (ToolRanker): with the full list on the table, work out — BEFORE any tool runs, so this turn's calls cannot rank
         // themselves — which tools a targeted list would have held; after the turn, recordShadow() checks the tools really called against it. Changes nothing.
         $this->shadowPlan = null;
+        $this->targeted   = false;
         if ($wideTools && !$hasImage && $this->toolSubset === null) {
             $this->shadowPlan = $this->planShadow($userId, $ruleGroups);
+            // Tool targeting, LIVE (flag `tool_targeting`, off by default): send the targeted list instead of every tool — matched areas + core + new + the user's top N — plus
+            // `more_tools`, which unlocks the full list for the rest of the turn if the model needs something that is not on the shortlist.
+            if ($this->shadowPlan !== null && $flags->isOn('tool_targeting', false)) {
+                $all     = $this->tools->declarations();
+                $names   = ToolRanker::targeted($this->shadowPlan['plan'], $this->shadowPlan['ranks'], array_map(static fn (array $d): string => (string) ($d['name'] ?? ''), $all));
+                $webKeep = array_values(array_filter($declarations, static fn (array $d): bool => WebSafety::isWebTool((string) ($d['name'] ?? ''))));   // the consent-gated web tools already decided above
+                $declarations = array_merge(ToolSelector::only($all, $names), [ToolRanker::moreToolsDeclaration()], $webKeep);
+                $groups       = ['TARGETED (' . (count($declarations) - count($webKeep) - 1) . ' tools)'];
+                $this->targeted = true;
+            }
         }
         // Home devices the assistant already knows by name (saved list + this conversation's lookups).
         $toolMemory   = trim($toolMemory . "\n\n" . ToolMemory::homeDevices($history, $this->savedHomeDevices($userId, $userMessage, $recent, ToolMemory::homeActive($history))));
@@ -748,7 +759,14 @@ final class AssistantLoop
             foreach ($calls as $call) {
                 $td0 = microtime(true);
                 $this->progress('tools', (string) $call['name'], 'running');
-                if ($webRead && !WebSafety::allowedAfterWeb((string) $call['name'])) {
+                if ($this->targeted && (string) $call['name'] === ToolRanker::MORE_TOOLS) {
+                    // The shortlist was not enough: every tool from the next round on (the web tools stay as the consent rule left them).
+                    $webKeep = array_values(array_filter($declarations, static fn (array $d): bool => WebSafety::isWebTool((string) ($d['name'] ?? ''))));
+                    $declarations = array_merge(array_values(array_filter($this->tools->declarations(), static fn (array $d): bool => !WebSafety::isWebTool((string) ($d['name'] ?? '')))), $webKeep);
+                    $this->targeted = false;
+                    $this->lastDiagnostics['more_tools'] = mb_substr((string) ($call['args']['need'] ?? ''), 0, 200);
+                    $result = ['ok' => true, 'note' => 'Every tool is now available. Continue with the request.'];
+                } elseif ($webRead && !WebSafety::allowedAfterWeb((string) $call['name'])) {
                     // Web content was read earlier this turn: no acting on it (see WebSafety).
                     $result = WebSafety::blockedResult((string) $call['name']);
                 } else {
@@ -900,6 +918,8 @@ final class AssistantLoop
      */
     /** @var array{user:int, plan:array<string, mixed>, ranks:array<string, int>}|null this turn's would-be targeted tool list (shadow mode) */
     private ?array $shadowPlan = null;
+    /** @var bool this turn runs on the targeted tool list (so `more_tools` is on offer and answered by the loop) */
+    private bool $targeted = false;
 
     /**
      * The targeted tool list this turn would have had (see ToolRanker). Best effort: null when the shadow tables are not there yet or anything fails.
