@@ -149,8 +149,8 @@ final class ToolRanker
     {
         return [
             'name'        => self::MORE_TOOLS,
-            'description' => 'Your tool list is a SHORTLIST for this message. If you need a capability that is not in it (a different area of the app: settings, mail, location history, '
-                . 'bookkeeping, training, the home, routines …), call this FIRST — it unlocks every tool for the rest of this turn — instead of saying you cannot do something.',
+            'description' => 'Your tool list is a SHORTLIST for this message. If none of your tools clearly fits what the user asked (a different area of the app: routines and their notifications, mail, location history, '
+                . 'bookkeeping, training, the home …), call this FIRST — it unlocks every tool for the rest of this turn. Do NOT use a tool that only looks similar (above all: never change a setting the user did not ask about), and do not say you cannot do it.',
             'parameters'  => ['type' => 'object', 'properties' => ['need' => ['type' => 'string', 'description' => 'What you want to do, in a few words.']], 'required' => []],
         ];
     }

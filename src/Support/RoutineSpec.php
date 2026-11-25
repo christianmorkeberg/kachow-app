@@ -48,6 +48,7 @@ final class RoutineSpec
                     'once'     => ['type' => 'boolean'],
                 ],
             ],
+            'notify'      => ['type' => 'boolean', 'description' => 'true = send a push notification EVERY time it has run ("tells you every time"); false = run quietly: no push (the run is still recorded on the routine\'s card and in its chat). Use for "I don\'t want the notification", "stop notifying me about this", "tell me every time it runs".'],
             'mode'        => ['type' => 'string', 'enum' => ['auto', 'ask'], 'description' => '"auto" (default): runs by itself when triggered by a place or the clock. "ask": sends a question first and runs only after the user says yes. Saying the phrase always runs it at once. Use "ask" ONLY when the user asked to be asked BEFORE it runs. If the instruction itself asks the user something after a check ("check the lights; if some are on, ask if I want them off"), keep "auto": that run only asks when there is something to ask (notify_me with an offer), and "ask" would add a pointless first question.'],
         ];
     }
@@ -102,6 +103,9 @@ final class RoutineSpec
         }
         if (isset($a['mode']) && in_array($a['mode'], ['auto', 'ask'], true)) {
             $f['run_mode'] = (string) $a['mode'];
+        }
+        if (array_key_exists('notify', $a) && $a['notify'] !== null && $a['notify'] !== '') {
+            $f['notify_always'] = filter_var($a['notify'], FILTER_VALIDATE_BOOL);
         }
 
         $sensor = trim((string) ($a['trigger_sensor'] ?? ''));

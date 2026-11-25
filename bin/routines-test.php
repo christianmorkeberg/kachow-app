@@ -355,5 +355,16 @@ check('the gate: sun=daylight is the opposite', RoutineGate::check(['sun' => 'da
 check('the offset moves sunset: +60 min is still light shortly after sunset', RoutineGate::check(['sun' => 'dark', 'sun_offset_min' => 60], $dec['sunset']->modify('+10 minutes'), null) === 'it is not dark yet' && RoutineGate::check(['sun' => 'dark', 'sun_offset_min' => 60], $dec['sunset']->modify('+70 minutes'), null) === null);
 check('normalize keeps sun + offset, drops junk', RoutineGate::normalize(['sun' => 'Dark', 'sun_offset_min' => 30]) === ['sun' => 'dark', 'sun_offset_min' => 30] && RoutineGate::normalize(['sun' => 'purple']) === []);
 check('describe says it in words', str_contains(RoutineGate::describe(['sun' => 'dark', 'sun_offset_min' => 30]), 'after sunset (+30 min)'));
+echo "\nNotifications of a routine (report #86): quiet by default, `notify` turns them on / off\n";
+$q = $create->execute(['name' => 'Quiet one', 'instruction' => 'Turn on the kitchen light.', 'phrases' => ['quiet phrase'], 'save' => true], 1);
+check('a new routine runs quietly by default', ($q['routine']['notifies_every_run'] ?? null) === false, json_encode($q['routine'] ?? $q));
+$n = $update->execute(['routine' => 'Quiet one', 'notify' => true], 1);
+check('notify=true: tells you every time', ($n['routine']['notifies_every_run'] ?? null) === true && ($n['updated'] ?? null) === true, json_encode($n['routine'] ?? $n));
+$n = $update->execute(['routine' => 'Quiet one', 'notify' => false], 1);
+check('notify=false: "I don\'t want the notification" — quiet again', ($n['routine']['notifies_every_run'] ?? null) === false, json_encode($n['routine'] ?? $n));
+$loud = $create->execute(['name' => 'Loud one', 'instruction' => 'Check the lights.', 'phrases' => ['loud phrase'], 'notify' => true, 'save' => true], 1);
+check('a routine can be created as "tell me every time"', ($loud['routine']['notifies_every_run'] ?? null) === true);
+check('the notify switch is on the tool\'s declaration', isset($update->parameters()['properties']['notify']) && isset($create->parameters()['properties']['notify']));
+
 printf("\n%d passed, %d failed\n", $pass, $fail);
 exit($fail > 0 ? 1 : 0);

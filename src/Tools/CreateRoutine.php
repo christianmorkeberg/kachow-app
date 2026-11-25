@@ -77,7 +77,7 @@ final class CreateRoutine implements Tool
         $id = $this->routines->create($userId, $conv, [
             'label' => $f['label'], 'instruction' => $f['instruction'], 'trigger_type' => $kind ?? 'phrase',
             'phrases' => $phrases, 'trigger_config' => $f['trigger_config'] ?? [], 'conditions' => $f['conditions'] ?? [],
-            'run_mode' => $f['run_mode'] ?? 'auto', 'status' => $save ? 'active' : 'draft',
+            'run_mode' => $f['run_mode'] ?? 'auto', 'notify_always' => $f['notify_always'] ?? false, 'status' => $save ? 'active' : 'draft',
         ]);
 
         return [

@@ -48,8 +48,9 @@ final class Routines
             "INSERT INTO scheduled_tasks
                 (user_id, conversation_id, label, instruction, frequency, trigger_type, phrases, trigger_config, conditions,
                  run_mode, notify_always, status, next_run_at)
-             VALUES (:u, :conv, :label, :instr, 'event', :type, :phrases, :cfg, :cond, :mode, 1, :status, :next)"
+             VALUES (:u, :conv, :label, :instr, 'event', :type, :phrases, :cfg, :cond, :mode, :na, :status, :next)"
         )->execute([
+            ':na'     => !empty($spec['notify_always']) ? 1 : 0,   // a new routine runs QUIETLY unless asked to tell every time ("Ran 5 recorded steps" pushes were noise)
             ':u'      => $userId,
             ':conv'   => $conversationId,
             ':label'  => mb_substr(trim($spec['label']), 0, 80),
@@ -107,6 +108,10 @@ final class Routines
             $set[] = 'run_mode = :mode';
             $p[':mode'] = $fields['run_mode'];
         }
+        if (array_key_exists('notify_always', $fields)) {
+            $set[] = 'notify_always = :na';
+            $p[':na'] = $fields['notify_always'] ? 1 : 0;
+        }
         if ($set === []) {
             return true;
         }
@@ -139,7 +144,7 @@ final class Routines
 
         return [
             'id' => $r['id'], 'name' => $r['label'], 'status' => $r['status'], 'when' => self::describeTrigger($r, $placeNames), 'phrases' => $r['phrases'],
-            'conditions' => RoutineGate::describe($r['conditions'], $placeNames), 'mode' => $r['run_mode'], 'does' => $r['instruction'],
+            'conditions' => RoutineGate::describe($r['conditions'], $placeNames), 'mode' => $r['run_mode'], 'notifies_every_run' => (bool) ($r['notify_always'] ?? false), 'does' => $r['instruction'],
         ];
     }
 

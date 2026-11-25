@@ -497,7 +497,9 @@ final class ToolSelector
             'keep an eye on', 'back in stock', 'tell me when the price', 'tell me if the price',
             'hold øje med', 'overvåg', 'på lager igen', 'sig til når prisen',
             // Routines (create_routine / run_routine): "when I say X do Y", "when I leave home …"
-            'routine', 'routines', 'rutine', 'rutiner', 'automation', 'automatisering', 'when i say', 'when i leave', 'when i arrive',
+            'routine', 'routines', 'rutine', 'rutiner', 'automation', 'automatisering',
+            // complaints about what a routine / task sends (update_routine notify=false, set_scheduled_task_active)
+            'recorded steps', 'recorded step', 'the notification', 'notification for', 'notifications for', 'no notification', 'stop notifying', 'tells you every time', 'tell me every time', 'notifikation', 'optagede trin', 'melder hver gang', 'when i say', 'when i leave', 'when i arrive',
             'when i get home', 'when i go to', 'når jeg siger', 'når jeg forlader', 'når jeg går', 'når jeg kommer hjem',
             'i\'m leaving', 'im leaving', 'i am leaving', 'i\'m home', 'im home', 'jeg smutter', 'jeg går nu', 'jeg er hjemme', 'good night routine', 'sensor', 'light level', 'lysniveau', 'light sensor', 'lyssensor', 'undo that', 'undo it', 'put it back', 'put them back', 'fortryd', 'sæt det tilbage',
             // Danish

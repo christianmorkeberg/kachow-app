@@ -22,7 +22,7 @@ final class UpdateSetting implements Tool
 
     public function description(): string
     {
-        return 'Changes one of the user\'s settings. Keys: "work_calendar" — the name of the Google '
+        return 'Changes one of the user\'s settings — ONLY when they explicitly ask to change one of the keys below. NEVER use it to stop a routine\'s or scheduled task\'s notifications (that is update_routine with notify=false), and never touch "personality" unless they talk about the assistant\'s tone or character. Keys: "work_calendar" — the name of the Google '
             . 'calendar used for work-log tracking and the afternoon nudge (default "Arbejde"); '
             . '"personality" — how much character the assistant\'s replies carry, on a scale of 1–5 '
             . '(1 = off/neutral, 5 = maximum; use for "turn your personality up to 5", "be a hype gym bro" '

@@ -214,6 +214,8 @@ $cases = [
     ['msg' => 'how much am I free to spend?', 'expect' => 'bookkeeping'],
     ['msg' => 'I paid 3450 kr moms to SKAT today', 'expect' => 'bookkeeping'],
     ['msg' => 'log a bank fee of 50 kr', 'expect' => 'bookkeeping'],
+    ['msg' => 'I don\'t want the notification for the recorded steps you just sent', 'expect' => 'reminders'],
+    ['msg' => 'stop notifying me about that', 'expect' => 'reminders'],
     ['msg' => 'am I ahead or behind on my hours?', 'expect' => 'worktime'],
     ['msg' => 'I am on holiday 22 to 24 december', 'expect' => 'worktime'],
     ['msg' => 'jeg har ferie i næste uge', 'expect' => 'worktime'],

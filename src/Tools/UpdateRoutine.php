@@ -27,7 +27,7 @@ final class UpdateRoutine implements Tool
     public function description(): string
     {
         return 'Changes one of the user\'s routines (made with create_routine): rename it, change what it does (`instruction`), its `phrases`, '
-            . 'its place trigger (trigger_event + trigger_place / trigger_place_type), its `conditions`, or `mode` ("ask" = ask first, "auto"). '
+            . 'its place trigger (trigger_event + trigger_place / trigger_place_type), its `conditions`, `mode` ("ask" = ask first, "auto"), or `notify` (false = run quietly, NO push notification each time — the way to answer "I don\'t want the notification for that routine"; true = tell me every time). '
             . 'Also: status "active" SAVES a draft (use it when the user says "yes, save it") or resumes a paused one, "paused" pauses it, '
             . '"cancelled" removes it. Identify it by `routine` (its name, a phrase, or its id). Only the fields you pass are changed — passing '
             . '`phrases` or `conditions` REPLACES the old list, so include the ones to keep. The routine card shows the result.';
